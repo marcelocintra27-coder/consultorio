@@ -2,13 +2,126 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Consultório</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consultório Odontológico</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f4f6f8;
+            color: #333;
+        }
+
+        header {
+            background: #0b6e8e;
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 32px;
+        }
+
+        header p {
+            margin: 8px 0 0;
+            font-size: 17px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+
+        .card h2 {
+            color: #0b6e8e;
+            margin-top: 0;
+        }
+
+        .card p {
+            color: #666;
+        }
+
+        .botao {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: #0b6e8e;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+        }
+
+        footer {
+            margin-top: 50px;
+            padding: 20px;
+            text-align: center;
+            background: #e9ecef;
+            color: #666;
+        }
+    </style>
 </head>
+
 <body>
 
-    <h1>Bem-vindo ao Consultório</h1>
+<header>
+    <h1>Consultório Odontológico</h1>
+    <p>Sistema de Gestão do Consultório</p>
+</header>
 
-    <p>Sistema de gestão do consultório.</p>
+<div class="container">
+
+    <div class="cards">
+
+        <div class="card">
+            <h2>Pacientes</h2>
+            <p>Cadastro e informações dos pacientes.</p>
+            <a href="#" class="botao">Acessar</a>
+        </div>
+
+        <div class="card">
+            <h2>Agenda</h2>
+            <p>Controle de consultas e horários.</p>
+            <a href="#" class="botao">Acessar</a>
+        </div>
+
+        <div class="card">
+            <h2>Prontuários</h2>
+            <p>Consulta e acompanhamento dos prontuários.</p>
+            <a href="#" class="botao">Acessar</a>
+        </div>
+
+        <div class="card">
+            <h2>Financeiro</h2>
+            <p>Controle financeiro do consultório.</p>
+            <a href="#" class="botao">Acessar</a>
+        </div>
+
+    </div>
+
+</div>
+
+<footer>
+    Sistema de Gestão do Consultório Odontológico
+</footer>
 
 </body>
 </html>
+
