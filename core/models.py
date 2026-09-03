@@ -1,4 +1,4 @@
-from django.db import models
+﻿from django.db import models
 
 
 class Convenio(models.Model):
@@ -42,7 +42,6 @@ class Paciente(models.Model):
 
     def __str__(self):
         return self.nome_completo
-...
 
 class Evolucao(models.Model):
     paciente = models.ForeignKey(Paciente, verbose_name='paciente', on_delete=models.CASCADE, related_name='evolucoes')
@@ -54,5 +53,5 @@ class Evolucao(models.Model):
         verbose_name_plural = 'evolucoes'
         ordering = ['data']
 
-    def _str_(self):
+    def __str__(self):
         return f'{self.paciente.nome_completo} - {self.data}'
