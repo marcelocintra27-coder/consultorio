@@ -16,7 +16,7 @@ class Convenio(models.Model):
 
 class Paciente(models.Model):
     nome_completo = models.CharField('nome completo', max_length=200)
-    cpf = models.CharField('CPF', max_length=14, unique=True)
+    cpf = models.CharField('CPF', max_length=18, unique=True)
     data_nascimento = models.DateField('data de nascimento')
     telefone = models.CharField('telefone', max_length=20)
     whatsapp = models.CharField('WhatsApp', max_length=20, blank=True)
