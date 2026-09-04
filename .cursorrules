@@ -1,0 +1,34 @@
+# Regras do projeto — Sistema de Gestão para Consultório Odontológico
+
+## Stack
+- Python + Django + SQLite (dev). Deploy alvo: Render.
+- Repositório GitHub: marcelocintra27-coder/consultorio.
+
+## Apps e modelos existentes
+- core: Convenio, Paciente, Evolucao.
+- locacao: Sala, Disponibilidade.
+
+## Como se comportar neste projeto
+- Trabalhe em etapas curtas. Não pule para a próxima etapa sem confirmação do usuário.
+- Nunca execute `git add` ou `git commit` sem autorização explícita.
+- Nunca sobrescreva models ou views já funcionando sem necessidade clara.
+- Sempre use UTF-8 corretamente em textos com acentos (já houve bug de
+  acentuação corrompida no projeto — não repetir).
+- Depois de qualquer mudança, oriente o teste no navegador/admin antes de
+  seguir em frente.
+- Nomes de campos e models em português, seguindo o padrão já existente
+  (nome_completo, data_nascimento, cadastrado_em).
+- Migrations devem ser geradas e aplicadas a cada mudança de model.
+
+## Prioridade atual do roadmap
+1. Cadastro de pacientes (listar, buscar, cadastrar) — em andamento.
+2. Edição de pacientes.
+3. Agenda / Consultas.
+4. Financeiro básico.
+5. Módulo de Locação de Consultórios — só depois do item 4.
+6. Automações (WhatsApp, IA) — só depois da Agenda pronta.
+
+## Não fazer
+- Não avançar fases do roadmap fora de ordem sem o usuário pedir.
+- Não commitar o banco de dados (já está no .gitignore).
+- Não remover o domínio do Render do ALLOWED_HOSTS.
