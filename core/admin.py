@@ -5,7 +5,13 @@ from .models import Convenio, Paciente, Evolucao, Consulta
 
 @admin.register(Convenio)
 class ConvenioAdmin(admin.ModelAdmin):
-    list_display = ('nome', 'ativo')
+    list_display = (
+        'nome',
+        'valor_hora',
+        'percentual_desconto',
+        'percentual_imposto',
+        'ativo',
+    )
     list_filter = ('ativo',)
     search_fields = ('nome',)
 
@@ -41,9 +47,17 @@ class EvolucaoAdmin(admin.ModelAdmin):
 
 @admin.register(Consulta)
 class ConsultaAdmin(admin.ModelAdmin):
-    list_display = ('paciente', 'data', 'hora_inicio', 'hora_fim', 'status')
-    list_filter = ('status', 'data')
+    list_display = (
+        'paciente',
+        'data',
+        'hora_inicio',
+        'hora_fim',
+        'status',
+        'pago',
+        'valor_a_cobrar',
+    )
+    list_filter = ('status', 'pago', 'data')
     search_fields = ('paciente__nome_completo',)
     autocomplete_fields = ('paciente',)
-    readonly_fields = ('cadastrado_em',)
+    readonly_fields = ('cadastrado_em', 'valor_a_cobrar')
     list_per_page = 25

@@ -1,9 +1,30 @@
-﻿from django.db import models
+﻿from datetime import datetime
+from decimal import Decimal
+
+from django.db import models
 
 
 class Convenio(models.Model):
     nome = models.CharField('nome', max_length=100, unique=True)
     ativo = models.BooleanField('ativo', default=True)
+    valor_hora = models.DecimalField(
+        'valor da hora',
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    percentual_desconto = models.DecimalField(
+        'percentual de desconto',
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+    )
+    percentual_imposto = models.DecimalField(
+        'percentual de imposto',
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+    )
 
     class Meta:
         verbose_name = 'convênio'
@@ -79,6 +100,7 @@ class Consulta(models.Model):
         choices=Status.choices,
         default=Status.AGENDADA,
     )
+    pago = models.BooleanField('pago', default=False)
     observacoes = models.TextField('observações', blank=True)
     cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
 
@@ -89,3 +111,26 @@ class Consulta(models.Model):
 
     def __str__(self):
         return f'{self.paciente.nome_completo} - {self.data} {self.hora_inicio}'
+
+    @property
+    def duracao_minutos(self):
+        inicio = datetime.combine(self.data, self.hora_inicio)
+        fim = datetime.combine(self.data, self.hora_fim)
+        if fim <= inicio:
+            return 0
+        return int((fim - inicio).total_seconds() // 60)
+
+    @property
+    def valor_a_cobrar(self):
+        convenio = self.paciente.convenio if self.paciente_id else None
+        if not convenio:
+            return Decimal('0.00')
+        horas = Decimal(self.duracao_minutos) / Decimal(60)
+        valor_bruto = horas * convenio.valor_hora
+        valor_com_desconto = valor_bruto * (
+            Decimal('1') - convenio.percentual_desconto / Decimal(100)
+        )
+        return (
+            valor_com_desconto
+            * (Decimal('1') + convenio.percentual_imposto / Decimal(100))
+        ).quantize(Decimal('0.01'))
