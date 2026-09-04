@@ -1,0 +1,13 @@
+.calendar caption.calendar-caption-nav {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 28px;
+}
+
+.calendar-month-select,
+.calendar-year-select {
+    font: inherit;
+    max-width: 9.5rem;
+}
