@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f4f6f8;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background: #333;
+            color: #fff;
+        }
+        .botao {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #333;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .busca-form {
+            margin: 20px 0;
+            display: flex;
+            gap: 8px;
+        }
+        .busca-form input[type="date"] {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Consultorio Odontologico</h1>
+        <p>Agenda</p>
+    </header>
+
+    <div class="container">
+        <a href="{% url 'core:inicio' %}" class="botao">Voltar</a>
+
+        <form method="get" class="busca-form">
+            <input type="date" name="data" value="{{ data|date:'Y-m-d' }}">
+            <button type="submit" class="botao">Filtrar</button>
+        </form>
+
+        <table>
+            <tr>
+                <th>Paciente</th>
+                <th>Data</th>
+                <th>Hora início</th>
+                <th>Hora fim</th>
+                <th>Status</th>
+            </tr>
+            {% for consulta in consultas %}
+            <tr>
+                <td>{{ consulta.paciente.nome_completo }}</td>
+                <td>{{ consulta.data|date:"d/m/Y" }}</td>
+                <td>{{ consulta.hora_inicio|time:"H:i" }}</td>
+                <td>{{ consulta.hora_fim|time:"H:i" }}</td>
+                <td>{{ consulta.get_status_display }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5">Nenhuma consulta encontrada.</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>

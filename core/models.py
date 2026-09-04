@@ -55,3 +55,37 @@ class Evolucao(models.Model):
 
     def __str__(self):
         return f'{self.paciente.nome_completo} - {self.data}'
+
+
+class Consulta(models.Model):
+    class Status(models.TextChoices):
+        AGENDADA = 'agendada', 'agendada'
+        REALIZADA = 'realizada', 'realizada'
+        FALTOU = 'faltou', 'faltou'
+        CANCELADA = 'cancelada', 'cancelada'
+
+    paciente = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente',
+        on_delete=models.PROTECT,
+        related_name='consultas',
+    )
+    data = models.DateField('data')
+    hora_inicio = models.TimeField('hora início')
+    hora_fim = models.TimeField('hora fim')
+    status = models.CharField(
+        'status',
+        max_length=20,
+        choices=Status.choices,
+        default=Status.AGENDADA,
+    )
+    observacoes = models.TextField('observações', blank=True)
+    cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'consulta'
+        verbose_name_plural = 'consultas'
+        ordering = ['data', 'hora_inicio']
+
+    def __str__(self):
+        return f'{self.paciente.nome_completo} - {self.data} {self.hora_inicio}'

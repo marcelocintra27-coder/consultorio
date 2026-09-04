@@ -1,5 +1,9 @@
-﻿from django.shortcuts import get_object_or_404, render, redirect
-from .models import Paciente
+﻿from datetime import datetime
+
+from django.shortcuts import get_object_or_404, render, redirect
+from django.utils import timezone
+
+from .models import Paciente, Consulta
 from .forms import PacienteForm
 
 def inicio(request):
@@ -39,4 +43,25 @@ def editar_paciente(request, pk):
     return render(request, 'core/form_paciente.html', {
         'form': form,
         'titulo': 'Editar Paciente',
+    })
+
+
+def listar_consultas(request):
+    data_str = request.GET.get('data', '').strip()
+    hoje = timezone.localdate()
+    if data_str:
+        try:
+            data = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except ValueError:
+            data = hoje
+    else:
+        data = hoje
+    consultas = (
+        Consulta.objects.filter(data=data)
+        .select_related('paciente')
+        .order_by('hora_inicio')
+    )
+    return render(request, 'core/listar_consultas.html', {
+        'consultas': consultas,
+        'data': data,
     })
