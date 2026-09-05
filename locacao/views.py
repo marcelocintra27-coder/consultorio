@@ -1,7 +1,6 @@
 from datetime import date
 
 from django.contrib import messages
-from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -168,7 +167,6 @@ def _parse_mes(mes_str):
     return date(hoje.year, hoje.month, 1)
 
 
-@staff_member_required
 def acerto_mensal(request):
     mes = _parse_mes(request.GET.get('mes', '').strip())
     resultado = calcular_acerto_mensal(mes)
@@ -180,7 +178,6 @@ def acerto_mensal(request):
     })
 
 
-@staff_member_required
 @require_POST
 def marcar_pagamento(request):
     mes = _parse_mes(request.POST.get('mes', '').strip())
