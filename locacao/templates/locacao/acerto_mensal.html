@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acerto entre Dentistas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f4f6f8;
+            color: #333;
+        }
+        header {
+            background: #0b6e8e;
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px 60px;
+        }
+        .mes-nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .mes-nav input[type="month"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .botao {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #333;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .botao.marcar { background: #1a7a3c; }
+        .botao.desmarcar { background: #8a1a1a; }
+        .mensagens { margin-bottom: 20px; }
+        .mensagem {
+            padding: 10px 14px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        .mensagem.success { background: #d9f2e3; color: #14532d; }
+        .mensagem.error { background: #fbdada; color: #7f1d1d; }
+        section { margin-top: 36px; }
+        h2 { color: #0b6e8e; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th { background: #333; color: #fff; }
+        td.valor, th.valor { text-align: right; }
+        .positivo { color: #1a7a3c; }
+        .negativo { color: #8a1a1a; }
+        .status-pago { color: #1a7a3c; font-weight: bold; }
+        .status-pendente { color: #8a1a1a; font-weight: bold; }
+        .vazio { color: #777; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Acerto entre Dentistas</h1>
+    <p>Competência: {{ mes|date:"m/Y" }}</p>
+</header>
+
+<div class="container">
+
+    <a href="{% url 'core:inicio' %}" class="botao">Voltar</a>
+
+    <form method="get" class="mes-nav">
+        <a href="?mes={{ mes_anterior }}" class="botao">&larr; Mês anterior</a>
+        <input type="month" name="mes" value="{{ mes_input }}">
+        <button type="submit" class="botao">Ver</button>
+        <a href="?mes={{ mes_seguinte }}" class="botao">Mês seguinte &rarr;</a>
+    </form>
+
+    {% if messages %}
+    <div class="mensagens">
+        {% for message in messages %}
+        <div class="mensagem {{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <section>
+        <h2>Resumo por dentista</h2>
+        <table>
+            <tr>
+                <th>Dentista</th>
+                <th class="valor">A receber</th>
+                <th class="valor">A pagar</th>
+                <th class="valor">Saldo líquido</th>
+                <th class="valor">Despesas individuais (informativo)</th>
+            </tr>
+            {% for linha in resumo %}
+            <tr>
+                <td>{{ linha.dentista.nome_completo }}</td>
+                <td class="valor">R$ {{ linha.a_receber }}</td>
+                <td class="valor">R$ {{ linha.a_pagar }}</td>
+                <td class="valor {% if linha.saldo > 0 %}positivo{% elif linha.saldo < 0 %}negativo{% endif %}">
+                    R$ {{ linha.saldo }}
+                </td>
+                <td class="valor">R$ {{ linha.despesas_individuais }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="vazio">Nenhuma dentista ativa cadastrada.</td></tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <section>
+        <h2>Acertos entre pares</h2>
+        <table>
+            <tr>
+                <th>Devedor</th>
+                <th>Credor</th>
+                <th class="valor">Valor</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+            {% for par in pares %}
+            <tr>
+                <td>{{ par.devedor.nome_completo }}</td>
+                <td>{{ par.credor.nome_completo }}</td>
+                <td class="valor">R$ {{ par.valor }}</td>
+                <td class="{% if par.pago %}status-pago{% else %}status-pendente{% endif %}">
+                    {% if par.pago %}Pago{% else %}Pendente{% endif %}
+                </td>
+                <td>
+                    <form method="post" action="{% url 'locacao:marcar_pagamento' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="mes" value="{{ mes_input }}">
+                        <input type="hidden" name="devedor_id" value="{{ par.devedor.id }}">
+                        <input type="hidden" name="credor_id" value="{{ par.credor.id }}">
+                        {% if par.pago %}
+                        <input type="hidden" name="acao" value="desmarcar">
+                        <button type="submit" class="botao desmarcar">Desmarcar pago</button>
+                        {% else %}
+                        <input type="hidden" name="acao" value="marcar">
+                        <button type="submit" class="botao marcar">Marcar como pago</button>
+                        {% endif %}
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="vazio">Nenhum saldo pendente entre dentistas nesse mês.</td></tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <section>
+        <h2>Despesas compartilhadas do mês</h2>
+        <table>
+            <tr>
+                <th>Descrição</th>
+                <th>Pago por</th>
+                <th class="valor">Valor total</th>
+                <th class="valor">Cota por dentista</th>
+            </tr>
+            {% for despesa in despesas_compartilhadas %}
+            <tr>
+                <td>{{ despesa.descricao }}</td>
+                <td>{{ despesa.pago_por.nome_completo }}</td>
+                <td class="valor">R$ {{ despesa.valor }}</td>
+                <td class="valor">R$ {{ despesa.valor_cota }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="vazio">Nenhuma despesa compartilhada nesse mês.</td></tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <section>
+        <h2>Dívidas avulsas do mês</h2>
+        <table>
+            <tr>
+                <th>Descrição</th>
+                <th>De</th>
+                <th>Para</th>
+                <th class="valor">Valor</th>
+            </tr>
+            {% for divida in dividas %}
+            <tr>
+                <td>{{ divida.descricao }}</td>
+                <td>{{ divida.de_dentista.nome_completo }}</td>
+                <td>{{ divida.para_dentista.nome_completo }}</td>
+                <td class="valor">R$ {{ divida.valor }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="vazio">Nenhuma dívida avulsa nesse mês.</td></tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <section>
+        <h2>Despesas individuais do mês (informativo)</h2>
+        <table>
+            <tr>
+                <th>Descrição</th>
+                <th>Pago por</th>
+                <th class="valor">Valor</th>
+            </tr>
+            {% for despesa in despesas_individuais %}
+            <tr>
+                <td>{{ despesa.descricao }}</td>
+                <td>{{ despesa.pago_por.nome_completo }}</td>
+                <td class="valor">R$ {{ despesa.valor }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="vazio">Nenhuma despesa individual nesse mês.</td></tr>
+            {% endfor %}
+        </table>
+    </section>
+
+</div>
+</body>
+</html>

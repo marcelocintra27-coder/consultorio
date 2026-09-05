@@ -202,6 +202,14 @@ class PagamentoPar(models.Model):
         'competência',
         help_text='Use o primeiro dia do mês (ex.: 01/09/2026 para setembro).',
     )
+    valor = models.DecimalField(
+        'valor',
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Valor líquido do acerto no momento em que foi marcado como pago.',
+    )
     pago = models.BooleanField('pago', default=False)
     cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
 
