@@ -99,7 +99,7 @@ def listar_consultas(request):
         data = hoje
     consultas = (
         Consulta.objects.filter(data=data)
-        .select_related('paciente')
+        .select_related('paciente__convenio')
         .order_by('hora_inicio')
     )
     return render(request, 'core/listar_consultas.html', {

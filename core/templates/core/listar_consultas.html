@@ -12,7 +12,7 @@
             color: #333;
         }
         .container {
-            max-width: 900px;
+            max-width: 1100px;
             margin: 40px auto;
             padding: 0 20px;
         }
@@ -56,7 +56,7 @@
 </head>
 <body>
     <header>
-        <h1>Consultorio Odontologico</h1>
+        <h1>Consultório Odontológico</h1>
         <p>Agenda</p>
     </header>
 
@@ -75,6 +75,8 @@
                 <th>Hora início</th>
                 <th>Hora fim</th>
                 <th>Status</th>
+                <th>Valor a cobrar</th>
+                <th>Pago</th>
             </tr>
             {% for consulta in consultas %}
             <tr>
@@ -83,10 +85,12 @@
                 <td>{{ consulta.hora_inicio|time:"H:i" }}</td>
                 <td>{{ consulta.hora_fim|time:"H:i" }}</td>
                 <td>{{ consulta.get_status_display }}</td>
+                <td>R$ {{ consulta.valor_a_cobrar }}</td>
+                <td>{% if consulta.pago %}sim{% else %}não{% endif %}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5">Nenhuma consulta encontrada.</td>
+                <td colspan="7">Nenhuma consulta encontrada.</td>
             </tr>
             {% endfor %}
         </table>
