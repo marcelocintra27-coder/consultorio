@@ -59,14 +59,10 @@
             color: #666;
         }
 
-        .botao {
-            display: inline-block;
-            margin-top: 10px;
-            padding: 10px 20px;
-            background: #0b6e8e;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
+        .botao.sair {
+            background: #fff;
+            color: #0b6e8e;
+            margin-top: 16px;
         }
 
         footer {
@@ -84,6 +80,12 @@
 <header>
     <h1>Consultório Odontológico</h1>
     <p>Sistema de Gestão do Consultório</p>
+    {% if user.is_authenticated %}
+    <form method="post" action="{% url 'sair' %}" style="margin: 0;">
+        {% csrf_token %}
+        <button type="submit" class="botao sair">Sair</button>
+    </form>
+    {% endif %}
 </header>
 
 <div class="container">
@@ -130,6 +132,12 @@
             <h2>Pagamentos</h2>
             <p>Forma de pagamento de cada consulta.</p>
             <a href="{% url 'core:listar_pagamentos_consulta' %}" class="botao">Acessar</a>
+        </div>
+
+        <div class="card">
+            <h2>Materiais</h2>
+            <p>Consumo e custo por atendimento.</p>
+            <a href="{% url 'core:listar_materiais_dia' %}" class="botao">Acessar</a>
         </div>
 
         <div class="card">

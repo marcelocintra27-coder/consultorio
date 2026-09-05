@@ -1,7 +1,8 @@
 ﻿from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import models
+from django.db.models import Sum
 
 
 class Convenio(models.Model):
@@ -134,7 +135,7 @@ class Consulta(models.Model):
         return int((fim - inicio).total_seconds() // 60)
 
     @property
-    def valor_a_cobrar(self):
+    def valor_convenio(self):
         convenio = self.paciente.convenio if self.paciente_id else None
         if not convenio:
             return Decimal('0.00')
@@ -146,4 +147,46 @@ class Consulta(models.Model):
         return (
             valor_com_desconto
             * (Decimal('1') + convenio.percentual_imposto / Decimal(100))
-        ).quantize(Decimal('0.01'))
+        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def valor_materiais(self):
+        total = self.materiais.aggregate(soma=Sum('valor'))['soma']
+        if total is None:
+            return Decimal('0.00')
+        return Decimal(total).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def valor_a_cobrar(self):
+        return (self.valor_convenio + self.valor_materiais).quantize(
+            Decimal('0.01'),
+            rounding=ROUND_HALF_UP,
+        )
+
+
+class MaterialUsado(models.Model):
+    consulta = models.ForeignKey(
+        Consulta,
+        verbose_name='consulta',
+        on_delete=models.CASCADE,
+        related_name='materiais',
+    )
+    descricao = models.CharField('descrição', max_length=200)
+    valor = models.DecimalField('valor', max_digits=10, decimal_places=2)
+    cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'material usado'
+        verbose_name_plural = 'materiais usados'
+        ordering = ['descricao']
+
+    def __str__(self):
+        return f'{self.descricao} — {self.consulta}'
+
+    def save(self, *args, **kwargs):
+        if self.valor is not None:
+            self.valor = Decimal(self.valor).quantize(
+                Decimal('0.01'),
+                rounding=ROUND_HALF_UP,
+            )
+        super().save(*args, **kwargs)

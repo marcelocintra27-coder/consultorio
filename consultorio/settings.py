@@ -49,6 +49,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.auth.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -114,6 +115,10 @@ TIME_ZONE = 'America/Sao_Paulo'
 USE_I18N = True
 
 USE_TZ = True
+
+LOGIN_URL = 'entrar'
+LOGIN_REDIRECT_URL = 'core:inicio'
+LOGOUT_REDIRECT_URL = 'entrar'
 
 
 # Static files (CSS, JavaScript, Images)

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Convenio, Paciente, Evolucao, Consulta
+from .models import Convenio, Paciente, Evolucao, Consulta, MaterialUsado
 
 
 @admin.register(Convenio)
@@ -61,4 +61,13 @@ class ConsultaAdmin(admin.ModelAdmin):
     search_fields = ('paciente__nome_completo',)
     autocomplete_fields = ('paciente',)
     readonly_fields = ('cadastrado_em', 'valor_a_cobrar')
+    list_per_page = 25
+
+
+@admin.register(MaterialUsado)
+class MaterialUsadoAdmin(admin.ModelAdmin):
+    list_display = ('descricao', 'valor', 'consulta', 'cadastrado_em')
+    search_fields = ('descricao', 'consulta__paciente__nome_completo')
+    autocomplete_fields = ('consulta',)
+    readonly_fields = ('cadastrado_em',)
     list_per_page = 25

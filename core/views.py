@@ -5,8 +5,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import Convenio, Paciente, Consulta
-from .forms import ConvenioForm, PacienteForm
+from .models import Convenio, Paciente, Consulta, MaterialUsado
+from .forms import ConvenioForm, PacienteForm, MaterialUsadoForm
 
 def inicio(request):
     return render(request, 'core/inicio.html')
@@ -158,3 +158,75 @@ def salvar_forma_pagamento(request, pk):
     return redirect(
         f"{reverse('core:listar_pagamentos_consulta')}?data={consulta.data.isoformat()}"
     )
+
+
+def listar_materiais_dia(request):
+    data_str = request.GET.get('data', '').strip()
+    hoje = timezone.localdate()
+    if data_str:
+        try:
+            data = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except ValueError:
+            data = hoje
+    else:
+        data = hoje
+    consultas = (
+        Consulta.objects.filter(data=data)
+        .select_related('paciente__convenio')
+        .prefetch_related('materiais')
+        .order_by('hora_inicio')
+    )
+    return render(request, 'core/listar_materiais_dia.html', {
+        'consultas': consultas,
+        'data': data,
+    })
+
+
+def materiais_consulta(request, pk):
+    consulta = get_object_or_404(
+        Consulta.objects.select_related('paciente__convenio'),
+        pk=pk,
+    )
+    materiais = consulta.materiais.all()
+    if request.method == 'POST':
+        form = MaterialUsadoForm(request.POST)
+        if form.is_valid():
+            material = form.save(commit=False)
+            material.consulta = consulta
+            material.save()
+            return redirect('core:materiais_consulta', pk=consulta.pk)
+    else:
+        form = MaterialUsadoForm()
+    return render(request, 'core/materiais_consulta.html', {
+        'consulta': consulta,
+        'materiais': materiais,
+        'form': form,
+    })
+
+
+def editar_material_usado(request, pk):
+    material = get_object_or_404(
+        MaterialUsado.objects.select_related('consulta__paciente__convenio'),
+        pk=pk,
+    )
+    consulta = material.consulta
+    if request.method == 'POST':
+        form = MaterialUsadoForm(request.POST, instance=material)
+        if form.is_valid():
+            form.save()
+            return redirect('core:materiais_consulta', pk=consulta.pk)
+    else:
+        form = MaterialUsadoForm(instance=material)
+    return render(request, 'core/form_material.html', {
+        'form': form,
+        'consulta': consulta,
+        'titulo': 'Editar Material',
+    })
+
+
+@require_POST
+def excluir_material_usado(request, pk):
+    material = get_object_or_404(MaterialUsado, pk=pk)
+    consulta_id = material.consulta_id
+    material.delete()
+    return redirect('core:materiais_consulta', pk=consulta_id)

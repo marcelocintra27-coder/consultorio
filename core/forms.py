@@ -1,5 +1,5 @@
 ﻿from django import forms
-from .models import Convenio, Paciente
+from .models import Convenio, Paciente, MaterialUsado
 
 
 class PacienteForm(forms.ModelForm):
@@ -43,4 +43,16 @@ class ConvenioForm(forms.ModelForm):
             'valor_hora': forms.NumberInput(attrs={'step': '0.01'}),
             'percentual_desconto': forms.NumberInput(attrs={'step': '0.01'}),
             'percentual_imposto': forms.NumberInput(attrs={'step': '0.01'}),
+        }
+
+
+class MaterialUsadoForm(forms.ModelForm):
+    class Meta:
+        model = MaterialUsado
+        fields = [
+            'descricao',
+            'valor',
+        ]
+        widgets = {
+            'valor': forms.NumberInput(attrs={'step': '0.01'}),
         }

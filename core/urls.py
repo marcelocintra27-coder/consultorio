@@ -11,6 +11,10 @@ from .views import (
     marcar_consulta_paga,
     listar_pagamentos_consulta,
     salvar_forma_pagamento,
+    listar_materiais_dia,
+    materiais_consulta,
+    editar_material_usado,
+    excluir_material_usado,
 )
 
 app_name = 'core'
@@ -25,18 +29,38 @@ urlpatterns = [
     path('convenios/<int:pk>/editar/', editar_convenio, name='editar_convenio'),
     path('consultas/', listar_consultas, name='listar_consultas'),
     path(
-        'consultas/<int:pk>/marcar-pago/',
-        marcar_consulta_paga,
-        name='marcar_consulta_paga',
-    ),
-    path(
         'consultas/pagamentos/',
         listar_pagamentos_consulta,
         name='listar_pagamentos_consulta',
     ),
     path(
+        'consultas/materiais/',
+        listar_materiais_dia,
+        name='listar_materiais_dia',
+    ),
+    path(
+        'consultas/<int:pk>/marcar-pago/',
+        marcar_consulta_paga,
+        name='marcar_consulta_paga',
+    ),
+    path(
         'consultas/<int:pk>/forma-pagamento/',
         salvar_forma_pagamento,
         name='salvar_forma_pagamento',
+    ),
+    path(
+        'consultas/<int:pk>/materiais/',
+        materiais_consulta,
+        name='materiais_consulta',
+    ),
+    path(
+        'materiais/<int:pk>/editar/',
+        editar_material_usado,
+        name='editar_material_usado',
+    ),
+    path(
+        'materiais/<int:pk>/excluir/',
+        excluir_material_usado,
+        name='excluir_material_usado',
     ),
 ]
