@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Despesas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f4f6f8;
+            color: #333;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background: #333;
+            color: #fff;
+        }
+        .botao {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #333;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .busca-form {
+            margin: 20px 0;
+            display: flex;
+            gap: 8px;
+        }
+        .busca-form input[type="text"],
+        .busca-form input[type="month"] {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Consultório Odontológico</h1>
+        <p>Lista de Despesas</p>
+    </header>
+
+    <div class="container">
+        <a href="{% url 'core:inicio' %}" class="botao">Voltar</a>
+        <a href="{% url 'locacao:cadastrar_despesa' %}" class="botao">Cadastrar</a>
+
+        <form method="get" class="busca-form">
+            <input type="month" name="mes" value="{{ mes_input }}">
+            <input type="text" name="q" placeholder="Buscar por descrição..." value="{{ termo }}">
+            <button type="submit" class="botao">Buscar</button>
+        </form>
+
+        <table>
+            <tr>
+                <th>Descrição</th>
+                <th>Valor</th>
+                <th>Mês</th>
+                <th>Tipo</th>
+                <th>Pago por</th>
+                <th>Cota</th>
+                <th></th>
+            </tr>
+            {% for despesa in despesas %}
+            <tr>
+                <td>{{ despesa.descricao }}</td>
+                <td>R$ {{ despesa.valor }}</td>
+                <td>{{ despesa.competencia|date:"m/Y" }}</td>
+                <td>{{ despesa.get_tipo_display }}</td>
+                <td>{{ despesa.pago_por }}</td>
+                <td>R$ {{ despesa.valor_cota }}</td>
+                <td>
+                    <a href="{% url 'locacao:editar_despesa' despesa.pk %}" class="botao">Editar</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7">Nenhuma despesa encontrada.</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>

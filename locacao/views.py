@@ -7,8 +7,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .forms import DentistaForm
-from .models import Dentista, PagamentoPar
+from .forms import DentistaForm, DespesaForm
+from .models import Dentista, Despesa, PagamentoPar
 from .services import calcular_acerto_mensal, mes_anterior, mes_seguinte
 
 
@@ -50,6 +50,58 @@ def editar_dentista(request, pk):
     return render(request, 'locacao/form_dentista.html', {
         'form': form,
         'titulo': 'Editar Dentista',
+    })
+
+
+def listar_despesas(request):
+    termo = request.GET.get('q', '').strip()
+    mes = _parse_mes(request.GET.get('mes', '').strip())
+    despesas = (
+        Despesa.objects.filter(competencia=mes)
+        .select_related('pago_por')
+        .order_by('descricao')
+    )
+    if termo:
+        despesas = despesas.filter(descricao__icontains=termo)
+    return render(request, 'locacao/listar_despesas.html', {
+        'despesas': despesas,
+        'termo': termo,
+        'mes_input': mes.strftime('%Y-%m'),
+    })
+
+
+def cadastrar_despesa(request):
+    if request.method == 'POST':
+        form = DespesaForm(request.POST)
+        if form.is_valid():
+            despesa = form.save()
+            return redirect(
+                f"{reverse('locacao:listar_despesas')}"
+                f"?mes={despesa.competencia.strftime('%Y-%m')}"
+            )
+    else:
+        form = DespesaForm()
+    return render(request, 'locacao/form_despesa.html', {
+        'form': form,
+        'titulo': 'Cadastrar Despesa',
+    })
+
+
+def editar_despesa(request, pk):
+    despesa = get_object_or_404(Despesa, pk=pk)
+    if request.method == 'POST':
+        form = DespesaForm(request.POST, instance=despesa)
+        if form.is_valid():
+            despesa = form.save()
+            return redirect(
+                f"{reverse('locacao:listar_despesas')}"
+                f"?mes={despesa.competencia.strftime('%Y-%m')}"
+            )
+    else:
+        form = DespesaForm(instance=despesa)
+    return render(request, 'locacao/form_despesa.html', {
+        'form': form,
+        'titulo': 'Editar Despesa',
     })
 
 
