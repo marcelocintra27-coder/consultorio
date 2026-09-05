@@ -1,5 +1,5 @@
 ﻿from django import forms
-from .models import Paciente
+from .models import Convenio, Paciente
 
 
 class PacienteForm(forms.ModelForm):
@@ -27,4 +27,20 @@ class PacienteForm(forms.ModelForm):
             'cpf': forms.TextInput(attrs={'autocomplete': 'off'}),
             'endereco': forms.Textarea(attrs={'rows': 2}),
             'observacoes': forms.Textarea(attrs={'rows': 3}),
+        }
+
+
+class ConvenioForm(forms.ModelForm):
+    class Meta:
+        model = Convenio
+        fields = [
+            'nome',
+            'valor_hora',
+            'percentual_desconto',
+            'percentual_imposto',
+        ]
+        widgets = {
+            'valor_hora': forms.NumberInput(attrs={'step': '0.01'}),
+            'percentual_desconto': forms.NumberInput(attrs={'step': '0.01'}),
+            'percentual_imposto': forms.NumberInput(attrs={'step': '0.01'}),
         }

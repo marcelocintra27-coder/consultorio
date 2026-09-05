@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Convênios</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f4f6f8;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background: #333;
+            color: #fff;
+        }
+        .botao {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #333;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .busca-form {
+            margin: 20px 0;
+            display: flex;
+            gap: 8px;
+        }
+        .busca-form input[type="text"] {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Consultório Odontológico</h1>
+        <p>Lista de Convênios</p>
+    </header>
+
+    <div class="container">
+        <a href="{% url 'core:inicio' %}" class="botao">Voltar</a>
+        <a href="{% url 'core:cadastrar_convenio' %}" class="botao">Cadastrar</a>
+
+        <form method="get" class="busca-form">
+            <input type="text" name="q" placeholder="Buscar por nome..." value="{{ termo }}">
+            <button type="submit" class="botao">Buscar</button>
+        </form>
+
+        <table>
+            <tr>
+                <th>Nome</th>
+                <th>Valor da hora</th>
+                <th>Desconto %</th>
+                <th>Imposto %</th>
+                <th></th>
+            </tr>
+            {% for convenio in convenios %}
+            <tr>
+                <td>{{ convenio.nome }}</td>
+                <td>{{ convenio.valor_hora }}</td>
+                <td>{{ convenio.percentual_desconto }}</td>
+                <td>{{ convenio.percentual_imposto }}</td>
+                <td>
+                    <a href="{% url 'core:editar_convenio' convenio.pk %}" class="botao">Editar</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5">Nenhum convênio encontrado.</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>

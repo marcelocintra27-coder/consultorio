@@ -3,8 +3,8 @@
 from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 
-from .models import Paciente, Consulta
-from .forms import PacienteForm
+from .models import Convenio, Paciente, Consulta
+from .forms import ConvenioForm, PacienteForm
 
 def inicio(request):
     return render(request, 'core/inicio.html')
@@ -43,6 +43,47 @@ def editar_paciente(request, pk):
     return render(request, 'core/form_paciente.html', {
         'form': form,
         'titulo': 'Editar Paciente',
+    })
+
+
+def listar_convenios(request):
+    termo = request.GET.get('q', '').strip()
+    convenios = Convenio.objects.filter(ativo=True)
+    if termo:
+        convenios = convenios.filter(nome__icontains=termo)
+    convenios = convenios.order_by('nome')
+    return render(request, 'core/listar_convenios.html', {
+        'convenios': convenios,
+        'termo': termo,
+    })
+
+
+def cadastrar_convenio(request):
+    if request.method == 'POST':
+        form = ConvenioForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('core:listar_convenios')
+    else:
+        form = ConvenioForm()
+    return render(request, 'core/form_convenio.html', {
+        'form': form,
+        'titulo': 'Cadastrar Convênio',
+    })
+
+
+def editar_convenio(request, pk):
+    convenio = get_object_or_404(Convenio, pk=pk, ativo=True)
+    if request.method == 'POST':
+        form = ConvenioForm(request.POST, instance=convenio)
+        if form.is_valid():
+            form.save()
+            return redirect('core:listar_convenios')
+    else:
+        form = ConvenioForm(instance=convenio)
+    return render(request, 'core/form_convenio.html', {
+        'form': form,
+        'titulo': 'Editar Convênio',
     })
 
 
