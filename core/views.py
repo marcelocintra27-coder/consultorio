@@ -123,3 +123,38 @@ def marcar_consulta_paga(request, pk):
     return redirect(
         f"{reverse('core:listar_consultas')}?data={consulta.data.isoformat()}"
     )
+
+
+def listar_pagamentos_consulta(request):
+    data_str = request.GET.get('data', '').strip()
+    hoje = timezone.localdate()
+    if data_str:
+        try:
+            data = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except ValueError:
+            data = hoje
+    else:
+        data = hoje
+    consultas = (
+        Consulta.objects.filter(data=data)
+        .select_related('paciente__convenio')
+        .order_by('hora_inicio')
+    )
+    return render(request, 'core/listar_pagamentos_consulta.html', {
+        'consultas': consultas,
+        'data': data,
+        'formas_pagamento': Consulta.FormaPagamento.choices,
+    })
+
+
+@require_POST
+def salvar_forma_pagamento(request, pk):
+    consulta = get_object_or_404(Consulta, pk=pk)
+    forma = (request.POST.get('forma_pagamento') or '').strip()
+    opcoes = {choice[0] for choice in Consulta.FormaPagamento.choices}
+    if forma == '' or forma in opcoes:
+        consulta.forma_pagamento = forma
+        consulta.save(update_fields=['forma_pagamento'])
+    return redirect(
+        f"{reverse('core:listar_pagamentos_consulta')}?data={consulta.data.isoformat()}"
+    )

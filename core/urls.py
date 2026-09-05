@@ -9,6 +9,8 @@ from .views import (
     editar_convenio,
     listar_consultas,
     marcar_consulta_paga,
+    listar_pagamentos_consulta,
+    salvar_forma_pagamento,
 )
 
 app_name = 'core'
@@ -26,5 +28,15 @@ urlpatterns = [
         'consultas/<int:pk>/marcar-pago/',
         marcar_consulta_paga,
         name='marcar_consulta_paga',
+    ),
+    path(
+        'consultas/pagamentos/',
+        listar_pagamentos_consulta,
+        name='listar_pagamentos_consulta',
+    ),
+    path(
+        'consultas/<int:pk>/forma-pagamento/',
+        salvar_forma_pagamento,
+        name='salvar_forma_pagamento',
     ),
 ]

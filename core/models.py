@@ -85,6 +85,12 @@ class Consulta(models.Model):
         FALTOU = 'faltou', 'faltou'
         CANCELADA = 'cancelada', 'cancelada'
 
+    class FormaPagamento(models.TextChoices):
+        DINHEIRO = 'dinheiro', 'dinheiro'
+        CARTAO_CREDITO = 'cartao_credito', 'cartão de crédito'
+        PIX = 'pix', 'pix'
+        OUTROS = 'outros', 'outros'
+
     paciente = models.ForeignKey(
         Paciente,
         verbose_name='paciente',
@@ -101,6 +107,13 @@ class Consulta(models.Model):
         default=Status.AGENDADA,
     )
     pago = models.BooleanField('pago', default=False)
+    forma_pagamento = models.CharField(
+        'forma de pagamento',
+        max_length=20,
+        choices=FormaPagamento.choices,
+        blank=True,
+        default='',
+    )
     observacoes = models.TextField('observações', blank=True)
     cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
 

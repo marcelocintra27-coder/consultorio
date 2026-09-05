@@ -54,9 +54,10 @@ class ConsultaAdmin(admin.ModelAdmin):
         'hora_fim',
         'status',
         'pago',
+        'forma_pagamento',
         'valor_a_cobrar',
     )
-    list_filter = ('status', 'pago', 'data')
+    list_filter = ('status', 'pago', 'forma_pagamento', 'data')
     search_fields = ('paciente__nome_completo',)
     autocomplete_fields = ('paciente',)
     readonly_fields = ('cadastrado_em', 'valor_a_cobrar')
