@@ -7,8 +7,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .forms import DentistaForm, DespesaForm
-from .models import Dentista, Despesa, PagamentoPar
+from .forms import DentistaForm, DespesaForm, DividaAvulsaForm
+from .models import Dentista, Despesa, DividaAvulsa, PagamentoPar
 from .services import calcular_acerto_mensal, mes_anterior, mes_seguinte
 
 
@@ -102,6 +102,58 @@ def editar_despesa(request, pk):
     return render(request, 'locacao/form_despesa.html', {
         'form': form,
         'titulo': 'Editar Despesa',
+    })
+
+
+def listar_dividas(request):
+    termo = request.GET.get('q', '').strip()
+    mes = _parse_mes(request.GET.get('mes', '').strip())
+    dividas = (
+        DividaAvulsa.objects.filter(competencia=mes)
+        .select_related('de_dentista', 'para_dentista')
+        .order_by('descricao')
+    )
+    if termo:
+        dividas = dividas.filter(descricao__icontains=termo)
+    return render(request, 'locacao/listar_dividas.html', {
+        'dividas': dividas,
+        'termo': termo,
+        'mes_input': mes.strftime('%Y-%m'),
+    })
+
+
+def cadastrar_divida(request):
+    if request.method == 'POST':
+        form = DividaAvulsaForm(request.POST)
+        if form.is_valid():
+            divida = form.save()
+            return redirect(
+                f"{reverse('locacao:listar_dividas')}"
+                f"?mes={divida.competencia.strftime('%Y-%m')}"
+            )
+    else:
+        form = DividaAvulsaForm()
+    return render(request, 'locacao/form_divida.html', {
+        'form': form,
+        'titulo': 'Cadastrar Dívida',
+    })
+
+
+def editar_divida(request, pk):
+    divida = get_object_or_404(DividaAvulsa, pk=pk)
+    if request.method == 'POST':
+        form = DividaAvulsaForm(request.POST, instance=divida)
+        if form.is_valid():
+            divida = form.save()
+            return redirect(
+                f"{reverse('locacao:listar_dividas')}"
+                f"?mes={divida.competencia.strftime('%Y-%m')}"
+            )
+    else:
+        form = DividaAvulsaForm(instance=divida)
+    return render(request, 'locacao/form_divida.html', {
+        'form': form,
+        'titulo': 'Editar Dívida',
     })
 
 
