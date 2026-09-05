@@ -1,7 +1,9 @@
 ﻿from datetime import datetime
 
 from django.shortcuts import get_object_or_404, render, redirect
+from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .models import Convenio, Paciente, Consulta
 from .forms import ConvenioForm, PacienteForm
@@ -106,3 +108,18 @@ def listar_consultas(request):
         'consultas': consultas,
         'data': data,
     })
+
+
+@require_POST
+def marcar_consulta_paga(request, pk):
+    consulta = get_object_or_404(Consulta, pk=pk)
+    acao = request.POST.get('acao')
+    if acao == 'marcar':
+        consulta.pago = True
+        consulta.save(update_fields=['pago'])
+    elif acao == 'desmarcar':
+        consulta.pago = False
+        consulta.save(update_fields=['pago'])
+    return redirect(
+        f"{reverse('core:listar_consultas')}?data={consulta.data.isoformat()}"
+    )

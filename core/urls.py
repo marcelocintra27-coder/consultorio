@@ -8,6 +8,7 @@ from .views import (
     cadastrar_convenio,
     editar_convenio,
     listar_consultas,
+    marcar_consulta_paga,
 )
 
 app_name = 'core'
@@ -21,4 +22,9 @@ urlpatterns = [
     path('convenios/cadastrar/', cadastrar_convenio, name='cadastrar_convenio'),
     path('convenios/<int:pk>/editar/', editar_convenio, name='editar_convenio'),
     path('consultas/', listar_consultas, name='listar_consultas'),
+    path(
+        'consultas/<int:pk>/marcar-pago/',
+        marcar_consulta_paga,
+        name='marcar_consulta_paga',
+    ),
 ]
