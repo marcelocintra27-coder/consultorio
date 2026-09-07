@@ -67,6 +67,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.admin_local_date',
+                'core.context_processors.permissoes_usuario',
             ],
         },
     },

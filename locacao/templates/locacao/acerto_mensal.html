@@ -1,101 +1,19 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acerto entre Dentistas</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            background: #f4f6f8;
-            color: #333;
-        }
-        header {
-            background: #0b6e8e;
-            color: white;
-            padding: 25px;
-            text-align: center;
-        }
-        header h1 {
-            margin: 0;
-            font-size: 28px;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 40px auto;
-            padding: 0 20px 60px;
-        }
-        .mes-nav {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        .mes-nav input[type="month"] {
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .botao {
-            display: inline-block;
-            padding: 8px 16px;
-            background: #333;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 4px;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .botao.marcar { background: #1a7a3c; }
-        .botao.desmarcar { background: #8a1a1a; }
-        .mensagens { margin-bottom: 20px; }
-        .mensagem {
-            padding: 10px 14px;
-            border-radius: 4px;
-            margin-bottom: 8px;
-        }
-        .mensagem.success { background: #d9f2e3; color: #14532d; }
-        .mensagem.error { background: #fbdada; color: #7f1d1d; }
-        section { margin-top: 36px; }
-        h2 { color: #0b6e8e; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #fff;
-        }
-        th, td {
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
-            text-align: left;
-        }
-        th { background: #333; color: #fff; }
-        td.valor, th.valor { text-align: right; }
-        .positivo { color: #1a7a3c; }
-        .negativo { color: #8a1a1a; }
-        .status-pago { color: #1a7a3c; font-weight: bold; }
-        .status-pendente { color: #8a1a1a; font-weight: bold; }
-        .vazio { color: #777; font-style: italic; }
-    </style>
-</head>
-<body>
+{% extends "core/base.html" %}
 
-<header>
-    <h1>Acerto entre Dentistas</h1>
-    <p>Competência: {{ mes|date:"m/Y" }}</p>
-</header>
+{% block title %}Acerto entre Dentistas{% endblock %}
+{% block titulo %}Acerto mensal · {{ mes|date:"m/Y" }}{% endblock %}
+{% block container_class %}largo{% endblock %}
 
-<div class="container">
-
-    <a href="{% url 'core:inicio' %}" class="botao">Voltar</a>
+{% block content %}
+    <div class="acoes">
+        <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+    </div>
 
     <form method="get" class="mes-nav">
-        <a href="?mes={{ mes_anterior }}" class="botao">&larr; Mês anterior</a>
+        <a href="?mes={{ mes_anterior }}" class="botao secundario">&larr; Mês anterior</a>
         <input type="month" name="mes" value="{{ mes_input }}">
         <button type="submit" class="botao">Ver</button>
-        <a href="?mes={{ mes_seguinte }}" class="botao">Mês seguinte &rarr;</a>
+        <a href="?mes={{ mes_seguinte }}" class="botao secundario">Mês seguinte &rarr;</a>
     </form>
 
     {% if messages %}
@@ -106,8 +24,8 @@
     </div>
     {% endif %}
 
-    <section>
-        <h2>Resumo por dentista</h2>
+    <h2 class="secao-pagina">Resumo por dentista</h2>
+    <div class="tabela-wrap">
         <table>
             <tr>
                 <th>Dentista</th>
@@ -130,10 +48,10 @@
             <tr><td colspan="5" class="vazio">Nenhuma dentista ativa cadastrada.</td></tr>
             {% endfor %}
         </table>
-    </section>
+    </div>
 
-    <section>
-        <h2>Acertos entre pares</h2>
+    <h2 class="secao-pagina">Acertos entre pares</h2>
+    <div class="tabela-wrap">
         <table>
             <tr>
                 <th>Devedor</th>
@@ -151,7 +69,7 @@
                     {% if par.pago %}Pago{% else %}Pendente{% endif %}
                 </td>
                 <td>
-                    <form method="post" action="{% url 'locacao:marcar_pagamento' %}">
+                    <form method="post" action="{% url 'locacao:marcar_pagamento' %}" class="form-inline">
                         {% csrf_token %}
                         <input type="hidden" name="mes" value="{{ mes_input }}">
                         <input type="hidden" name="devedor_id" value="{{ par.devedor.id }}">
@@ -170,10 +88,10 @@
             <tr><td colspan="5" class="vazio">Nenhum saldo pendente entre dentistas nesse mês.</td></tr>
             {% endfor %}
         </table>
-    </section>
+    </div>
 
-    <section>
-        <h2>Despesas compartilhadas do mês</h2>
+    <h2 class="secao-pagina">Despesas compartilhadas do mês</h2>
+    <div class="tabela-wrap">
         <table>
             <tr>
                 <th>Descrição</th>
@@ -192,10 +110,10 @@
             <tr><td colspan="4" class="vazio">Nenhuma despesa compartilhada nesse mês.</td></tr>
             {% endfor %}
         </table>
-    </section>
+    </div>
 
-    <section>
-        <h2>Dívidas avulsas do mês</h2>
+    <h2 class="secao-pagina">Dívidas avulsas do mês</h2>
+    <div class="tabela-wrap">
         <table>
             <tr>
                 <th>Descrição</th>
@@ -214,10 +132,10 @@
             <tr><td colspan="4" class="vazio">Nenhuma dívida avulsa nesse mês.</td></tr>
             {% endfor %}
         </table>
-    </section>
+    </div>
 
-    <section>
-        <h2>Despesas individuais do mês (informativo)</h2>
+    <h2 class="secao-pagina">Despesas individuais do mês (informativo)</h2>
+    <div class="tabela-wrap">
         <table>
             <tr>
                 <th>Descrição</th>
@@ -234,8 +152,5 @@
             <tr><td colspan="3" class="vazio">Nenhuma despesa individual nesse mês.</td></tr>
             {% endfor %}
         </table>
-    </section>
-
-</div>
-</body>
-</html>
+    </div>
+{% endblock %}

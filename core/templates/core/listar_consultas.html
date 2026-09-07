@@ -1,79 +1,20 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agenda</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            background: #f4f6f8;
-            color: #333;
-        }
-        .container {
-            max-width: 1100px;
-            margin: 40px auto;
-            padding: 0 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #fff;
-        }
-        th, td {
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
-            text-align: left;
-        }
-        th {
-            background: #333;
-            color: #fff;
-        }
-        .botao {
-            display: inline-block;
-            padding: 8px 16px;
-            background: #333;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 4px;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .busca-form {
-            margin: 20px 0;
-            display: flex;
-            gap: 8px;
-        }
-        .busca-form input[type="date"] {
-            flex: 1;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        form.form-pago {
-            display: inline;
-            margin: 0;
-            padding: 0;
-            background: none;
-        }
-    </style>
-</head>
-<body>
-    <header>
-        <h1>Consultório Odontológico</h1>
-        <p>Agenda</p>
-    </header>
+{% extends "core/base.html" %}
 
-    <div class="container">
-        <a href="{% url 'core:inicio' %}" class="botao">Voltar</a>
+{% block title %}Agenda{% endblock %}
+{% block titulo %}Agenda{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+        </div>
 
         <form method="get" class="busca-form">
             <input type="date" name="data" value="{{ data|date:'Y-m-d' }}">
             <button type="submit" class="botao">Filtrar</button>
         </form>
 
+        <div class="tabela-wrap">
         <table>
             <tr>
                 <th>Paciente</th>
@@ -81,9 +22,11 @@
                 <th>Hora início</th>
                 <th>Hora fim</th>
                 <th>Status</th>
+                {% if pode_financeiro %}
                 <th>Valor a cobrar</th>
                 <th>Pago</th>
                 <th></th>
+                {% endif %}
             </tr>
             {% for consulta in consultas %}
             <tr>
@@ -92,6 +35,7 @@
                 <td>{{ consulta.hora_inicio|time:"H:i" }}</td>
                 <td>{{ consulta.hora_fim|time:"H:i" }}</td>
                 <td>{{ consulta.get_status_display }}</td>
+                {% if pode_financeiro %}
                 <td>R$ {{ consulta.valor_a_cobrar }}</td>
                 <td>{% if consulta.pago %}sim{% else %}não{% endif %}</td>
                 <td>
@@ -99,20 +43,20 @@
                         {% csrf_token %}
                         {% if consulta.pago %}
                             <input type="hidden" name="acao" value="desmarcar">
-                            <button type="submit" class="botao">Desmarcar</button>
+                            <button type="submit" class="botao desmarcar">Desmarcar</button>
                         {% else %}
                             <input type="hidden" name="acao" value="marcar">
-                            <button type="submit" class="botao">Marcar pago</button>
+                            <button type="submit" class="botao marcar">Marcar pago</button>
                         {% endif %}
                     </form>
                 </td>
+                {% endif %}
             </tr>
             {% empty %}
             <tr>
-                <td colspan="8">Nenhuma consulta encontrada.</td>
+                <td colspan="{% if pode_financeiro %}8{% else %}5{% endif %}">Nenhuma consulta encontrada.</td>
             </tr>
             {% endfor %}
         </table>
-    </div>
-</body>
-</html>
+        </div>
+{% endblock %}

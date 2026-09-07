@@ -1,0 +1,12 @@
+{% extends "core/base.html" %}
+
+{% block title %}Acesso negado{% endblock %}
+{% block titulo %}Acesso negado{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+        <div class="pagina-aviso">
+            <p>Seu usuário não tem permissão para esta tela.</p>
+            <a href="{% url 'core:inicio' %}" class="botao">Voltar ao início</a>
+        </div>
+{% endblock %}

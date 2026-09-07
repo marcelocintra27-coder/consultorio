@@ -1,5 +1,7 @@
 ﻿from datetime import datetime
 
+from django.contrib.auth import logout
+from django.contrib.auth.decorators import login_not_required
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -7,9 +9,16 @@ from django.views.decorators.http import require_POST
 
 from .models import Convenio, Paciente, Consulta, MaterialUsado
 from .forms import ConvenioForm, PacienteForm, MaterialUsadoForm
+from .permissoes import exige_financeiro
 
 def inicio(request):
     return render(request, 'core/inicio.html')
+
+
+@login_not_required
+def sair(request):
+    logout(request)
+    return redirect('entrar')
 
 def listar_pacientes(request):
     termo = request.GET.get('q', '').strip()
@@ -48,6 +57,7 @@ def editar_paciente(request, pk):
     })
 
 
+@exige_financeiro
 def listar_convenios(request):
     termo = request.GET.get('q', '').strip()
     convenios = Convenio.objects.filter(ativo=True)
@@ -60,6 +70,7 @@ def listar_convenios(request):
     })
 
 
+@exige_financeiro
 def cadastrar_convenio(request):
     if request.method == 'POST':
         form = ConvenioForm(request.POST)
@@ -74,6 +85,7 @@ def cadastrar_convenio(request):
     })
 
 
+@exige_financeiro
 def editar_convenio(request, pk):
     convenio = get_object_or_404(Convenio, pk=pk, ativo=True)
     if request.method == 'POST':
@@ -110,6 +122,7 @@ def listar_consultas(request):
     })
 
 
+@exige_financeiro
 @require_POST
 def marcar_consulta_paga(request, pk):
     consulta = get_object_or_404(Consulta, pk=pk)
@@ -125,6 +138,7 @@ def marcar_consulta_paga(request, pk):
     )
 
 
+@exige_financeiro
 def listar_pagamentos_consulta(request):
     data_str = request.GET.get('data', '').strip()
     hoje = timezone.localdate()
@@ -147,6 +161,7 @@ def listar_pagamentos_consulta(request):
     })
 
 
+@exige_financeiro
 @require_POST
 def salvar_forma_pagamento(request, pk):
     consulta = get_object_or_404(Consulta, pk=pk)
@@ -160,6 +175,7 @@ def salvar_forma_pagamento(request, pk):
     )
 
 
+@exige_financeiro
 def listar_materiais_dia(request):
     data_str = request.GET.get('data', '').strip()
     hoje = timezone.localdate()
@@ -182,6 +198,7 @@ def listar_materiais_dia(request):
     })
 
 
+@exige_financeiro
 def materiais_consulta(request, pk):
     consulta = get_object_or_404(
         Consulta.objects.select_related('paciente__convenio'),
@@ -204,6 +221,7 @@ def materiais_consulta(request, pk):
     })
 
 
+@exige_financeiro
 def editar_material_usado(request, pk):
     material = get_object_or_404(
         MaterialUsado.objects.select_related('consulta__paciente__convenio'),
@@ -224,6 +242,7 @@ def editar_material_usado(request, pk):
     })
 
 
+@exige_financeiro
 @require_POST
 def excluir_material_usado(request, pk):
     material = get_object_or_404(MaterialUsado, pk=pk)

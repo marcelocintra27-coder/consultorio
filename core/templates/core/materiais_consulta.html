@@ -1,90 +1,12 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Materiais da consulta</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            background: #f4f6f8;
-            color: #333;
-        }
-        .container {
-            max-width: 900px;
-            margin: 40px auto;
-            padding: 0 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #fff;
-        }
-        th, td {
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
-            text-align: left;
-        }
-        th {
-            background: #333;
-            color: #fff;
-        }
-        .botao {
-            display: inline-block;
-            padding: 8px 16px;
-            background: #333;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 4px;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        form.form-excluir {
-            display: inline;
-            margin: 0;
-            padding: 0;
-            background: none;
-        }
-        form.form-cadastro {
-            background: #fff;
-            padding: 20px;
-            border-radius: 4px;
-            margin: 20px 0;
-        }
-        .campo {
-            margin-bottom: 15px;
-        }
-        .campo label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 4px;
-        }
-        .campo input {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        .erro {
-            color: #b00020;
-            font-size: 13px;
-        }
-        .resumo {
-            margin: 16px 0;
-        }
-    </style>
-</head>
-<body>
-    <header>
-        <h1>Consultório Odontológico</h1>
-        <p>Materiais — {{ consulta.paciente.nome_completo }}</p>
-    </header>
+{% extends "core/base.html" %}
 
-    <div class="container">
-        <a href="{% url 'core:listar_materiais_dia' %}?data={{ consulta.data|date:'Y-m-d' }}" class="botao">Voltar</a>
+{% block title %}Materiais da consulta{% endblock %}
+{% block titulo %}Materiais — {{ consulta.paciente.nome_completo }}{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_materiais_dia' %}?data={{ consulta.data|date:'Y-m-d' }}" class="botao secundario">Voltar</a>
+        </div>
 
         <p class="resumo">
             {{ consulta.data|date:"d/m/Y" }}
@@ -94,6 +16,7 @@
             · Total: R$ {{ consulta.valor_a_cobrar }}
         </p>
 
+        <div class="tabela-wrap">
         <table>
             <tr>
                 <th>Descrição</th>
@@ -108,7 +31,7 @@
                     <a href="{% url 'core:editar_material_usado' material.pk %}" class="botao">Editar</a>
                     <form method="post" action="{% url 'core:excluir_material_usado' material.pk %}" class="form-excluir">
                         {% csrf_token %}
-                        <button type="submit" class="botao">Excluir</button>
+                        <button type="submit" class="botao perigo">Excluir</button>
                     </form>
                 </td>
             </tr>
@@ -118,8 +41,9 @@
             </tr>
             {% endfor %}
         </table>
+        </div>
 
-        <form method="post" class="form-cadastro">
+        <form method="post" class="form-cartao">
             {% csrf_token %}
             <p><strong>Adicionar material</strong></p>
             {% for field in form %}
@@ -133,6 +57,4 @@
             {% endfor %}
             <button type="submit" class="botao">Salvar</button>
         </form>
-    </div>
-</body>
-</html>
+{% endblock %}

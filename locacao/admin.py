@@ -6,6 +6,7 @@ from .models import (
     Disponibilidade,
     DividaAvulsa,
     PagamentoPar,
+    PerfilUsuario,
     Sala,
 )
 
@@ -31,6 +32,19 @@ class DentistaAdmin(admin.ModelAdmin):
     search_fields = ('nome_completo',)
     autocomplete_fields = ('sala',)
     readonly_fields = ('cadastrado_em',)
+
+
+@admin.register(PerfilUsuario)
+class PerfilUsuarioAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'dentista', 'papel')
+    list_filter = ('papel', 'dentista')
+    search_fields = (
+        'usuario__username',
+        'usuario__first_name',
+        'usuario__last_name',
+        'dentista__nome_completo',
+    )
+    autocomplete_fields = ('usuario', 'dentista')
 
 
 @admin.register(Despesa)

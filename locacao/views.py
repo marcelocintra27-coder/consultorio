@@ -6,11 +6,14 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from core.permissoes import exige_financeiro
+
 from .forms import DentistaForm, DespesaForm, DividaAvulsaForm
 from .models import Dentista, Despesa, DividaAvulsa, PagamentoPar
 from .services import calcular_acerto_mensal, mes_anterior, mes_seguinte
 
 
+@exige_financeiro
 def listar_dentistas(request):
     termo = request.GET.get('q', '').strip()
     dentistas = Dentista.objects.filter(ativo=True).select_related('sala')
@@ -23,6 +26,7 @@ def listar_dentistas(request):
     })
 
 
+@exige_financeiro
 def cadastrar_dentista(request):
     if request.method == 'POST':
         form = DentistaForm(request.POST)
@@ -37,6 +41,7 @@ def cadastrar_dentista(request):
     })
 
 
+@exige_financeiro
 def editar_dentista(request, pk):
     dentista = get_object_or_404(Dentista, pk=pk, ativo=True)
     if request.method == 'POST':
@@ -52,6 +57,7 @@ def editar_dentista(request, pk):
     })
 
 
+@exige_financeiro
 def listar_despesas(request):
     termo = request.GET.get('q', '').strip()
     mes = _parse_mes(request.GET.get('mes', '').strip())
@@ -69,6 +75,7 @@ def listar_despesas(request):
     })
 
 
+@exige_financeiro
 def cadastrar_despesa(request):
     if request.method == 'POST':
         form = DespesaForm(request.POST)
@@ -86,6 +93,7 @@ def cadastrar_despesa(request):
     })
 
 
+@exige_financeiro
 def editar_despesa(request, pk):
     despesa = get_object_or_404(Despesa, pk=pk)
     if request.method == 'POST':
@@ -104,6 +112,7 @@ def editar_despesa(request, pk):
     })
 
 
+@exige_financeiro
 def listar_dividas(request):
     termo = request.GET.get('q', '').strip()
     mes = _parse_mes(request.GET.get('mes', '').strip())
@@ -121,6 +130,7 @@ def listar_dividas(request):
     })
 
 
+@exige_financeiro
 def cadastrar_divida(request):
     if request.method == 'POST':
         form = DividaAvulsaForm(request.POST)
@@ -138,6 +148,7 @@ def cadastrar_divida(request):
     })
 
 
+@exige_financeiro
 def editar_divida(request, pk):
     divida = get_object_or_404(DividaAvulsa, pk=pk)
     if request.method == 'POST':
@@ -167,6 +178,7 @@ def _parse_mes(mes_str):
     return date(hoje.year, hoje.month, 1)
 
 
+@exige_financeiro
 def acerto_mensal(request):
     mes = _parse_mes(request.GET.get('mes', '').strip())
     resultado = calcular_acerto_mensal(mes)
@@ -178,6 +190,7 @@ def acerto_mensal(request):
     })
 
 
+@exige_financeiro
 @require_POST
 def marcar_pagamento(request):
     mes = _parse_mes(request.POST.get('mes', '').strip())

@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -77,6 +78,55 @@ class Dentista(models.Model):
 
     def __str__(self):
         return self.nome_completo
+
+
+class PerfilUsuario(models.Model):
+    class Papel(models.TextChoices):
+        DENTISTA = 'dentista', 'dentista'
+        AUXILIAR = 'auxiliar', 'auxiliar'
+        SECRETARIA = 'secretaria', 'secretária'
+
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        verbose_name='usuário',
+        on_delete=models.CASCADE,
+        related_name='perfil',
+    )
+    dentista = models.ForeignKey(
+        Dentista,
+        verbose_name='dentista',
+        on_delete=models.PROTECT,
+        related_name='perfis',
+        null=True,
+        blank=True,
+    )
+    papel = models.CharField(
+        'papel',
+        max_length=20,
+        choices=Papel.choices,
+        default=Papel.DENTISTA,
+    )
+
+    class Meta:
+        verbose_name = 'perfil de usuário'
+        verbose_name_plural = 'perfis de usuário'
+        ordering = ['usuario__username']
+
+    def __str__(self):
+        if self.dentista_id:
+            return f'{self.usuario} — {self.dentista} ({self.get_papel_display()})'
+        return f'{self.usuario} — clínica ({self.get_papel_display()})'
+
+    def clean(self):
+        if self.papel == self.Papel.SECRETARIA:
+            if self.dentista_id:
+                raise ValidationError(
+                    'A secretária não deve estar vinculada a um consultório.'
+                )
+        elif not self.dentista_id:
+            raise ValidationError(
+                'Dentista e auxiliar precisam estar vinculados a um consultório.'
+            )
 
 
 class Despesa(models.Model):

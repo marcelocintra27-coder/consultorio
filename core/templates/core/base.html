@@ -1,0 +1,30 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Consultório Odontológico{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'core/css/app.css' %}">
+</head>
+<body>
+    <header class="topo">
+        <div class="topo-esquerda">
+            <h1>Consultório Odontológico</h1>
+            <p>{% block titulo %}{% endblock %}</p>
+        </div>
+        {% if user.is_authenticated %}
+        <div class="topo-direita">
+            <span class="topo-usuario">{{ user.get_full_name|default:user.username }}</span>
+            <a href="{% url 'sair' %}" class="botao sair">Sair</a>
+        </div>
+        {% endif %}
+    </header>
+
+    <main class="container {% block container_class %}{% endblock %}">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block rodape %}{% endblock %}
+</body>
+</html>

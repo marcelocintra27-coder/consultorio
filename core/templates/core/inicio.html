@@ -1,165 +1,77 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consultório Odontológico</title>
+{% extends "core/base.html" %}
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            background: #f4f6f8;
-            color: #333;
-        }
+{% block title %}Consultório Odontológico{% endblock %}
+{% block titulo %}Sistema de Gestão do Consultório{% endblock %}
+{% block container_class %}largo{% endblock %}
 
-        header {
-            background: #0b6e8e;
-            color: white;
-            padding: 25px;
-            text-align: center;
-        }
+{% block content %}
+    <section class="secao">
+        <h2>Consultório</h2>
+        <p class="subtitulo">Dia a dia de cada dentista — agenda, pacientes e o que entra no atendimento.</p>
+        <div class="cards">
+            <div class="card">
+                <h3>Agenda</h3>
+                <p>Controle de consultas e horários.</p>
+                <a href="{% url 'core:listar_consultas' %}" class="botao">Acessar</a>
+            </div>
 
-        header h1 {
-            margin: 0;
-            font-size: 32px;
-        }
+            <div class="card">
+                <h3>Pacientes</h3>
+                <p>Cadastro e informações dos pacientes.</p>
+                <a href="{% url 'core:listar_pacientes' %}" class="botao">Acessar</a>
+            </div>
 
-        header p {
-            margin: 8px 0 0;
-            font-size: 17px;
-        }
+            {% if pode_financeiro %}
+            <div class="card">
+                <h3>Materiais</h3>
+                <p>Consumo e custo por atendimento.</p>
+                <a href="{% url 'core:listar_materiais_dia' %}" class="botao">Acessar</a>
+            </div>
 
-        .container {
-            max-width: 1100px;
-            margin: 40px auto;
-            padding: 20px;
-        }
+            <div class="card">
+                <h3>Pagamentos</h3>
+                <p>Forma de pagamento de cada consulta.</p>
+                <a href="{% url 'core:listar_pagamentos_consulta' %}" class="botao">Acessar</a>
+            </div>
+            {% endif %}
+        </div>
+    </section>
 
-        .cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
-        }
+    {% if pode_financeiro %}
+    <section class="secao">
+        <h2>Clínica</h2>
+        <p class="subtitulo">O que é da casa: rateio, convênios e cadastros compartilhados.</p>
+        <div class="cards">
+            <div class="card">
+                <h3>Despesas gerais</h3>
+                <p>Cadastro de despesas compartilhadas da clínica.</p>
+                <a href="{% url 'locacao:listar_despesas' %}" class="botao">Acessar</a>
+            </div>
 
-        .card {
-            background: white;
-            padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
-            text-align: center;
-        }
+            <div class="card">
+                <h3>Dívidas avulsas</h3>
+                <p>Cadastro de dívidas avulsas entre dentistas.</p>
+                <a href="{% url 'locacao:listar_dividas' %}" class="botao">Acessar</a>
+            </div>
 
-        .card h2 {
-            color: #0b6e8e;
-            margin-top: 0;
-        }
+            <div class="card">
+                <h3>Acerto mensal</h3>
+                <p>Rateio e fechamento do mês.</p>
+                <a href="{% url 'locacao:acerto_mensal' %}" class="botao">Acessar</a>
+            </div>
 
-        .card p {
-            color: #666;
-        }
-
-        .botao.sair {
-            background: #fff;
-            color: #0b6e8e;
-            margin-top: 16px;
-        }
-
-        footer {
-            margin-top: 50px;
-            padding: 20px;
-            text-align: center;
-            background: #e9ecef;
-            color: #666;
-        }
-    </style>
-</head>
-
-<body>
-
-<header>
-    <h1>Consultório Odontológico</h1>
-    <p>Sistema de Gestão do Consultório</p>
-    {% if user.is_authenticated %}
-    <form method="post" action="{% url 'sair' %}" style="margin: 0;">
-        {% csrf_token %}
-        <button type="submit" class="botao sair">Sair</button>
-    </form>
+            <div class="card">
+                <h3>Convênios</h3>
+                <p>Cadastro de convênios e valores.</p>
+                <a href="{% url 'core:listar_convenios' %}" class="botao">Acessar</a>
+            </div>
+        </div>
+    </section>
     {% endif %}
-</header>
+{% endblock %}
 
-<div class="container">
-
-    <div class="cards">
-
-        <div class="card">
-            <h2>Pacientes</h2>
-            <p>Cadastro e informações dos pacientes.</p>
-            <a href="{% url 'core:listar_pacientes' %}" class="botao">Acessar</a>
-        </div>
-
-        <div class="card">
-            <h2>Convênios</h2>
-            <p>Cadastro de convênios e valores.</p>
-            <a href="{% url 'core:listar_convenios' %}" class="botao">Acessar</a>
-        </div>
-
-        <div class="card">
-            <h2>Dentistas</h2>
-            <p>Cadastro de dentistas e salas.</p>
-            <a href="{% url 'locacao:listar_dentistas' %}" class="botao">Acessar</a>
-        </div>
-
-        <div class="card">
-            <h2>Despesas</h2>
-            <p>Cadastro de despesas do consultório.</p>
-            <a href="{% url 'locacao:listar_despesas' %}" class="botao">Acessar</a>
-        </div>
-
-        <div class="card">
-            <h2>Dívidas</h2>
-            <p>Cadastro de dívidas avulsas entre dentistas.</p>
-            <a href="{% url 'locacao:listar_dividas' %}" class="botao">Acessar</a>
-        </div>
-
-        <div class="card">
-            <h2>Agenda</h2>
-            <p>Controle de consultas e horários.</p>
-            <a href="{% url 'core:listar_consultas' %}" class="botao">Acessar</a>
-        </div>
-
-        <div class="card">
-            <h2>Pagamentos</h2>
-            <p>Forma de pagamento de cada consulta.</p>
-            <a href="{% url 'core:listar_pagamentos_consulta' %}" class="botao">Acessar</a>
-        </div>
-
-        <div class="card">
-            <h2>Materiais</h2>
-            <p>Consumo e custo por atendimento.</p>
-            <a href="{% url 'core:listar_materiais_dia' %}" class="botao">Acessar</a>
-        </div>
-
-        <div class="card">
-            <h2>Prontuários</h2>
-            <p>Consulta e acompanhamento dos prontuários.</p>
-            <a href="#" class="botao">Acessar</a>
-        </div>
-
-        <div class="card">
-            <h2>Financeiro</h2>
-            <p>Controle financeiro do consultório.</p>
-            <a href="{% url 'locacao:acerto_mensal' %}" class="botao">Acessar</a>
-        </div>
-
-    </div>
-
-</div>
-
-<footer>
+{% block rodape %}
+<footer class="rodape">
     Sistema de Gestão do Consultório Odontológico
 </footer>
-
-</body>
-</html>
-
+{% endblock %}
