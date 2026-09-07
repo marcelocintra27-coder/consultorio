@@ -33,6 +33,7 @@ from .forms import (
     StatusConsultaForm,
     ProcedimentoForm,
     LancamentoForm,
+    LancamentoUniodontoForm,
     ComplementarDentistaForm,
 )
 from .permissoes import (
@@ -339,6 +340,11 @@ def agendar_consulta(request):
     })
 
 
+def _usa_lancamento_uniodonto(consulta):
+    convenio = consulta.paciente.convenio
+    return bool(convenio and convenio.usa_tabela_oficial)
+
+
 def ficha_consulta(request, pk):
     consulta = get_object_or_404(
         Consulta.objects.select_related(
@@ -354,17 +360,27 @@ def ficha_consulta(request, pk):
 
     status_form = StatusConsultaForm(instance=consulta)
     complementar_form = None
+    usa_uniodonto = _usa_lancamento_uniodonto(consulta)
     bound = getattr(request, '_lancamento_form', None)
     if bound is not None:
         lancamento_form = bound
     elif pode_lancar and consulta.dentista_id:
-        lancamento_form = LancamentoForm(dentista=consulta.dentista)
-        if consulta.paciente.convenio_id:
-            lancamento_form.fields['percentual_desconto'].initial = (
-                consulta.paciente.convenio.percentual_desconto
-            )
-        if consulta.eh_legado:
-            lancamento_form.fields['tipo'].initial = LancamentoAtendimento.Tipo.AJUSTE
+        if usa_uniodonto:
+            lancamento_form = LancamentoUniodontoForm()
+            if consulta.eh_legado:
+                lancamento_form.fields['tipo'].initial = (
+                    LancamentoAtendimento.Tipo.AJUSTE
+                )
+        else:
+            lancamento_form = LancamentoForm(dentista=consulta.dentista)
+            if consulta.paciente.convenio_id:
+                lancamento_form.fields['percentual_desconto'].initial = (
+                    consulta.paciente.convenio.percentual_desconto
+                )
+            if consulta.eh_legado:
+                lancamento_form.fields['tipo'].initial = (
+                    LancamentoAtendimento.Tipo.AJUSTE
+                )
     else:
         lancamento_form = None
     bound_comp = getattr(request, '_complementar_form', None)
@@ -375,7 +391,15 @@ def ficha_consulta(request, pk):
 
     precos = {}
     sugestoes_desconto = {}
-    if lancamento_form:
+    itens_uniodonto = {}
+    if lancamento_form and usa_uniodonto:
+        for item in lancamento_form.fields['procedimento_uniodonto'].queryset:
+            itens_uniodonto[str(item.pk)] = {
+                'codigo': item.codigo,
+                'valor_us': str(item.valor_us),
+                'valor_reais': str(item.valor_reais),
+            }
+    elif lancamento_form and 'procedimento' in lancamento_form.fields:
         for proc in lancamento_form.fields['procedimento'].queryset.prefetch_related(
             'precos'
         ):
@@ -401,7 +425,10 @@ def ficha_consulta(request, pk):
         'pode_financeiro': pode_financeiro,
         'pode_lancar': pode_lancar,
         'pode_complementar': pode_complementar,
+        'usa_lancamento_uniodonto': usa_uniodonto,
+        'fator_us_uniodonto': FATOR_US_UNIODONTO,
         'precos_json': json.dumps(precos),
+        'itens_uniodonto_json': json.dumps(itens_uniodonto),
         'sugestoes_desconto_json': json.dumps(sugestoes_desconto),
         'auditorias': consulta.auditorias.select_related('usuario')[:20]
         if pode_financeiro
@@ -427,11 +454,45 @@ def alterar_status_consulta(request, pk):
 @exige_financeiro
 @require_POST
 def lancar_atendimento(request, pk):
-    consulta = get_object_or_404(Consulta, pk=pk)
+    consulta = get_object_or_404(
+        Consulta.objects.select_related('paciente__convenio', 'dentista'),
+        pk=pk,
+    )
     if not usuario_pode_lancar(request.user, consulta):
         raise PermissionDenied
     if not consulta.dentista_id:
         raise PermissionDenied
+    if _usa_lancamento_uniodonto(consulta):
+        form = LancamentoUniodontoForm(request.POST)
+        if not form.is_valid():
+            request._lancamento_form = form
+            return ficha_consulta(request, pk)
+        dados = form.cleaned_data
+        item = dados['procedimento_uniodonto']
+        LancamentoAtendimento.objects.create(
+            consulta=consulta,
+            procedimento=None,
+            procedimento_uniodonto=item,
+            nome_procedimento=item.nome,
+            codigo_tuss=item.codigo,
+            valor_us=item.valor_us,
+            fator_us=item.fator_us,
+            dentista=consulta.dentista,
+            convenio=consulta.paciente.convenio,
+            particular=False,
+            valor_tabela=dados['valor_tabela'],
+            percentual_desconto=dados['percentual_desconto'],
+            valor_final=dados['valor_final'],
+            tipo=dados['tipo'],
+            cadastrado_por=request.user,
+        )
+        if consulta.eh_legado:
+            _registrar_auditoria(
+                consulta,
+                request.user,
+                f'lançamento {dados["tipo"]}: {item.codigo} — {item.nome}',
+            )
+        return redirect('core:ficha_consulta', pk=consulta.pk)
     form = LancamentoForm(request.POST, dentista=consulta.dentista)
     if not form.is_valid():
         request._lancamento_form = form

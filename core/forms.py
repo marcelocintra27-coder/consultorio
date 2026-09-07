@@ -1,10 +1,15 @@
-﻿from django import forms
+﻿from itertools import groupby
+
+from django import forms
+from django.forms.models import ModelChoiceField, ModelChoiceIterator
+
 from .models import (
     Convenio,
     Paciente,
     MaterialUsado,
     Consulta,
     Procedimento,
+    ProcedimentoUniodonto,
     LancamentoAtendimento,
 )
 from locacao.models import Dentista
@@ -163,6 +168,63 @@ class LancamentoForm(forms.Form):
             ).order_by('nome')
         else:
             self.fields['procedimento'].queryset = Procedimento.objects.none()
+
+
+class ProcedimentoUniodontoIterator(ModelChoiceIterator):
+    def __iter__(self):
+        if self.field.empty_label is not None:
+            yield ('', self.field.empty_label)
+        objetos = list(self.queryset)
+        for categoria, grupo in groupby(objetos, key=lambda item: item.categoria):
+            rotulo = ProcedimentoUniodonto.Categoria(categoria).label
+            yield (rotulo, [self.choice(obj) for obj in grupo])
+
+
+class ProcedimentoUniodontoChoiceField(ModelChoiceField):
+    iterator = ProcedimentoUniodontoIterator
+
+    def label_from_instance(self, obj):
+        return f'{obj.codigo} — {obj.nome}'
+
+
+class LancamentoUniodontoForm(forms.Form):
+    procedimento_uniodonto = ProcedimentoUniodontoChoiceField(
+        label='procedimento',
+        queryset=ProcedimentoUniodonto.objects.none(),
+        empty_label='Selecione o procedimento',
+    )
+    valor_tabela = forms.DecimalField(
+        label='valor de tabela',
+        max_digits=10,
+        decimal_places=2,
+        min_value=0,
+    )
+    percentual_desconto = forms.DecimalField(
+        label='desconto (%)',
+        max_digits=5,
+        decimal_places=2,
+        min_value=0,
+        initial=0,
+    )
+    valor_final = forms.DecimalField(
+        label='valor final',
+        max_digits=10,
+        decimal_places=2,
+        min_value=0,
+    )
+    tipo = forms.ChoiceField(
+        label='tipo',
+        choices=LancamentoAtendimento.Tipo.choices,
+        initial=LancamentoAtendimento.Tipo.ATENDIMENTO,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['procedimento_uniodonto'].queryset = (
+            ProcedimentoUniodonto.objects.filter(ativo=True).order_by(
+                'categoria', 'nome'
+            )
+        )
 
 
 class ComplementarDentistaForm(forms.Form):

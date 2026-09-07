@@ -335,7 +335,30 @@ class LancamentoAtendimento(models.Model):
         null=True,
         blank=True,
     )
-    nome_procedimento = models.CharField('procedimento', max_length=200)
+    procedimento_uniodonto = models.ForeignKey(
+        'ProcedimentoUniodonto',
+        verbose_name='procedimento Uniodonto',
+        on_delete=models.SET_NULL,
+        related_name='lancamentos',
+        null=True,
+        blank=True,
+    )
+    nome_procedimento = models.CharField('procedimento', max_length=300)
+    codigo_tuss = models.CharField('código TUSS', max_length=20, blank=True)
+    valor_us = models.DecimalField(
+        'valor US',
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    fator_us = models.DecimalField(
+        'fator US',
+        max_digits=8,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
     dentista = models.ForeignKey(
         'locacao.Dentista',
         verbose_name='dentista',
@@ -390,6 +413,11 @@ class LancamentoAtendimento(models.Model):
             return 'particular'
         return self.convenio.nome
 
+    def rotulo_procedimento(self):
+        if self.codigo_tuss:
+            return f'{self.codigo_tuss} — {self.nome_procedimento}'
+        return self.nome_procedimento
+
     def save(self, *args, **kwargs):
         for campo in ('valor_tabela', 'percentual_desconto', 'valor_final'):
             valor = getattr(self, campo)
@@ -399,6 +427,14 @@ class LancamentoAtendimento(models.Model):
                     campo,
                     Decimal(valor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
                 )
+        if self.valor_us is not None:
+            self.valor_us = Decimal(self.valor_us).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP
+            )
+        if self.fator_us is not None:
+            self.fator_us = Decimal(self.fator_us).quantize(
+                Decimal('0.0001'), rounding=ROUND_HALF_UP
+            )
         super().save(*args, **kwargs)
 
 

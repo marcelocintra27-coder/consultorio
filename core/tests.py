@@ -364,3 +364,107 @@ class TabelaUniodontoTests(TestCase):
         self.client.force_login(self.admin)
         home = self.client.get('/', HTTP_HOST='localhost').content.decode()
         self.assertIn('Tabela Uniodonto', home)
+
+    def _consulta_uniodonto(self):
+        uniodonto = Convenio.objects.get(nome=NOME_CONVENIO_UNIODONTO)
+        paciente = Paciente.objects.create(
+            nome_completo='Paciente Uniodonto Teste',
+            cpf='222.222.222-22',
+            data_nascimento=date(1990, 1, 1),
+            telefone='11988887777',
+            convenio=uniodonto,
+        )
+        return Consulta.objects.create(
+            paciente=paciente,
+            data=date(2026, 9, 7),
+            hora_inicio=time(10, 0),
+            hora_fim=time(11, 0),
+            dentista=self.dentista,
+        )
+
+    def test_ficha_uniodonto_usa_tabela_oficial(self):
+        consulta = self._consulta_uniodonto()
+        Procedimento.objects.create(
+            dentista=self.dentista,
+            nome='Consulta particular',
+        )
+        self.client.force_login(self.admin)
+        html = self.client.get(
+            f'/consultas/{consulta.pk}/', HTTP_HOST='localhost'
+        ).content.decode()
+        self.assertIn('Novo lançamento Uniodonto', html)
+        self.assertIn('85100196', html)
+        self.assertIn('código TUSS', html)
+        self.assertIn('valor US', html)
+        self.assertIn('Selecione o procedimento', html)
+        self.assertNotIn('Consulta particular', html)
+        self.assertNotIn('empty_label', html)
+        self.assertNotIn('>Particular<', html)
+
+    def test_lanca_procedimento_uniodonto_congela_snapshot(self):
+        consulta = self._consulta_uniodonto()
+        item = ProcedimentoUniodonto.objects.get(codigo='85100196')
+        self.client.force_login(self.admin)
+        resposta = self.client.post(
+            f'/consultas/{consulta.pk}/lancar/',
+            {
+                'procedimento_uniodonto': item.pk,
+                'valor_tabela': '40.00',
+                'percentual_desconto': '0',
+                'valor_final': '40.00',
+                'tipo': 'atendimento',
+            },
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        lancamento = consulta.lancamentos.get()
+        self.assertEqual(lancamento.codigo_tuss, '85100196')
+        self.assertEqual(lancamento.nome_procedimento, item.nome)
+        self.assertEqual(lancamento.valor_us, Decimal('233.64'))
+        self.assertEqual(lancamento.fator_us, FATOR_US_UNIODONTO)
+        self.assertEqual(lancamento.valor_tabela, Decimal('40.00'))
+        self.assertEqual(lancamento.valor_final, Decimal('40.00'))
+        self.assertFalse(lancamento.particular)
+        self.assertIsNone(lancamento.procedimento_id)
+        self.assertEqual(consulta.valor_a_cobrar, Decimal('40.00'))
+        item.valor_reais = Decimal('99.00')
+        item.nome = 'Nome alterado na tabela'
+        item.save()
+        lancamento.refresh_from_db()
+        self.assertEqual(lancamento.valor_tabela, Decimal('40.00'))
+        self.assertEqual(lancamento.nome_procedimento, 'Restauração em resina fotopolimerizável 1 face')
+        html = self.client.get(
+            f'/consultas/{consulta.pk}/', HTTP_HOST='localhost'
+        ).content.decode()
+        self.assertIn('85100196 — Restauração em resina fotopolimerizável 1 face', html)
+        self.assertIn('Uniodonto', html)
+
+    def test_ficha_ipasgo_nao_usa_tabela_uniodonto(self):
+        ipasgo = Convenio.objects.get(nome='Ipasgo')
+        paciente = Paciente.objects.create(
+            nome_completo='Paciente Ipasgo Teste',
+            cpf='333.333.333-33',
+            data_nascimento=date(1990, 1, 1),
+            telefone='11977776666',
+            convenio=ipasgo,
+        )
+        consulta = Consulta.objects.create(
+            paciente=paciente,
+            data=date(2026, 9, 7),
+            hora_inicio=time(14, 0),
+            hora_fim=time(15, 0),
+            dentista=self.dentista,
+        )
+        Procedimento.objects.create(
+            dentista=self.dentista,
+            nome='Consulta particular',
+        )
+        self.client.force_login(self.admin)
+        html = self.client.get(
+            f'/consultas/{consulta.pk}/', HTTP_HOST='localhost'
+        ).content.decode()
+        self.assertNotIn('Novo lançamento Uniodonto', html)
+        self.assertNotIn('código TUSS', html)
+        self.assertNotIn('85100196', html)
+        self.assertIn('Consulta particular', html)
+        self.assertIn('Particular', html)

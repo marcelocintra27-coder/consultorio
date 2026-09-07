@@ -117,10 +117,19 @@ class LancamentoAtendimentoAdmin(admin.ModelAdmin):
         'cadastrado_em',
     )
     list_filter = ('tipo', 'particular')
-    search_fields = ('nome_procedimento',)
-    autocomplete_fields = ('consulta', 'procedimento', 'dentista', 'convenio')
+    search_fields = ('nome_procedimento', 'codigo_tuss')
+    autocomplete_fields = (
+        'consulta',
+        'procedimento',
+        'procedimento_uniodonto',
+        'dentista',
+        'convenio',
+    )
     readonly_fields = (
         'nome_procedimento',
+        'codigo_tuss',
+        'valor_us',
+        'fator_us',
         'valor_tabela',
         'percentual_desconto',
         'valor_final',

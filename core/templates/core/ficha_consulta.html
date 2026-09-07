@@ -69,7 +69,7 @@
                 {% for lancamento in consulta.lancamentos.all %}
                 <tr>
                     <td>{{ lancamento.cadastrado_em|date:"d/m/Y H:i" }}</td>
-                    <td>{{ lancamento.nome_procedimento }}</td>
+                    <td>{{ lancamento.rotulo_procedimento }}</td>
                     <td>{{ lancamento.nome_tabela }}</td>
                     <td>R$ {{ lancamento.valor_tabela }}</td>
                     <td>{{ lancamento.percentual_desconto }}</td>
@@ -93,17 +93,66 @@
             {% if pode_lancar and lancamento_form %}
             <form method="post" action="{% url 'core:lancar_atendimento' consulta.pk %}" class="form-cartao" id="form-lancamento">
                 {% csrf_token %}
+                {% if usa_lancamento_uniodonto %}
+                <p><strong>{% if consulta.eh_legado %}Novo lançamento Uniodonto (ajuste){% else %}Novo lançamento Uniodonto{% endif %}</strong></p>
+                <p class="resumo">Tabela: Uniodonto · fator vigente US = {{ fator_us_uniodonto }}</p>
+                <div class="campo">
+                    <label for="{{ lancamento_form.procedimento_uniodonto.id_for_label }}">procedimento</label>
+                    {{ lancamento_form.procedimento_uniodonto }}
+                    {% if lancamento_form.procedimento_uniodonto.errors %}
+                    <div class="erro">{{ lancamento_form.procedimento_uniodonto.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="campo">
+                    <label for="id_codigo_tuss">código TUSS</label>
+                    <input id="id_codigo_tuss" type="text" readonly value="">
+                </div>
+                <div class="campo">
+                    <label for="id_valor_us">valor US</label>
+                    <input id="id_valor_us" type="text" readonly value="">
+                </div>
+                <div class="campo">
+                    <label for="{{ lancamento_form.valor_tabela.id_for_label }}">valor de tabela</label>
+                    {{ lancamento_form.valor_tabela }}
+                    {% if lancamento_form.valor_tabela.errors %}
+                    <div class="erro">{{ lancamento_form.valor_tabela.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="campo">
+                    <label for="{{ lancamento_form.percentual_desconto.id_for_label }}">desconto (%)</label>
+                    {{ lancamento_form.percentual_desconto }}
+                    {% if lancamento_form.percentual_desconto.errors %}
+                    <div class="erro">{{ lancamento_form.percentual_desconto.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="campo">
+                    <label for="{{ lancamento_form.valor_final.id_for_label }}">valor final</label>
+                    {{ lancamento_form.valor_final }}
+                    {% if lancamento_form.valor_final.errors %}
+                    <div class="erro">{{ lancamento_form.valor_final.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="campo">
+                    <label for="{{ lancamento_form.tipo.id_for_label }}">tipo</label>
+                    {{ lancamento_form.tipo }}
+                    {% if lancamento_form.tipo.errors %}
+                    <div class="erro">{{ lancamento_form.tipo.errors }}</div>
+                    {% endif %}
+                </div>
+                <p class="resumo">Código e US vêm da tabela oficial. O valor de tabela começa no R$ oficial e pode ser ajustado. O valor final é obrigatório e fica congelado.</p>
+                {% else %}
                 <p><strong>{% if consulta.eh_legado %}Novo lançamento (ajuste){% else %}Novo lançamento{% endif %}</strong></p>
                 {% for field in lancamento_form %}
                 <div class="campo">
                     <label for="{{ field.id_for_label }}">{{ field.label }}</label>
                     {{ field }}
                     {% if field.errors %}
-                        <div class="erro">{{ field.errors }}</div>
+                    <div class="erro">{{ field.errors }}</div>
                     {% endif %}
                 </div>
                 {% endfor %}
                 <p class="resumo">O percentual do convênio é só sugestão. Confirme ou zere o desconto. O valor final é obrigatório e fica congelado.</p>
+                {% endif %}
                 <button type="submit" class="botao">Salvar lançamento</button>
             </form>
             {% endif %}
@@ -134,15 +183,42 @@
 {% if pode_lancar and lancamento_form %}
 <script>
 (function () {
-    var precos = {{ precos_json|safe }};
-    var sugestoes = {{ sugestoes_desconto_json|safe }};
     var form = document.getElementById('form-lancamento');
     if (!form) return;
-    var proc = form.querySelector('[name="procedimento"]');
-    var conv = form.querySelector('[name="convenio"]');
     var tabela = form.querySelector('[name="valor_tabela"]');
     var desc = form.querySelector('[name="percentual_desconto"]');
     var final = form.querySelector('[name="valor_final"]');
+    function recalcular() {
+        var vt = parseFloat(tabela && tabela.value || '0');
+        var pd = parseFloat(desc && desc.value || '0');
+        var vf = vt * (1 - pd / 100);
+        if (!isNaN(vf) && final) final.value = vf.toFixed(2);
+    }
+    {% if usa_lancamento_uniodonto %}
+    var itens = {{ itens_uniodonto_json|safe }};
+    var proc = form.querySelector('[name="procedimento_uniodonto"]');
+    var codigo = document.getElementById('id_codigo_tuss');
+    var us = document.getElementById('id_valor_us');
+    function preencher() {
+        var item = proc && itens[proc.value];
+        if (item) {
+            if (codigo) codigo.value = item.codigo;
+            if (us) us.value = item.valor_us;
+            if (tabela) tabela.value = item.valor_reais;
+        } else {
+            if (codigo) codigo.value = '';
+            if (us) us.value = '';
+        }
+        if (desc) desc.value = '0';
+        recalcular();
+    }
+    if (proc) proc.addEventListener('change', preencher);
+    if (proc && proc.value) preencher();
+    {% else %}
+    var precos = {{ precos_json|safe }};
+    var sugestoes = {{ sugestoes_desconto_json|safe }};
+    var proc = form.querySelector('[name="procedimento"]');
+    var conv = form.querySelector('[name="convenio"]');
     function preencher() {
         var pid = proc && proc.value;
         var cid = conv && conv.value ? conv.value : '';
@@ -156,14 +232,9 @@
         }
         recalcular();
     }
-    function recalcular() {
-        var vt = parseFloat(tabela.value || '0');
-        var pd = parseFloat(desc.value || '0');
-        var vf = vt * (1 - pd / 100);
-        if (!isNaN(vf)) final.value = vf.toFixed(2);
-    }
     if (proc) proc.addEventListener('change', preencher);
     if (conv) conv.addEventListener('change', preencher);
+    {% endif %}
     if (tabela) tabela.addEventListener('input', recalcular);
     if (desc) desc.addEventListener('input', recalcular);
 })();

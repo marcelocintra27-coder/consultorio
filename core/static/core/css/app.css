@@ -315,6 +315,11 @@ th.valor {
     background: #fff;
 }
 
+.campo input[readonly] {
+    background: var(--cor-fundo);
+    color: var(--cor-texto-secundario);
+}
+
 .erro {
     color: var(--cor-erro);
     font-size: 13px;
