@@ -1,0 +1,34 @@
+---
+description: Antes de criar ou alterar qualquer tela, aplicar design (hierarquia, UX, design system, a11y) sem mudar regras de negócio nem permissões.
+alwaysApply: true
+---
+
+# Frontend design em cada etapa de interface
+
+Antes de implementar ou alterar HTML/CSS de uma tela, planejar (mesmo que em poucas linhas) e só então codar. Não pular para a próxima etapa sem o usuário confirmar.
+
+## O que considerar em toda tela
+
+- **Hierarquia:** um título de página no header (`block titulo`); ações primárias mais visíveis que Voltar.
+- **UX:** fluxo curto (Voltar → ação → conteúdo); busca/filtro acima da tabela; erros junto do campo.
+- **Componentes existentes:** estender `core/templates/core/base.html`; classes de `core/static/core/css/app.css` (`.botao`, `.botao.secundario`, `.botao.perigo`, `.botao.marcar`, `.form-cartao`, `.tabela-wrap`, `.acoes`, `.campo`). Não inventar outro visual paralelo.
+- **Responsividade:** header já empilha no mobile; tabelas dentro de `.tabela-wrap`; não fixar larguras que quebrem em ~360px.
+- **Acessibilidade:** `label` ligado ao campo; contraste da paleta teal `#0B6E8E` em fundo branco; foco visível já no CSS; não usar só cor para pago/pendente se já houver texto.
+- **Consistência:** mesma faixa teal, tipografia `system-ui`/`Segoe UI`, raios 8px/12px. Sombra **só** nos cards da Home (`.card`). Django admin fica de fora.
+
+## Não negociar nesta etapa
+
+- Regras de negócio e cálculos existentes.
+- Permissões (`pode_financeiro`, `exige_financeiro`, papéis do `PerfilUsuario`).
+- Arquivos e telas fora do pedido atual.
+
+## Exemplo
+
+```html
+{# ruim: botão preto inline, sem base #}
+<a style="background:#333" href="/">Voltar</a>
+
+{# bom: base + variantes do design system #}
+<a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+<a href="{% url 'core:cadastrar_paciente' %}" class="botao">Cadastrar</a>
+```

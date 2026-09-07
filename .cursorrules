@@ -16,6 +16,9 @@
   acentuação corrompida no projeto — não repetir).
 - Depois de qualquer mudança, oriente o teste no navegador/admin antes de
   seguir em frente.
+- Telas do app: seguir `.cursor/rules/frontend-design.mdc` (design system em
+  `base.html` + `app.css`). Não mudar regra de negócio nem permissão fora
+  da etapa pedida.
 - Nomes de campos e models em português, seguindo o padrão já existente
   (nome_completo, data_nascimento, cadastrado_em).
 - Migrations devem ser geradas e aplicadas a cada mudança de model.

@@ -1,0 +1,172 @@
+{% extends "core/base.html" %}
+
+{% block title %}Consulta — {{ consulta.paciente.nome_completo }}{% endblock %}
+{% block titulo %}
+    Consulta
+    {% if consulta.eh_legado %}<span class="pill-legado">Registro legado</span>{% endif %}
+{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_consultas' %}?data={{ consulta.data|date:'Y-m-d' }}" class="botao secundario">Voltar</a>
+        </div>
+
+        <p class="resumo">
+            {{ consulta.paciente.nome_completo }}
+            · {{ consulta.data|date:"d/m/Y" }}
+            {{ consulta.hora_inicio|time:"H:i" }}–{{ consulta.hora_fim|time:"H:i" }}
+            · Dentista: {% if consulta.dentista %}{{ consulta.dentista.nome_completo }}{% else %}não informado{% endif %}
+            · Status: {{ consulta.get_status_display }}
+        </p>
+
+        <form method="post" action="{% url 'core:alterar_status_consulta' consulta.pk %}" class="form-cartao">
+            {% csrf_token %}
+            <div class="campo">
+                <label for="{{ status_form.status.id_for_label }}">status</label>
+                {{ status_form.status }}
+            </div>
+            <button type="submit" class="botao">Atualizar status</button>
+        </form>
+
+        {% if pode_complementar and complementar_form %}
+        <h2 class="secao-pagina">Completar dentista</h2>
+        <form method="post" action="{% url 'core:complementar_dentista' consulta.pk %}" class="form-cartao">
+            {% csrf_token %}
+            <p class="resumo">Não altera o valor histórico congelado.</p>
+            <div class="campo">
+                <label for="{{ complementar_form.dentista.id_for_label }}">dentista</label>
+                {{ complementar_form.dentista }}
+                {% if complementar_form.dentista.errors %}
+                    <div class="erro">{{ complementar_form.dentista.errors }}</div>
+                {% endif %}
+            </div>
+            <button type="submit" class="botao">Salvar dentista</button>
+        </form>
+        {% endif %}
+
+        {% if pode_financeiro %}
+            {% if consulta.eh_legado %}
+            <div class="bloco-historico">
+                <strong>Valor histórico congelado:</strong> R$ {{ consulta.valor_historico|default:"0,00" }}
+                <p class="resumo">Este valor não muda se o catálogo, o convênio ou o dentista forem alterados depois.</p>
+            </div>
+            {% endif %}
+
+            <h2 class="secao-pagina">Lançamentos</h2>
+            <div class="tabela-wrap">
+            <table>
+                <tr>
+                    <th>Data</th>
+                    <th>Procedimento</th>
+                    <th>Tabela</th>
+                    <th>Valor de tabela</th>
+                    <th>Desconto %</th>
+                    <th>Valor final</th>
+                    <th>Tipo</th>
+                    <th>Por</th>
+                </tr>
+                {% for lancamento in consulta.lancamentos.all %}
+                <tr>
+                    <td>{{ lancamento.cadastrado_em|date:"d/m/Y H:i" }}</td>
+                    <td>{{ lancamento.nome_procedimento }}</td>
+                    <td>{{ lancamento.nome_tabela }}</td>
+                    <td>R$ {{ lancamento.valor_tabela }}</td>
+                    <td>{{ lancamento.percentual_desconto }}</td>
+                    <td>R$ {{ lancamento.valor_final }}</td>
+                    <td>{{ lancamento.get_tipo_display }}</td>
+                    <td>{{ lancamento.cadastrado_por.get_full_name|default:lancamento.cadastrado_por.username }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="vazio">Nenhum lançamento.</td>
+                </tr>
+                {% endfor %}
+            </table>
+            </div>
+            <p class="resumo">
+                Lançamentos: R$ {{ consulta.valor_lancamentos }}
+                · Materiais: R$ {{ consulta.valor_materiais }}
+                · Total a cobrar: R$ {{ consulta.valor_a_cobrar }}
+            </p>
+
+            {% if pode_lancar and lancamento_form %}
+            <form method="post" action="{% url 'core:lancar_atendimento' consulta.pk %}" class="form-cartao" id="form-lancamento">
+                {% csrf_token %}
+                <p><strong>{% if consulta.eh_legado %}Novo lançamento (ajuste){% else %}Novo lançamento{% endif %}</strong></p>
+                {% for field in lancamento_form %}
+                <div class="campo">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}
+                        <div class="erro">{{ field.errors }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                <p class="resumo">O percentual do convênio é só sugestão. Confirme ou zere o desconto. O valor final é obrigatório e fica congelado.</p>
+                <button type="submit" class="botao">Salvar lançamento</button>
+            </form>
+            {% endif %}
+
+            {% if auditorias %}
+            <h2 class="secao-pagina">Auditoria</h2>
+            <div class="tabela-wrap">
+            <table>
+                <tr>
+                    <th>Data e hora</th>
+                    <th>Usuário</th>
+                    <th>Descrição</th>
+                </tr>
+                {% for item in auditorias %}
+                <tr>
+                    <td>{{ item.cadastrado_em|date:"d/m/Y H:i" }}</td>
+                    <td>{{ item.usuario.get_full_name|default:item.usuario.username }}</td>
+                    <td>{{ item.descricao }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            </div>
+            {% endif %}
+        {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if pode_lancar and lancamento_form %}
+<script>
+(function () {
+    var precos = {{ precos_json|safe }};
+    var sugestoes = {{ sugestoes_desconto_json|safe }};
+    var form = document.getElementById('form-lancamento');
+    if (!form) return;
+    var proc = form.querySelector('[name="procedimento"]');
+    var conv = form.querySelector('[name="convenio"]');
+    var tabela = form.querySelector('[name="valor_tabela"]');
+    var desc = form.querySelector('[name="percentual_desconto"]');
+    var final = form.querySelector('[name="valor_final"]');
+    function preencher() {
+        var pid = proc && proc.value;
+        var cid = conv && conv.value ? conv.value : '';
+        if (pid && precos[pid] && precos[pid][cid] !== undefined && precos[pid][cid] !== '') {
+            tabela.value = precos[pid][cid];
+        }
+        if (cid && sugestoes[cid] !== undefined) {
+            desc.value = sugestoes[cid];
+        } else if (!cid) {
+            desc.value = '0';
+        }
+        recalcular();
+    }
+    function recalcular() {
+        var vt = parseFloat(tabela.value || '0');
+        var pd = parseFloat(desc.value || '0');
+        var vf = vt * (1 - pd / 100);
+        if (!isNaN(vf)) final.value = vf.toFixed(2);
+    }
+    if (proc) proc.addEventListener('change', preencher);
+    if (conv) conv.addEventListener('change', preencher);
+    if (tabela) tabela.addEventListener('input', recalcular);
+    if (desc) desc.addEventListener('input', recalcular);
+})();
+</script>
+{% endif %}
+{% endblock %}

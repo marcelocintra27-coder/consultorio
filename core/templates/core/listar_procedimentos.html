@@ -1,0 +1,66 @@
+{% extends "core/base.html" %}
+
+{% block title %}Procedimentos{% endblock %}
+{% block titulo %}Procedimentos — {{ dentista.nome_completo }}{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+            <a href="{% url 'core:cadastrar_procedimento' %}{% if dentista %}?dentista={{ dentista.pk }}{% endif %}" class="botao">Cadastrar</a>
+        </div>
+
+        {% if dentistas %}
+        <form method="get" class="busca-form">
+            <label for="id_dentista_filtro">dentista</label>
+            <select name="dentista" id="id_dentista_filtro">
+                {% for d in dentistas %}
+                <option value="{{ d.pk }}" {% if d.pk == dentista.pk %}selected{% endif %}>{{ d.nome_completo }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="botao">Ver</button>
+        </form>
+        {% endif %}
+
+        <p class="resumo">Valor-hora para sugestão: R$ {{ dentista.valor_hora }}</p>
+
+        <div class="tabela-wrap">
+        <table>
+            <tr>
+                <th>Procedimento</th>
+                <th>Duração estimada</th>
+                <th>Sugestão</th>
+                <th>Particular</th>
+                {% for convenio in convenios %}
+                <th>{{ convenio.nome }}</th>
+                {% endfor %}
+                <th></th>
+            </tr>
+            {% for procedimento in procedimentos %}
+            <tr>
+                <td>{{ procedimento.nome }}</td>
+                <td>{% if procedimento.duracao_estimada_minutos %}{{ procedimento.duracao_estimada_minutos }} min{% else %}—{% endif %}</td>
+                <td>{% if procedimento.preco_sugerido %}R$ {{ procedimento.preco_sugerido }}{% else %}—{% endif %}</td>
+                <td>
+                    {% for preco in procedimento.precos.all %}
+                        {% if not preco.convenio_id %}R$ {{ preco.valor }}{% endif %}
+                    {% endfor %}
+                </td>
+                {% for convenio in convenios %}
+                <td>
+                    {% for preco in procedimento.precos.all %}
+                        {% if preco.convenio_id == convenio.pk %}R$ {{ preco.valor }}{% endif %}
+                    {% endfor %}
+                </td>
+                {% endfor %}
+                <td>
+                    <a href="{% url 'core:editar_procedimento' procedimento.pk %}" class="botao">Editar</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="{{ convenios|length|add:5 }}">Nenhum procedimento cadastrado.</td>
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+{% endblock %}

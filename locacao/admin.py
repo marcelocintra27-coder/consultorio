@@ -27,7 +27,7 @@ class DisponibilidadeAdmin(admin.ModelAdmin):
 
 @admin.register(Dentista)
 class DentistaAdmin(admin.ModelAdmin):
-    list_display = ('nome_completo', 'sala', 'ativo')
+    list_display = ('nome_completo', 'sala', 'valor_hora', 'ativo')
     list_filter = ('ativo',)
     search_fields = ('nome_completo',)
     autocomplete_fields = ('sala',)

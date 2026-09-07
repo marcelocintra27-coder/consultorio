@@ -1,0 +1,39 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }} — {{ dentista.nome_completo }}{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_procedimentos' %}?dentista={{ dentista.pk }}" class="botao secundario">Voltar</a>
+        </div>
+
+        <form method="post" class="form-cartao">
+            {% csrf_token %}
+            <input type="hidden" name="dentista_id" value="{{ dentista.pk }}">
+            {% for field in form %}
+            <div class="campo">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                    <div class="erro">{{ field.errors }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% if dentista.valor_hora %}
+            <p class="resumo">Sugestão (valor-hora × duração): preenchida só como referência. O preço cadastrado é o que você gravar abaixo.</p>
+            {% endif %}
+            <div class="campo">
+                <label for="id_preco_particular">preço particular</label>
+                <input id="id_preco_particular" name="preco_particular" type="number" step="0.01" min="0" value="{{ precos.particular }}">
+            </div>
+            {% for convenio in convenios %}
+            <div class="campo">
+                <label for="id_preco_convenio_{{ convenio.pk }}">preço {{ convenio.nome }}</label>
+                <input id="id_preco_convenio_{{ convenio.pk }}" name="preco_convenio_{{ convenio.pk }}" type="number" step="0.01" min="0" value="{% for chave, valor in precos.items %}{% if chave == convenio.pk|stringformat:'s' %}{{ valor }}{% endif %}{% endfor %}">
+            </div>
+            {% endfor %}
+            <button type="submit" class="botao">Salvar</button>
+        </form>
+{% endblock %}

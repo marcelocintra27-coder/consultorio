@@ -69,6 +69,13 @@ class Dentista(models.Model):
         related_name='dentista',
     )
     ativo = models.BooleanField('ativo', default=True)
+    valor_hora = models.DecimalField(
+        'valor-hora',
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text='Usado só para sugerir preço de procedimento (valor-hora × duração estimada).',
+    )
     cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
 
     class Meta:

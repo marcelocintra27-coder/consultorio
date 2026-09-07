@@ -34,7 +34,9 @@
                 <td>R$ {{ consulta.valor_materiais }}</td>
                 <td>R$ {{ consulta.valor_a_cobrar }}</td>
                 <td>
+                    {% if consulta.pode_lancar %}
                     <a href="{% url 'core:materiais_consulta' consulta.pk %}" class="botao">Registrar</a>
+                    {% endif %}
                 </td>
             </tr>
             {% empty %}

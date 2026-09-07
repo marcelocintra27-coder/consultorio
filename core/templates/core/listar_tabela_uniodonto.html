@@ -1,0 +1,53 @@
+{% extends "core/base.html" %}
+
+{% block title %}Tabela Uniodonto{% endblock %}
+{% block titulo %}Tabela Uniodonto{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+        </div>
+
+        <p class="resumo">
+            Convênio Uniodonto · fator vigente US = {{ fator_us }} · {{ total }} procedimentos
+        </p>
+
+        <form method="get" class="busca-form">
+            <label for="id_q">buscar</label>
+            <input id="id_q" type="text" name="q" placeholder="Código ou nome..." value="{{ termo }}">
+            <label for="id_categoria">categoria</label>
+            <select name="categoria" id="id_categoria">
+                <option value="">Todas</option>
+                {% for valor, rotulo in categorias %}
+                <option value="{{ valor }}" {% if categoria == valor %}selected{% endif %}>{{ rotulo }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="botao">Buscar</button>
+        </form>
+
+        <div class="tabela-wrap">
+        <table>
+            <tr>
+                <th>Código</th>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>US</th>
+                <th>R$</th>
+            </tr>
+            {% for item in itens %}
+            <tr>
+                <td>{{ item.codigo }}</td>
+                <td>{{ item.nome }}</td>
+                <td>{{ item.get_categoria_display }}</td>
+                <td>{{ item.valor_us }}</td>
+                <td>R$ {{ item.valor_reais }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="vazio">Nenhum procedimento encontrado.</td>
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+{% endblock %}

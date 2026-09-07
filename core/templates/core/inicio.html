@@ -23,6 +23,12 @@
 
             {% if pode_financeiro %}
             <div class="card">
+                <h3>Procedimentos</h3>
+                <p>Tabela particular e convênios de cada dentista.</p>
+                <a href="{% url 'core:listar_procedimentos' %}" class="botao">Acessar</a>
+            </div>
+
+            <div class="card">
                 <h3>Materiais</h3>
                 <p>Consumo e custo por atendimento.</p>
                 <a href="{% url 'core:listar_materiais_dia' %}" class="botao">Acessar</a>
@@ -64,6 +70,12 @@
                 <h3>Convênios</h3>
                 <p>Cadastro de convênios e valores.</p>
                 <a href="{% url 'core:listar_convenios' %}" class="botao">Acessar</a>
+            </div>
+
+            <div class="card">
+                <h3>Tabela Uniodonto</h3>
+                <p>Catálogo oficial da cooperativa (código, US e R$).</p>
+                <a href="{% url 'core:listar_tabela_uniodonto' %}" class="botao">Acessar</a>
             </div>
         </div>
     </section>

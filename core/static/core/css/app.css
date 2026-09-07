@@ -224,6 +224,7 @@ table .botao {
 .busca-form input[type="text"],
 .busca-form input[type="date"],
 .busca-form input[type="month"],
+.busca-form select,
 .mes-nav input[type="month"] {
     flex: 1;
     min-width: 140px;
@@ -402,6 +403,25 @@ h2.secao-pagina {
     font-size: 20px;
     font-weight: 600;
     margin: 32px 0 12px;
+}
+
+.pill-legado {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--cor-primaria);
+    background: var(--cor-thead);
+    border-radius: 8px;
+    vertical-align: middle;
+}
+
+.bloco-historico {
+    background: var(--cor-superficie);
+    border: 1px solid var(--cor-borda);
+    border-radius: var(--raio-card);
+    padding: 16px 20px;
+    margin-bottom: 16px;
 }
 
 @media (max-width: 640px) {

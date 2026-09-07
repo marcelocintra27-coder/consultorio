@@ -20,7 +20,11 @@ class DentistaForm(forms.ModelForm):
         fields = [
             'nome_completo',
             'sala',
+            'valor_hora',
         ]
+        widgets = {
+            'valor_hora': forms.NumberInput(attrs={'step': '0.01'}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

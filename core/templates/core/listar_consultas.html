@@ -7,6 +7,7 @@
 {% block content %}
         <div class="acoes">
             <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+            <a href="{% url 'core:agendar_consulta' %}" class="botao">Agendar</a>
         </div>
 
         <form method="get" class="busca-form">
@@ -18,6 +19,7 @@
         <table>
             <tr>
                 <th>Paciente</th>
+                <th>Dentista</th>
                 <th>Data</th>
                 <th>Hora início</th>
                 <th>Hora fim</th>
@@ -27,10 +29,15 @@
                 <th>Pago</th>
                 <th></th>
                 {% endif %}
+                <th></th>
             </tr>
             {% for consulta in consultas %}
             <tr>
-                <td>{{ consulta.paciente.nome_completo }}</td>
+                <td>
+                    {{ consulta.paciente.nome_completo }}
+                    {% if consulta.eh_legado %}<span class="pill-legado">legado</span>{% endif %}
+                </td>
+                <td>{% if consulta.dentista %}{{ consulta.dentista.nome_completo }}{% else %}—{% endif %}</td>
                 <td>{{ consulta.data|date:"d/m/Y" }}</td>
                 <td>{{ consulta.hora_inicio|time:"H:i" }}</td>
                 <td>{{ consulta.hora_fim|time:"H:i" }}</td>
@@ -51,10 +58,13 @@
                     </form>
                 </td>
                 {% endif %}
+                <td>
+                    <a href="{% url 'core:ficha_consulta' consulta.pk %}" class="botao secundario">Abrir</a>
+                </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="{% if pode_financeiro %}8{% else %}5{% endif %}">Nenhuma consulta encontrada.</td>
+                <td colspan="{% if pode_financeiro %}10{% else %}7{% endif %}">Nenhuma consulta encontrada.</td>
             </tr>
             {% endfor %}
         </table>

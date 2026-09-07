@@ -1,0 +1,25 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_consultas' %}" class="botao secundario">Voltar</a>
+        </div>
+
+        <form method="post" class="form-cartao">
+            {% csrf_token %}
+            {% for field in form %}
+            <div class="campo">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                    <div class="erro">{{ field.errors }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="botao">Salvar</button>
+        </form>
+{% endblock %}
