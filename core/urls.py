@@ -37,6 +37,7 @@ from .views import (
     ver_ficha_anamnese,
     ficha_anamnese_publica,
     ficha_anamnese_enviada,
+    ficha_evolucao_clinica,
 )
 
 app_name = 'core'
@@ -80,6 +81,11 @@ urlpatterns = [
         'f/a/<uuid:token>/enviada/',
         ficha_anamnese_enviada,
         name='ficha_anamnese_enviada',
+    ),
+    path(
+        'pacientes/<int:pk>/evolucao/',
+        ficha_evolucao_clinica,
+        name='ficha_evolucao_clinica',
     ),
     path('convenios/', listar_convenios, name='listar_convenios'),
     path('convenios/cadastrar/', cadastrar_convenio, name='cadastrar_convenio'),

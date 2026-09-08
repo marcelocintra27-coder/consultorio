@@ -1,0 +1,57 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}{{ titulo }} — {{ paciente.nome_completo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:editar_paciente' paciente.pk %}" class="botao secundario">Voltar</a>
+        </div>
+
+        <p class="resumo">{{ paciente.nome_completo }} — histórico contínuo. Cada linha é assinada pelo profissional no consultório.</p>
+
+        {% for item in registros %}
+        <article class="evolucao-linha">
+            <p class="evolucao-data">{{ item.data|date:"d/m/Y" }}</p>
+            <p><strong>Procedimento / etapa:</strong> {{ item.procedimento_etapa }}</p>
+            <p><strong>Descrição clínica / conduta:</strong></p>
+            <p>{{ item.descricao_clinica|linebreaksbr }}</p>
+            {% if item.orientacoes %}
+            <p><strong>Orientações:</strong></p>
+            <p>{{ item.orientacoes|linebreaksbr }}</p>
+            {% endif %}
+            <p><strong>Profissional:</strong> {{ item.nome_profissional }} — CRO {{ item.cro }}</p>
+            {% if item.assinatura %}
+            <p>
+                <img src="{% url 'core:ver_imagem_assinatura' item.assinatura.pk %}" alt="Assinatura de {{ item.nome_profissional }}" class="assinatura-miniatura">
+            </p>
+            {% endif %}
+        </article>
+        {% empty %}
+        <p class="vazio">Nenhuma evolução assinada ainda.</p>
+        {% endfor %}
+
+        {% if pode_registrar and form %}
+        <h2 class="secao-pagina">Nova evolução</h2>
+        <form method="post" class="form-cartao" id="form-evolucao-clinica">
+            {% csrf_token %}
+            {% include "core/includes/campo_form.html" with field=form.data %}
+            {% include "core/includes/campo_form.html" with field=form.procedimento_etapa %}
+            {% include "core/includes/campo_form.html" with field=form.descricao_clinica %}
+            {% include "core/includes/campo_form.html" with field=form.orientacoes %}
+            <div class="grade-dois">
+                {% include "core/includes/campo_form.html" with field=form.nome_profissional %}
+                {% include "core/includes/campo_form.html" with field=form.cro %}
+            </div>
+            {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_base64" rotulo="assinatura do profissional" dica="O dentista assina esta linha na presença do paciente." erro=form.assinatura_base64.errors %}
+            <button type="submit" class="botao">Salvar evolução</button>
+        </form>
+        {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if pode_registrar %}
+<script src="{% static 'core/js/assinatura.js' %}"></script>
+{% endif %}
+{% endblock %}

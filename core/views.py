@@ -1,6 +1,6 @@
 ﻿from decimal import Decimal
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 
 from django.contrib import messages
@@ -18,6 +18,7 @@ from django.views.decorators.http import require_POST
 from locacao.models import Dentista
 
 from .assinatura import gravar_assinatura_manuscrita
+from .evolucao import texto_para_hash_evolucao
 from .anamnese import (
     SAUDE_BUCAL,
     SAUDE_CONDICOES,
@@ -43,6 +44,7 @@ from .models import (
     soma_producao_uniodonto,
     AssinaturaEletronica,
     FichaCadastroAnamnese,
+    RegistroEvolucaoClinica,
 )
 from .forms import (
     ConvenioForm,
@@ -58,6 +60,7 @@ from .forms import (
     AssinaturaTesteForm,
     FichaAnamneseForm,
     AssinaturaDentistaAnamneseForm,
+    RegistroEvolucaoClinicaForm,
 )
 from .permissoes import (
     exige_financeiro,
@@ -1190,4 +1193,75 @@ def _salvar_ficha_anamnese(request, ficha, *, publico, template):
         'menor': menor,
         'titulo': 'Cadastro e anamnese',
     })
+
+
+def ficha_evolucao_clinica(request, pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    pode_registrar = usuario_pode_financeiro(request.user)
+    registros = list(
+        RegistroEvolucaoClinica.objects.filter(paciente=paciente).order_by(
+            'data', 'criado_em', 'pk'
+        )
+    )
+    ids = [item.pk for item in registros]
+    assinaturas = {
+        item.documento_id: item
+        for item in AssinaturaEletronica.objects.filter(
+            tipo_documento=AssinaturaEletronica.TipoDocumento.EVOLUCAO,
+            documento_id__in=ids,
+        )
+    }
+    for item in registros:
+        item.assinatura = assinaturas.get(item.pk)
+
+    dentista = dentista_do_usuario(request.user)
+    nome_sugerido = ''
+    if dentista:
+        nome_sugerido = dentista.nome_completo
+    elif request.user.is_authenticated:
+        nome_sugerido = request.user.get_full_name() or request.user.username
+
+    if request.method == 'POST':
+        if not pode_registrar:
+            raise PermissionDenied
+        form = RegistroEvolucaoClinicaForm(request.POST)
+        if form.is_valid():
+            with transaction.atomic():
+                registro = form.save(commit=False)
+                registro.paciente = paciente
+                registro.dentista = dentista
+                registro.criado_por = request.user
+                registro.save()
+                gravar_assinatura_manuscrita(
+                    tipo_documento=AssinaturaEletronica.TipoDocumento.EVOLUCAO,
+                    documento_id=registro.pk,
+                    papel=AssinaturaEletronica.Papel.DENTISTA,
+                    nome_assinante=registro.nome_profissional,
+                    imagem_data_url=form.cleaned_data['assinatura_base64'],
+                    conteudo_para_hash=texto_para_hash_evolucao(registro),
+                    paciente=paciente,
+                    usuario=request.user,
+                    ip=_ip_do_pedido(request),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                )
+            messages.success(request, 'Evolução assinada e gravada.')
+            return redirect('core:ficha_evolucao_clinica', pk=paciente.pk)
+    else:
+        form = RegistroEvolucaoClinicaForm(
+            initial={
+                'data': date.today(),
+                'nome_profissional': nome_sugerido,
+            }
+        )
+        if not pode_registrar:
+            form = None
+
+    return render(request, 'core/ficha_evolucao_clinica.html', {
+        'paciente': paciente,
+        'registros': registros,
+        'form': form,
+        'pode_registrar': pode_registrar,
+        'titulo': 'Evolução clínica',
+    })
+
 

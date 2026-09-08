@@ -22,6 +22,7 @@ from .models import (
     RepasseUniodonto,
     AssinaturaEletronica,
     FichaCadastroAnamnese,
+    RegistroEvolucaoClinica,
 )
 from locacao.models import Dentista
 
@@ -598,4 +599,36 @@ class AssinaturaDentistaAnamneseForm(forms.Form):
             self.cleaned_data.get('assinatura_dentista_base64'),
             True,
         )
+
+
+class RegistroEvolucaoClinicaForm(forms.ModelForm):
+    assinatura_base64 = forms.CharField(widget=forms.HiddenInput())
+
+    class Meta:
+        model = RegistroEvolucaoClinica
+        fields = [
+            'data',
+            'procedimento_etapa',
+            'descricao_clinica',
+            'orientacoes',
+            'nome_profissional',
+            'cro',
+        ]
+        widgets = {
+            'data': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'descricao_clinica': forms.Textarea(attrs={'rows': 4}),
+            'orientacoes': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['data'].input_formats = ['%Y-%m-%d']
+        self.fields['orientacoes'].required = False
+
+    def clean_assinatura_base64(self):
+        return _validar_png_opcional(
+            self.cleaned_data.get('assinatura_base64'),
+            True,
+        )
+
 

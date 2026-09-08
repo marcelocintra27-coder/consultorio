@@ -14,6 +14,7 @@ from .models import (
     RepasseUniodonto,
     AssinaturaEletronica,
     FichaCadastroAnamnese,
+    RegistroEvolucaoClinica,
 )
 
 
@@ -209,4 +210,24 @@ class FichaCadastroAnamneseAdmin(admin.ModelAdmin):
     list_filter = ('status', 'preenchida_por')
     search_fields = ('paciente__nome_completo', 'cpf', 'nome_completo')
     readonly_fields = ('token', 'criado_em', 'atualizado_em')
+
+
+@admin.register(RegistroEvolucaoClinica)
+class RegistroEvolucaoClinicaAdmin(admin.ModelAdmin):
+    list_display = (
+        'paciente',
+        'data',
+        'procedimento_etapa',
+        'nome_profissional',
+        'cro',
+    )
+    search_fields = (
+        'paciente__nome_completo',
+        'procedimento_etapa',
+        'nome_profissional',
+        'cro',
+    )
+    autocomplete_fields = ('paciente', 'dentista')
+    readonly_fields = ('criado_em',)
+
 

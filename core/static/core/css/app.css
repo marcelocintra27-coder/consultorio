@@ -515,6 +515,20 @@ h2.secao-pagina {
     color: var(--cor-primaria);
 }
 
+.evolucao-linha {
+    background: var(--cor-superficie);
+    border: 1px solid var(--cor-borda);
+    border-radius: var(--raio-card);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+}
+
+.evolucao-data {
+    margin: 0 0 8px;
+    font-weight: 600;
+    color: var(--cor-primaria);
+}
+
 @media (max-width: 640px) {
     .topo {
         flex-direction: column;

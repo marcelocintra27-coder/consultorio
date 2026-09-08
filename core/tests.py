@@ -972,3 +972,147 @@ class FichaCadastroAnamneseTests(TestCase):
         )
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'não marque as outras opções')
+
+
+class RegistroEvolucaoClinicaTests(TestCase):
+    def setUp(self):
+        self.sala = Sala.objects.create(nome='Sala Evolucao')
+        self.dentista = Dentista.objects.create(
+            nome_completo='Dentista Evolucao',
+            sala=self.sala,
+            valor_hora=Decimal('200.00'),
+        )
+        self.paciente = Paciente.objects.create(
+            nome_completo='Paciente Evolucao',
+            cpf='333.333.333-33',
+            data_nascimento=date(1988, 3, 3),
+            telefone='11933334444',
+        )
+        self.admin = User.objects.create_user(
+            'admin_evolucao', password='x', is_staff=True, is_superuser=True
+        )
+        self.user_dentista = User.objects.create_user(
+            'dentista_evolucao', password='x', first_name='Carla'
+        )
+        PerfilUsuario.objects.create(
+            usuario=self.user_dentista,
+            dentista=self.dentista,
+            papel=PerfilUsuario.Papel.DENTISTA,
+        )
+        self.user_secretaria = User.objects.create_user(
+            'secretaria_evolucao', password='x', first_name='Amanda'
+        )
+        PerfilUsuario.objects.create(
+            usuario=self.user_secretaria,
+            dentista=None,
+            papel=PerfilUsuario.Papel.SECRETARIA,
+        )
+
+    def _payload(self, **extra):
+        dados = {
+            'data': '2026-09-01',
+            'procedimento_etapa': 'Profilaxia',
+            'descricao_clinica': 'Remoção de cálculo e polimento.',
+            'orientacoes': 'Higiene a cada 6 meses.',
+            'nome_profissional': 'Dentista Evolucao',
+            'cro': 'CRO-GO 12345',
+            'assinatura_base64': PNG_1PX,
+        }
+        dados.update(extra)
+        return dados
+
+    def test_dentista_grava_linha_assinada(self):
+        from .models import AssinaturaEletronica, RegistroEvolucaoClinica
+
+        self.client.force_login(self.user_dentista)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/evolucao/',
+            self._payload(),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        registro = RegistroEvolucaoClinica.objects.get()
+        self.assertEqual(registro.procedimento_etapa, 'Profilaxia')
+        self.assertEqual(registro.dentista_id, self.dentista.pk)
+        assinatura = AssinaturaEletronica.objects.get(
+            tipo_documento='evolucao', documento_id=registro.pk
+        )
+        self.assertEqual(assinatura.papel, 'dentista')
+        html = self.client.get(
+            f'/pacientes/{self.paciente.pk}/evolucao/',
+            HTTP_HOST='localhost',
+        ).content.decode()
+        self.assertIn('Profilaxia', html)
+        self.assertIn('CRO-GO 12345', html)
+        self.assertIn('Nova evolução', html)
+
+    def test_secretaria_ve_e_nao_lanca(self):
+        from .models import RegistroEvolucaoClinica
+
+        self.client.force_login(self.user_dentista)
+        self.client.post(
+            f'/pacientes/{self.paciente.pk}/evolucao/',
+            self._payload(),
+            HTTP_HOST='localhost',
+        )
+        self.client.force_login(self.user_secretaria)
+        html = self.client.get(
+            f'/pacientes/{self.paciente.pk}/evolucao/',
+            HTTP_HOST='localhost',
+        ).content.decode()
+        self.assertIn('Profilaxia', html)
+        self.assertNotIn('Nova evolução', html)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/evolucao/',
+            self._payload(procedimento_etapa='Outro'),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 403)
+        self.assertEqual(RegistroEvolucaoClinica.objects.count(), 1)
+
+    def test_ordem_cronologica_e_legado_nao_aparece(self):
+        from .models import Evolucao, RegistroEvolucaoClinica
+
+        Evolucao.objects.create(
+            paciente=self.paciente,
+            data=date(2020, 1, 1),
+            descricao='Importado da planilha',
+        )
+        self.client.force_login(self.admin)
+        self.client.post(
+            f'/pacientes/{self.paciente.pk}/evolucao/',
+            self._payload(data='2026-09-02', procedimento_etapa='Segunda'),
+            HTTP_HOST='localhost',
+        )
+        self.client.post(
+            f'/pacientes/{self.paciente.pk}/evolucao/',
+            self._payload(data='2026-09-01', procedimento_etapa='Primeira'),
+            HTTP_HOST='localhost',
+        )
+        registros = list(
+            RegistroEvolucaoClinica.objects.filter(paciente=self.paciente)
+        )
+        self.assertEqual(
+            [item.procedimento_etapa for item in registros],
+            ['Primeira', 'Segunda'],
+        )
+        html = self.client.get(
+            f'/pacientes/{self.paciente.pk}/evolucao/',
+            HTTP_HOST='localhost',
+        ).content.decode()
+        self.assertIn('Primeira', html)
+        self.assertIn('Segunda', html)
+        self.assertNotIn('Importado da planilha', html)
+        self.assertLess(html.find('Primeira'), html.find('Segunda'))
+
+    def test_recusa_sem_assinatura(self):
+        from .models import RegistroEvolucaoClinica
+
+        self.client.force_login(self.admin)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/evolucao/',
+            self._payload(assinatura_base64=''),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(RegistroEvolucaoClinica.objects.count(), 0)

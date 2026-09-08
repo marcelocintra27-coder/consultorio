@@ -961,3 +961,50 @@ class FichaCadastroAnamnese(models.Model):
             self.status == self.Status.RASCUNHO
             and timezone.now() <= self.token_expira_em
         )
+
+
+class RegistroEvolucaoClinica(models.Model):
+    paciente = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente',
+        on_delete=models.CASCADE,
+        related_name='registros_evolucao_clinica',
+    )
+    data = models.DateField('data')
+    procedimento_etapa = models.CharField(
+        'procedimento / etapa realizada',
+        max_length=200,
+    )
+    descricao_clinica = models.TextField('descrição clínica / conduta')
+    orientacoes = models.TextField('orientações fornecidas', blank=True)
+    nome_profissional = models.CharField(
+        'profissional',
+        max_length=200,
+    )
+    cro = models.CharField('CRO', max_length=30)
+    dentista = models.ForeignKey(
+        'locacao.Dentista',
+        verbose_name='dentista',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='registros_evolucao_clinica',
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='criado por',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='registros_evolucao_clinica_criados',
+    )
+
+    class Meta:
+        verbose_name = 'registro de evolução clínica'
+        verbose_name_plural = 'registros de evolução clínica'
+        ordering = ['data', 'criado_em', 'pk']
+
+    def __str__(self):
+        return f'{self.paciente.nome_completo} — {self.data}'
+

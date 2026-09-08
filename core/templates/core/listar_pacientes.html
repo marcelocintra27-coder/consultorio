@@ -30,6 +30,7 @@
                 <td>
                     <a href="{% url 'core:editar_paciente' paciente.pk %}" class="botao">Editar</a>
                     <a href="{% url 'core:listar_fichas_anamnese' paciente.pk %}" class="botao secundario">Anamnese</a>
+                    <a href="{% url 'core:ficha_evolucao_clinica' paciente.pk %}" class="botao secundario">Evolução</a>
                 </td>
             </tr>
             {% empty %}

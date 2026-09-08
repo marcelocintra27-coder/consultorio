@@ -9,6 +9,7 @@
             <a href="{% url 'core:listar_pacientes' %}" class="botao secundario">Voltar</a>
             {% if paciente %}
             <a href="{% url 'core:listar_fichas_anamnese' paciente.pk %}" class="botao">Anamnese</a>
+            <a href="{% url 'core:ficha_evolucao_clinica' paciente.pk %}" class="botao">Evolução</a>
             {% endif %}
         </div>
 
