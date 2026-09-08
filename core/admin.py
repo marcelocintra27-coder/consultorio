@@ -11,6 +11,9 @@ from .models import (
     LancamentoAtendimento,
     AuditoriaConsulta,
     ProcedimentoUniodonto,
+    RepasseUniodonto,
+    AssinaturaEletronica,
+    FichaCadastroAnamnese,
 )
 
 
@@ -158,4 +161,52 @@ class ProcedimentoUniodontoAdmin(admin.ModelAdmin):
     list_filter = ('categoria', 'ativo')
     search_fields = ('codigo', 'nome')
     readonly_fields = ('codigo', 'nome', 'categoria', 'valor_us', 'valor_reais', 'fator_us')
+
+
+@admin.register(RepasseUniodonto)
+class RepasseUniodontoAdmin(admin.ModelAdmin):
+    list_display = (
+        'dentista',
+        'competencia',
+        'producao_bruta',
+        'liquido_recebido',
+        'liquido_calculado',
+    )
+    list_filter = ('competencia', 'dentista')
+    autocomplete_fields = ('dentista',)
+    readonly_fields = ('liquido_calculado', 'cadastrado_em', 'cadastrado_por')
+
+
+@admin.register(AssinaturaEletronica)
+class AssinaturaEletronicaAdmin(admin.ModelAdmin):
+    list_display = (
+        'assinado_em',
+        'papel',
+        'nome_assinante',
+        'tipo_assinatura',
+        'tipo_documento',
+        'status_verificacao',
+    )
+    list_filter = ('tipo_assinatura', 'papel', 'tipo_documento')
+    search_fields = ('nome_assinante', 'cpf_assinante', 'hash_conteudo')
+    readonly_fields = (
+        'assinado_em',
+        'hash_conteudo',
+        'hash_imagem',
+        'ip',
+        'user_agent',
+    )
+
+
+@admin.register(FichaCadastroAnamnese)
+class FichaCadastroAnamneseAdmin(admin.ModelAdmin):
+    list_display = (
+        'paciente',
+        'status',
+        'preenchida_por',
+        'criado_em',
+    )
+    list_filter = ('status', 'preenchida_por')
+    search_fields = ('paciente__nome_completo', 'cpf', 'nome_completo')
+    readonly_fields = ('token', 'criado_em', 'atualizado_em')
 

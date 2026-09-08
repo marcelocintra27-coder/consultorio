@@ -22,7 +22,14 @@
     </header>
 
     <main class="container {% block container_class %}{% endblock %}">
-        {% block content %}{% endblock %}
+        {% if messages %}
+    <div class="mensagens">
+        {% for message in messages %}
+        <div class="mensagem {{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% block content %}{% endblock %}
     </main>
 
     {% block rodape %}{% endblock %}

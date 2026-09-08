@@ -1,9 +1,13 @@
-﻿from datetime import datetime
+﻿from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
+from uuid import uuid4
 
 from django.conf import settings
 from django.db import models
-from django.db.models import Sum
+from django.db.models import Q, Sum
+from django.utils import timezone
+
+from locacao.models import primeiro_dia_mes
 
 
 class ConvenioQuerySet(models.QuerySet):
@@ -510,3 +514,450 @@ class ProcedimentoUniodonto(models.Model):
                 Decimal('0.0001'), rounding=ROUND_HALF_UP
             )
         super().save(*args, **kwargs)
+
+
+def soma_producao_uniodonto(dentista, competencia):
+    if dentista is None or competencia is None:
+        return Decimal('0.00')
+    competencia = primeiro_dia_mes(competencia)
+    do_mes = LancamentoAtendimento.objects.filter(
+        Q(dentista=dentista) | Q(consulta__dentista=dentista),
+        consulta__data__year=competencia.year,
+        consulta__data__month=competencia.month,
+    )
+    uniodonto = (
+        do_mes.filter(procedimento_uniodonto__isnull=False)
+        | do_mes.filter(codigo_tuss__gt='')
+        | do_mes.filter(convenio__usa_tabela_oficial=True)
+    ).distinct()
+    total = uniodonto.aggregate(soma=Sum('valor_tabela'))['soma']
+    if total is None:
+        return Decimal('0.00')
+    return Decimal(total).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+class RepasseUniodonto(models.Model):
+    dentista = models.ForeignKey(
+        'locacao.Dentista',
+        verbose_name='dentista',
+        on_delete=models.PROTECT,
+        related_name='repasses_uniodonto',
+    )
+    competencia = models.DateField(
+        'competência',
+        help_text='Primeiro dia do mês.',
+    )
+    producao_bruta = models.DecimalField(
+        'produção bruta',
+        max_digits=10,
+        decimal_places=2,
+    )
+    glosa = models.DecimalField(
+        'glosa',
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    estorno = models.DecimalField(
+        'estorno',
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    inss_retido = models.DecimalField(
+        'INSS retido',
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    irrf_retido = models.DecimalField(
+        'IRRF retido',
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    liquido_recebido = models.DecimalField(
+        'líquido recebido',
+        max_digits=10,
+        decimal_places=2,
+    )
+    liquido_calculado = models.DecimalField(
+        'líquido calculado',
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+    )
+    observacoes = models.TextField('observações', blank=True)
+    cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
+    cadastrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='cadastrado por',
+        on_delete=models.PROTECT,
+        related_name='repasses_uniodonto',
+    )
+
+    class Meta:
+        verbose_name = 'repasse Uniodonto'
+        verbose_name_plural = 'repasses Uniodonto'
+        ordering = ['-competencia', 'dentista']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['dentista', 'competencia'],
+                name='repasse_uniodonto_dentista_competencia_unico',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.dentista} — {self.competencia:%m/%Y}'
+
+    def calcular_liquido(self):
+        return (
+            self.producao_bruta
+            - self.glosa
+            - self.estorno
+            - self.inss_retido
+            - self.irrf_retido
+        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    def diferenca(self):
+        return (self.liquido_calculado - self.liquido_recebido).quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP
+        )
+
+    def save(self, *args, **kwargs):
+        if self.competencia:
+            self.competencia = primeiro_dia_mes(self.competencia)
+        for campo in (
+            'producao_bruta',
+            'glosa',
+            'estorno',
+            'inss_retido',
+            'irrf_retido',
+            'liquido_recebido',
+        ):
+            valor = getattr(self, campo)
+            if valor is not None:
+                setattr(
+                    self,
+                    campo,
+                    Decimal(valor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
+                )
+        self.liquido_calculado = self.calcular_liquido()
+        super().save(*args, **kwargs)
+
+
+class AssinaturaEletronica(models.Model):
+    class TipoDocumento(models.TextChoices):
+        COMPONENTE_TESTE = 'componente_teste', 'componente de teste'
+        EVOLUCAO = 'evolucao', 'evolução'
+        PLANO_TRATAMENTO = 'plano_tratamento', 'plano de tratamento / consentimento'
+        ANAMNESE = 'anamnese', 'cadastro / anamnese'
+        AUTORIZACAO_CUSTO = 'autorizacao_custo', 'autorização de itens com custo'
+
+    class Papel(models.TextChoices):
+        PACIENTE = 'paciente', 'paciente'
+        DENTISTA = 'dentista', 'dentista'
+        RESPONSAVEL = 'responsavel', 'responsável'
+        TESTEMUNHA = 'testemunha', 'testemunha'
+
+    class TipoAssinatura(models.TextChoices):
+        MANUSCRITA = 'manuscrita', 'manuscrita'
+        ICP_BRASIL = 'icp_brasil', 'ICP-Brasil'
+
+    class StatusVerificacao(models.TextChoices):
+        NAO_APLICAVEL = 'nao_aplicavel', 'não aplicável'
+        VALIDA = 'valida', 'válida'
+        INVALIDA = 'invalida', 'inválida'
+        EXPIRADA = 'expirada', 'expirada'
+
+    tipo_documento = models.CharField(
+        'tipo do documento',
+        max_length=40,
+        choices=TipoDocumento.choices,
+    )
+    documento_id = models.PositiveIntegerField('id do documento', default=0)
+    paciente = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assinaturas',
+    )
+    papel = models.CharField('papel', max_length=20, choices=Papel.choices)
+    tipo_assinatura = models.CharField(
+        'tipo de assinatura',
+        max_length=20,
+        choices=TipoAssinatura.choices,
+        default=TipoAssinatura.MANUSCRITA,
+    )
+    imagem = models.FileField(
+        'imagem da assinatura',
+        upload_to='assinaturas/%Y/%m/',
+        blank=True,
+    )
+    nome_assinante = models.CharField('nome de quem assinou', max_length=200)
+    cpf_assinante = models.CharField('CPF de quem assinou', max_length=18, blank=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='usuário logado',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assinaturas_coletadas',
+    )
+    assinado_em = models.DateTimeField('assinado em', auto_now_add=True)
+    ip = models.GenericIPAddressField('IP', null=True, blank=True)
+    user_agent = models.CharField('user agent', max_length=400, blank=True)
+    hash_conteudo = models.CharField('hash do conteúdo', max_length=64, blank=True)
+    hash_imagem = models.CharField('hash da imagem', max_length=64, blank=True)
+    certificado_id = models.CharField('id do certificado', max_length=120, blank=True)
+    certificado_serial = models.CharField(
+        'serial do certificado', max_length=120, blank=True
+    )
+    certificado_emissor = models.CharField(
+        'emissor do certificado', max_length=200, blank=True
+    )
+    validade_certificado_inicio = models.DateTimeField(
+        'início da validade do certificado',
+        null=True,
+        blank=True,
+    )
+    validade_certificado_fim = models.DateTimeField(
+        'fim da validade do certificado',
+        null=True,
+        blank=True,
+    )
+    politica = models.CharField('política (CAdES/PAdES)', max_length=40, blank=True)
+    pacote_assinatura = models.BinaryField(
+        'pacote CMS/PAdES',
+        null=True,
+        blank=True,
+    )
+    carimbo_tempo = models.DateTimeField('carimbo de tempo', null=True, blank=True)
+    status_verificacao = models.CharField(
+        'status da verificação',
+        max_length=20,
+        choices=StatusVerificacao.choices,
+        default=StatusVerificacao.NAO_APLICAVEL,
+    )
+
+    class Meta:
+        verbose_name = 'assinatura eletrônica'
+        verbose_name_plural = 'assinaturas eletrônicas'
+        ordering = ['-assinado_em']
+
+    def __str__(self):
+        return f'{self.get_papel_display()} — {self.nome_assinante}'
+
+
+class FichaCadastroAnamnese(models.Model):
+    class Status(models.TextChoices):
+        RASCUNHO = 'rascunho', 'rascunho'
+        AGUARDANDO_DENTISTA = 'aguardando_dentista', 'aguardando dentista'
+        CONCLUIDA = 'concluida', 'concluída'
+
+    class PreenchidaPor(models.TextChoices):
+        PACIENTE = 'paciente', 'paciente'
+        EQUIPE = 'equipe', 'equipe'
+
+    class SimNao(models.TextChoices):
+        SIM = 'sim', 'sim'
+        NAO = 'nao', 'não'
+
+    class SimNaoNaoSei(models.TextChoices):
+        SIM = 'sim', 'sim'
+        NAO = 'nao', 'não'
+        NAO_SEI = 'nao_sei', 'não sei'
+
+    class Gravidez(models.TextChoices):
+        SIM = 'sim', 'sim'
+        NAO = 'nao', 'não'
+        NAO_SE_APLICA = 'nao_se_aplica', 'não se aplica'
+
+    paciente = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente',
+        on_delete=models.CASCADE,
+        related_name='fichas_anamnese',
+    )
+    dentista = models.ForeignKey(
+        'locacao.Dentista',
+        verbose_name='dentista',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='fichas_anamnese',
+    )
+    status = models.CharField(
+        'status',
+        max_length=30,
+        choices=Status.choices,
+        default=Status.RASCUNHO,
+    )
+    preenchida_por = models.CharField(
+        'preenchida por',
+        max_length=20,
+        choices=PreenchidaPor.choices,
+        default=PreenchidaPor.EQUIPE,
+    )
+    token = models.UUIDField('token do link', default=uuid4, unique=True, editable=False)
+    token_expira_em = models.DateTimeField('link expira em')
+    nome_completo = models.CharField('nome completo', max_length=200)
+    data_nascimento = models.DateField('data de nascimento')
+    cpf = models.CharField('CPF', max_length=18)
+    telefone = models.CharField('telefone', max_length=20)
+    whatsapp = models.CharField('WhatsApp', max_length=20, blank=True)
+    email = models.EmailField('e-mail', blank=True)
+    endereco = models.TextField('endereço', blank=True)
+    cidade = models.CharField('cidade', max_length=120, blank=True)
+    uf = models.CharField('UF', max_length=2, blank=True)
+    profissao = models.CharField('profissão', max_length=120, blank=True)
+    nome_responsavel = models.CharField(
+        'responsável legal',
+        max_length=200,
+        blank=True,
+    )
+    saude_condicoes = models.JSONField('sua saúde', default=list, blank=True)
+    saude_outra_texto = models.CharField(
+        'outra condição de saúde',
+        max_length=200,
+        blank=True,
+    )
+    alergia = models.CharField(
+        'alergia a medicamentos, alimentos ou látex',
+        max_length=20,
+        choices=SimNao.choices,
+        blank=True,
+        default='',
+    )
+    alergia_qual = models.CharField('qual alergia', max_length=200, blank=True)
+    usa_medicamento = models.CharField(
+        'usa medicamento',
+        max_length=20,
+        choices=SimNao.choices,
+        blank=True,
+        default='',
+    )
+    medicamento_nome = models.CharField(
+        'nome do medicamento',
+        max_length=200,
+        blank=True,
+    )
+    cirurgia_recente = models.CharField(
+        'cirurgia ou internação recente',
+        max_length=20,
+        choices=SimNao.choices,
+        blank=True,
+        default='',
+    )
+    cirurgia_qual = models.CharField(
+        'qual cirurgia ou internação / quando',
+        max_length=200,
+        blank=True,
+    )
+    saude_bucal = models.JSONField('sua saúde bucal', default=list, blank=True)
+    data_ultima_consulta = models.DateField(
+        'data da última consulta odontológica',
+        null=True,
+        blank=True,
+    )
+    experiencia_anterior = models.CharField(
+        'experiência odontológica anterior',
+        max_length=20,
+        choices=SimNao.choices,
+        blank=True,
+        default='',
+    )
+    experiencia_relato = models.TextField(
+        'relato da experiência anterior',
+        blank=True,
+    )
+    o_que_incomoda = models.TextField('o que mais incomoda', blank=True)
+    o_que_espera = models.TextField('o que espera do tratamento', blank=True)
+    fuma = models.CharField(
+        'fuma / nicotina',
+        max_length=20,
+        choices=SimNao.choices,
+        blank=True,
+        default='',
+    )
+    bebida_alcoolica = models.CharField(
+        'bebida alcoólica',
+        max_length=20,
+        choices=SimNao.choices,
+        blank=True,
+        default='',
+    )
+    range_dentes = models.CharField(
+        'range ou aperta os dentes',
+        max_length=20,
+        choices=SimNaoNaoSei.choices,
+        blank=True,
+        default='',
+    )
+    gravidez = models.CharField(
+        'grávida ou possibilidade de gravidez',
+        max_length=20,
+        choices=Gravidez.choices,
+        blank=True,
+        default='',
+    )
+    outra_info_saude = models.CharField(
+        'outra informação de saúde relevante',
+        max_length=20,
+        choices=SimNao.choices,
+        blank=True,
+        default='',
+    )
+    outra_info_relato = models.TextField(
+        'relato de outra informação de saúde',
+        blank=True,
+    )
+    aceitou_declaracao = models.BooleanField(
+        'aceitou a declaração',
+        default=False,
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+    atualizado_em = models.DateTimeField('atualizado em', auto_now=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='criado por',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='fichas_anamnese_criadas',
+    )
+
+    class Meta:
+        verbose_name = 'ficha de cadastro e anamnese'
+        verbose_name_plural = 'fichas de cadastro e anamnese'
+        ordering = ['-criado_em']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['paciente'],
+                condition=Q(
+                    status__in=['rascunho', 'aguardando_dentista']
+                ),
+                name='uma_ficha_anamnese_aberta_por_paciente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.paciente.nome_completo} — {self.get_status_display()}'
+
+    def save(self, *args, **kwargs):
+        if not self.token_expira_em:
+            self.token_expira_em = timezone.now() + timedelta(days=14)
+        super().save(*args, **kwargs)
+
+    @property
+    def esta_aberta(self):
+        return self.status in (self.Status.RASCUNHO, self.Status.AGUARDANDO_DENTISTA)
+
+    @property
+    def link_publico_ativo(self):
+        return (
+            self.status == self.Status.RASCUNHO
+            and timezone.now() <= self.token_expira_em
+        )

@@ -8,6 +8,10 @@ from .views import (
     cadastrar_convenio,
     editar_convenio,
     listar_tabela_uniodonto,
+    listar_repasses_uniodonto,
+    cadastrar_repasse_uniodonto,
+    editar_repasse_uniodonto,
+    sugestao_producao_uniodonto,
     listar_consultas,
     marcar_consulta_paga,
     agendar_consulta,
@@ -24,6 +28,15 @@ from .views import (
     materiais_consulta,
     editar_material_usado,
     excluir_material_usado,
+    teste_assinatura,
+    ver_imagem_assinatura,
+    listar_fichas_anamnese,
+    nova_ficha_anamnese,
+    renovar_link_anamnese,
+    editar_ficha_anamnese,
+    ver_ficha_anamnese,
+    ficha_anamnese_publica,
+    ficha_anamnese_enviada,
 )
 
 app_name = 'core'
@@ -33,6 +46,41 @@ urlpatterns = [
     path('pacientes/', listar_pacientes, name='listar_pacientes'),
     path('pacientes/cadastrar/', cadastrar_paciente, name='cadastrar_paciente'),
     path('pacientes/<int:pk>/editar/', editar_paciente, name='editar_paciente'),
+    path(
+        'pacientes/<int:pk>/anamnese/',
+        listar_fichas_anamnese,
+        name='listar_fichas_anamnese',
+    ),
+    path(
+        'pacientes/<int:pk>/anamnese/nova/',
+        nova_ficha_anamnese,
+        name='nova_ficha_anamnese',
+    ),
+    path(
+        'pacientes/<int:pk>/anamnese/<int:ficha_pk>/link/',
+        renovar_link_anamnese,
+        name='renovar_link_anamnese',
+    ),
+    path(
+        'pacientes/<int:pk>/anamnese/<int:ficha_pk>/editar/',
+        editar_ficha_anamnese,
+        name='editar_ficha_anamnese',
+    ),
+    path(
+        'pacientes/<int:pk>/anamnese/<int:ficha_pk>/',
+        ver_ficha_anamnese,
+        name='ver_ficha_anamnese',
+    ),
+    path(
+        'f/a/<uuid:token>/',
+        ficha_anamnese_publica,
+        name='ficha_anamnese_publica',
+    ),
+    path(
+        'f/a/<uuid:token>/enviada/',
+        ficha_anamnese_enviada,
+        name='ficha_anamnese_enviada',
+    ),
     path('convenios/', listar_convenios, name='listar_convenios'),
     path('convenios/cadastrar/', cadastrar_convenio, name='cadastrar_convenio'),
     path('convenios/<int:pk>/editar/', editar_convenio, name='editar_convenio'),
@@ -40,6 +88,26 @@ urlpatterns = [
         'convenios/uniodonto/tabela/',
         listar_tabela_uniodonto,
         name='listar_tabela_uniodonto',
+    ),
+    path(
+        'convenios/uniodonto/repasses/',
+        listar_repasses_uniodonto,
+        name='listar_repasses_uniodonto',
+    ),
+    path(
+        'convenios/uniodonto/repasses/novo/',
+        cadastrar_repasse_uniodonto,
+        name='cadastrar_repasse_uniodonto',
+    ),
+    path(
+        'convenios/uniodonto/repasses/sugestao/',
+        sugestao_producao_uniodonto,
+        name='sugestao_producao_uniodonto',
+    ),
+    path(
+        'convenios/uniodonto/repasses/<int:pk>/editar/',
+        editar_repasse_uniodonto,
+        name='editar_repasse_uniodonto',
     ),
     path('consultas/', listar_consultas, name='listar_consultas'),
     path('consultas/agendar/', agendar_consulta, name='agendar_consulta'),
@@ -104,5 +172,15 @@ urlpatterns = [
         'materiais/<int:pk>/excluir/',
         excluir_material_usado,
         name='excluir_material_usado',
+    ),
+    path(
+        'fichas/assinatura/',
+        teste_assinatura,
+        name='teste_assinatura',
+    ),
+    path(
+        'fichas/assinatura/<int:pk>/imagem/',
+        ver_imagem_assinatura,
+        name='ver_imagem_assinatura',
     ),
 ]

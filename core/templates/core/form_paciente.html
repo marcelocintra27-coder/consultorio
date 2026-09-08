@@ -7,6 +7,9 @@
 {% block content %}
         <div class="acoes">
             <a href="{% url 'core:listar_pacientes' %}" class="botao secundario">Voltar</a>
+            {% if paciente %}
+            <a href="{% url 'core:listar_fichas_anamnese' paciente.pk %}" class="botao">Anamnese</a>
+            {% endif %}
         </div>
 
         <form method="post" class="form-cartao">

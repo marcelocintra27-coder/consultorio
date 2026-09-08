@@ -1,11 +1,15 @@
 ﻿from decimal import Decimal
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
+
+from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Q
+from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -13,6 +17,17 @@ from django.views.decorators.http import require_POST
 
 from locacao.models import Dentista
 
+from .assinatura import gravar_assinatura_manuscrita
+from .anamnese import (
+    SAUDE_BUCAL,
+    SAUDE_CONDICOES,
+    TEXTO_DECLARACAO_ANAMNESE,
+    eh_menor_de_idade,
+    renovar_token,
+    rotulos_checklist,
+    sincronizar_paciente,
+    texto_para_hash,
+)
 from .tabela_uniodonto import FATOR_US_UNIODONTO
 from .models import (
     Convenio,
@@ -24,6 +39,10 @@ from .models import (
     LancamentoAtendimento,
     AuditoriaConsulta,
     ProcedimentoUniodonto,
+    RepasseUniodonto,
+    soma_producao_uniodonto,
+    AssinaturaEletronica,
+    FichaCadastroAnamnese,
 )
 from .forms import (
     ConvenioForm,
@@ -35,6 +54,10 @@ from .forms import (
     LancamentoForm,
     LancamentoUniodontoForm,
     ComplementarDentistaForm,
+    RepasseUniodontoForm,
+    AssinaturaTesteForm,
+    FichaAnamneseForm,
+    AssinaturaDentistaAnamneseForm,
 )
 from .permissoes import (
     exige_financeiro,
@@ -89,6 +112,7 @@ def editar_paciente(request, pk):
     return render(request, 'core/form_paciente.html', {
         'form': form,
         'titulo': 'Editar Paciente',
+        'paciente': paciente,
     })
 
 
@@ -154,6 +178,154 @@ def listar_tabela_uniodonto(request):
         'fator_us': FATOR_US_UNIODONTO,
         'total': ProcedimentoUniodonto.objects.filter(ativo=True).count(),
     })
+
+
+def _parse_competencia(mes_str):
+    try:
+        return datetime.strptime(mes_str, '%Y-%m').date().replace(day=1)
+    except (TypeError, ValueError):
+        return None
+
+
+def _dentista_repasse_request(request):
+    if usuario_e_administrador(request.user):
+        bruto = request.GET.get('dentista') or request.POST.get('dentista')
+        if bruto:
+            return get_object_or_404(Dentista, pk=bruto, ativo=True)
+        return None
+    dentista = dentista_do_usuario(request.user)
+    if dentista is None:
+        raise PermissionDenied
+    return dentista
+
+
+@exige_financeiro
+def listar_repasses_uniodonto(request):
+    admin = usuario_e_administrador(request.user)
+    dentista_user = dentista_do_usuario(request.user)
+    if not admin and dentista_user is None:
+        raise PermissionDenied
+    mes_str = request.GET.get('mes', '').strip()
+    competencia = _parse_competencia(mes_str) if mes_str else None
+    extratos = RepasseUniodonto.objects.select_related('dentista')
+    dentista_filtro = None
+    if admin:
+        dentista_id = request.GET.get('dentista', '').strip()
+        if dentista_id:
+            dentista_filtro = get_object_or_404(Dentista, pk=dentista_id, ativo=True)
+            extratos = extratos.filter(dentista=dentista_filtro)
+    else:
+        extratos = extratos.filter(dentista=dentista_user)
+    if competencia:
+        extratos = extratos.filter(competencia=competencia)
+    return render(request, 'core/listar_repasses_uniodonto.html', {
+        'extratos': extratos,
+        'mes_input': mes_str,
+        'dentista_filtro': dentista_filtro,
+        'dentistas': Dentista.objects.filter(ativo=True).order_by('nome_completo')
+        if admin
+        else None,
+    })
+
+
+def _contexto_form_repasse(request, form, sugerido, titulo, extrato=None):
+    return {
+        'form': form,
+        'sugerido': sugerido,
+        'titulo': titulo,
+        'extrato': extrato,
+        'liquido_calculado': extrato.liquido_calculado if extrato else None,
+        'diferenca': extrato.diferenca() if extrato else None,
+        'url_sugestao': reverse('core:sugestao_producao_uniodonto'),
+    }
+
+
+@exige_financeiro
+def cadastrar_repasse_uniodonto(request):
+    admin = usuario_e_administrador(request.user)
+    dentista_fixo = None if admin else dentista_do_usuario(request.user)
+    if not admin and dentista_fixo is None:
+        raise PermissionDenied
+    dentista = _dentista_repasse_request(request) or dentista_fixo
+    competencia = _parse_competencia(
+        request.GET.get('competencia') or request.POST.get('competencia', '')
+    )
+    if competencia is None:
+        competencia = timezone.localdate().replace(day=1)
+    sugerido = soma_producao_uniodonto(dentista, competencia)
+    if request.method == 'POST':
+        form = RepasseUniodontoForm(
+            request.POST, dentista_fixo=dentista_fixo
+        )
+        if form.is_valid():
+            extrato = form.save(commit=False)
+            extrato.cadastrado_por = request.user
+            extrato.save()
+            return redirect('core:listar_repasses_uniodonto')
+    else:
+        iniciais = {
+            'competencia': competencia.strftime('%Y-%m'),
+            'producao_bruta': sugerido,
+            'glosa': 0,
+            'estorno': 0,
+            'inss_retido': 0,
+            'irrf_retido': 0,
+        }
+        if dentista:
+            iniciais['dentista'] = dentista.pk
+        form = RepasseUniodontoForm(
+            initial=iniciais, dentista_fixo=dentista_fixo
+        )
+    return render(
+        request,
+        'core/form_repasse_uniodonto.html',
+        _contexto_form_repasse(request, form, sugerido, 'Novo repasse Uniodonto'),
+    )
+
+
+@exige_financeiro
+def editar_repasse_uniodonto(request, pk):
+    extrato = get_object_or_404(
+        RepasseUniodonto.objects.select_related('dentista'),
+        pk=pk,
+    )
+    if not usuario_pode_editar_catalogo(request.user, extrato.dentista):
+        raise PermissionDenied
+    admin = usuario_e_administrador(request.user)
+    dentista_fixo = None if admin else extrato.dentista
+    sugerido = soma_producao_uniodonto(extrato.dentista, extrato.competencia)
+    if request.method == 'POST':
+        form = RepasseUniodontoForm(
+            request.POST, instance=extrato, dentista_fixo=dentista_fixo
+        )
+        if form.is_valid():
+            form.save()
+            return redirect('core:listar_repasses_uniodonto')
+    else:
+        form = RepasseUniodontoForm(
+            instance=extrato, dentista_fixo=dentista_fixo
+        )
+    return render(
+        request,
+        'core/form_repasse_uniodonto.html',
+        _contexto_form_repasse(
+            request, form, sugerido, 'Editar repasse Uniodonto', extrato
+        ),
+    )
+
+
+@exige_financeiro
+def sugestao_producao_uniodonto(request):
+    dentista = _dentista_repasse_request(request)
+    if dentista is None:
+        return JsonResponse({'sugerido': '0.00'})
+    if not usuario_pode_editar_catalogo(request.user, dentista):
+        raise PermissionDenied
+    competencia = _parse_competencia(request.GET.get('competencia', ''))
+    if competencia is None:
+        competencia = timezone.localdate().replace(day=1)
+    sugerido = soma_producao_uniodonto(dentista, competencia)
+    return JsonResponse({'sugerido': f'{sugerido:.2f}'})
 
 
 def listar_consultas(request):
@@ -665,5 +837,357 @@ def editar_procedimento(request, pk):
         'convenios': Convenio.objects.catalogo_dentista(),
         'precos': precos,
         'titulo': 'Editar procedimento',
+    })
+
+
+def _ip_do_pedido(request):
+    return request.META.get('REMOTE_ADDR')
+
+
+def teste_assinatura(request):
+    if request.method == 'POST':
+        form = AssinaturaTesteForm(request.POST)
+        if form.is_valid():
+            dados = form.cleaned_data
+            paciente = dados.get('paciente')
+            conteudo = '|'.join(
+                [
+                    AssinaturaEletronica.TipoDocumento.COMPONENTE_TESTE,
+                    str(paciente.pk if paciente else 0),
+                    dados['papel'],
+                    dados['nome_assinante'],
+                    dados.get('cpf_assinante') or '',
+                ]
+            )
+            gravar_assinatura_manuscrita(
+                tipo_documento=AssinaturaEletronica.TipoDocumento.COMPONENTE_TESTE,
+                documento_id=paciente.pk if paciente else 0,
+                papel=dados['papel'],
+                nome_assinante=dados['nome_assinante'],
+                imagem_data_url=dados['imagem_base64'],
+                conteudo_para_hash=conteudo,
+                paciente=paciente,
+                cpf_assinante=dados.get('cpf_assinante') or '',
+                usuario=request.user,
+                ip=_ip_do_pedido(request),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            )
+            return redirect('core:teste_assinatura')
+    else:
+        form = AssinaturaTesteForm(
+            initial={'nome_assinante': request.user.get_full_name() or request.user.username}
+        )
+    recentes = AssinaturaEletronica.objects.select_related('paciente', 'usuario')[:8]
+    return render(request, 'core/form_assinatura_teste.html', {
+        'form': form,
+        'recentes': recentes,
+        'titulo': 'Assinatura eletrônica (componente)',
+    })
+
+
+def ver_imagem_assinatura(request, pk):
+    assinatura = get_object_or_404(AssinaturaEletronica, pk=pk)
+    if not assinatura.imagem:
+        raise PermissionDenied
+    return FileResponse(assinatura.imagem.open('rb'), content_type='image/png')
+
+
+def _ficha_aberta(paciente):
+    return FichaCadastroAnamnese.objects.filter(
+        paciente=paciente,
+        status__in=[
+            FichaCadastroAnamnese.Status.RASCUNHO,
+            FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA,
+        ],
+    ).first()
+
+
+def _criar_rascunho_anamnese(paciente, usuario):
+    existente = _ficha_aberta(paciente)
+    if existente:
+        return existente
+    return FichaCadastroAnamnese.objects.create(
+        paciente=paciente,
+        criado_por=usuario if usuario.is_authenticated else None,
+        nome_completo=paciente.nome_completo,
+        data_nascimento=paciente.data_nascimento,
+        cpf=paciente.cpf,
+        telefone=paciente.telefone,
+        whatsapp=paciente.whatsapp or '',
+        email=paciente.email or '',
+        endereco=paciente.endereco or '',
+        token_expira_em=timezone.now() + timedelta(days=14),
+    )
+
+
+def _assinaturas_da_ficha(ficha):
+    return AssinaturaEletronica.objects.filter(
+        tipo_documento=AssinaturaEletronica.TipoDocumento.ANAMNESE,
+        documento_id=ficha.pk,
+    )
+
+
+def _gravar_assinatura_anamnese(
+    request, ficha, papel, nome, cpf, data_url, usuario=None
+):
+    gravar_assinatura_manuscrita(
+        tipo_documento=AssinaturaEletronica.TipoDocumento.ANAMNESE,
+        documento_id=ficha.pk,
+        papel=papel,
+        nome_assinante=nome,
+        imagem_data_url=data_url,
+        conteudo_para_hash=texto_para_hash(ficha),
+        paciente=ficha.paciente,
+        cpf_assinante=cpf or '',
+        usuario=usuario,
+        ip=_ip_do_pedido(request),
+        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+    )
+
+
+def listar_fichas_anamnese(request, pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    fichas = paciente.fichas_anamnese.all()
+    ficha_aberta = _ficha_aberta(paciente)
+    link_publico = ''
+    if ficha_aberta and ficha_aberta.status == FichaCadastroAnamnese.Status.RASCUNHO:
+        link_publico = request.build_absolute_uri(
+            reverse('core:ficha_anamnese_publica', args=[ficha_aberta.token])
+        )
+    return render(request, 'core/listar_fichas_anamnese.html', {
+        'paciente': paciente,
+        'fichas': fichas,
+        'ficha_aberta': ficha_aberta,
+        'link_publico': link_publico,
+    })
+
+
+@require_POST
+def nova_ficha_anamnese(request, pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    ficha = _criar_rascunho_anamnese(paciente, request.user)
+    return redirect('core:editar_ficha_anamnese', pk=paciente.pk, ficha_pk=ficha.pk)
+
+
+@require_POST
+def renovar_link_anamnese(request, pk, ficha_pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    ficha = FichaCadastroAnamnese.objects.filter(
+        pk=ficha_pk, paciente=paciente
+    ).first()
+    if ficha is None:
+        messages.error(
+            request,
+            'Essa ficha não existe mais. Abra a lista de anamnese do paciente.',
+        )
+        return redirect('core:listar_fichas_anamnese', pk=paciente.pk)
+    if ficha.status != FichaCadastroAnamnese.Status.RASCUNHO:
+        messages.error(
+            request,
+            'Não dá para gerar um link novo: o paciente já enviou esta ficha. '
+            'Abra o registro e conclua com a assinatura do dentista.',
+        )
+        return redirect(
+            'core:ver_ficha_anamnese', pk=paciente.pk, ficha_pk=ficha.pk
+        )
+    renovar_token(ficha)
+    messages.success(request, 'Novo link gerado. O anterior deixa de funcionar.')
+    return redirect('core:listar_fichas_anamnese', pk=paciente.pk)
+
+
+def editar_ficha_anamnese(request, pk, ficha_pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    ficha = get_object_or_404(
+        FichaCadastroAnamnese, pk=ficha_pk, paciente=paciente
+    )
+    if ficha.status != FichaCadastroAnamnese.Status.RASCUNHO:
+        return redirect(
+            'core:ver_ficha_anamnese', pk=paciente.pk, ficha_pk=ficha.pk
+        )
+    return _salvar_ficha_anamnese(
+        request,
+        ficha,
+        publico=False,
+        template='core/form_ficha_anamnese.html',
+    )
+
+
+def ver_ficha_anamnese(request, pk, ficha_pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    ficha = get_object_or_404(
+        FichaCadastroAnamnese, pk=ficha_pk, paciente=paciente
+    )
+    if ficha.status == FichaCadastroAnamnese.Status.RASCUNHO:
+        return redirect(
+            'core:editar_ficha_anamnese', pk=paciente.pk, ficha_pk=ficha.pk
+        )
+    form = AssinaturaDentistaAnamneseForm(request.POST or None)
+    if (
+        request.method == 'POST'
+        and ficha.status == FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA
+        and form.is_valid()
+    ):
+        dentista = dentista_do_usuario(request.user)
+        with transaction.atomic():
+            if dentista and not ficha.dentista_id:
+                ficha.dentista = dentista
+                ficha.save(update_fields=['dentista'])
+            _gravar_assinatura_anamnese(
+                request,
+                ficha,
+                AssinaturaEletronica.Papel.DENTISTA,
+                request.user.get_full_name() or request.user.username,
+                '',
+                form.cleaned_data['assinatura_dentista_base64'],
+                usuario=request.user,
+            )
+            ficha.status = FichaCadastroAnamnese.Status.CONCLUIDA
+            ficha.save(update_fields=['status', 'atualizado_em'])
+        messages.success(request, 'Ficha concluída com a assinatura do dentista.')
+        return redirect(
+            'core:ver_ficha_anamnese', pk=paciente.pk, ficha_pk=ficha.pk
+        )
+    return render(request, 'core/ver_ficha_anamnese.html', {
+        'paciente': paciente,
+        'ficha': ficha,
+        'form': form,
+        'texto_declaracao': TEXTO_DECLARACAO_ANAMNESE,
+        'saude_rotulos': rotulos_checklist(ficha.saude_condicoes, SAUDE_CONDICOES),
+        'bucal_rotulos': rotulos_checklist(ficha.saude_bucal, SAUDE_BUCAL),
+        'assinaturas': _assinaturas_da_ficha(ficha),
+        'pode_assinar_dentista': (
+            ficha.status == FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA
+        ),
+        'titulo': 'Ficha de cadastro e anamnese',
+    })
+
+
+@login_not_required
+def ficha_anamnese_publica(request, token):
+    ficha = FichaCadastroAnamnese.objects.filter(token=token).select_related(
+        'paciente'
+    ).first()
+    if ficha is None or not ficha.link_publico_ativo:
+        if (
+            ficha is not None
+            and ficha.status != FichaCadastroAnamnese.Status.RASCUNHO
+        ):
+            return render(
+                request,
+                'core/ficha_anamnese_enviada.html',
+                {'ja_enviada': True},
+            )
+        return render(request, 'core/ficha_anamnese_indisponivel.html')
+    return _salvar_ficha_anamnese(
+        request,
+        ficha,
+        publico=True,
+        template='core/form_ficha_anamnese.html',
+    )
+
+
+@login_not_required
+def ficha_anamnese_enviada(request, token):
+    ficha = FichaCadastroAnamnese.objects.filter(token=token).first()
+    if ficha is None:
+        return render(request, 'core/ficha_anamnese_indisponivel.html')
+    return render(request, 'core/ficha_anamnese_enviada.html', {
+        'ja_enviada': False,
+    })
+
+
+def _salvar_ficha_anamnese(request, ficha, *, publico, template):
+    acao = request.POST.get('acao', 'enviar')
+    if publico:
+        acao = 'enviar'
+    exigir = acao != 'rascunho'
+    coletar_paciente = exigir
+    coletar_dentista = (not publico) and acao == 'concluir'
+    if request.method == 'POST':
+        form = FichaAnamneseForm(
+            request.POST,
+            instance=ficha,
+            exigir_completo=exigir,
+            coletar_paciente=coletar_paciente,
+            coletar_dentista=coletar_dentista,
+        )
+        if form.is_valid():
+            with transaction.atomic():
+                ficha = form.save(commit=False)
+                ficha.preenchida_por = (
+                    FichaCadastroAnamnese.PreenchidaPor.PACIENTE
+                    if publico
+                    else FichaCadastroAnamnese.PreenchidaPor.EQUIPE
+                )
+                if acao == 'rascunho':
+                    ficha.status = FichaCadastroAnamnese.Status.RASCUNHO
+                elif coletar_dentista:
+                    ficha.status = FichaCadastroAnamnese.Status.CONCLUIDA
+                    dentista = dentista_do_usuario(request.user)
+                    if dentista:
+                        ficha.dentista = dentista
+                else:
+                    ficha.status = FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA
+                ficha.save()
+                sincronizar_paciente(ficha)
+                if acao != 'rascunho':
+                    menor = eh_menor_de_idade(ficha.data_nascimento)
+                    if menor:
+                        papel = AssinaturaEletronica.Papel.RESPONSAVEL
+                        nome = ficha.nome_responsavel
+                        cpf = ''
+                    else:
+                        papel = AssinaturaEletronica.Papel.PACIENTE
+                        nome = ficha.nome_completo
+                        cpf = ficha.cpf
+                    _gravar_assinatura_anamnese(
+                        request,
+                        ficha,
+                        papel,
+                        nome,
+                        cpf,
+                        form.cleaned_data['assinatura_paciente_base64'],
+                        usuario=request.user if request.user.is_authenticated else None,
+                    )
+                    if coletar_dentista:
+                        _gravar_assinatura_anamnese(
+                            request,
+                            ficha,
+                            AssinaturaEletronica.Papel.DENTISTA,
+                            request.user.get_full_name() or request.user.username,
+                            '',
+                            form.cleaned_data['assinatura_dentista_base64'],
+                            usuario=request.user,
+                        )
+            if publico:
+                return redirect('core:ficha_anamnese_enviada', token=ficha.token)
+            messages.success(request, 'Ficha salva.')
+            if ficha.status == FichaCadastroAnamnese.Status.RASCUNHO:
+                return redirect(
+                    'core:editar_ficha_anamnese',
+                    pk=ficha.paciente_id,
+                    ficha_pk=ficha.pk,
+                )
+            return redirect(
+                'core:ver_ficha_anamnese',
+                pk=ficha.paciente_id,
+                ficha_pk=ficha.pk,
+            )
+    else:
+        form = FichaAnamneseForm(
+            instance=ficha,
+            exigir_completo=False,
+            coletar_paciente=False,
+            coletar_dentista=False,
+        )
+    menor = eh_menor_de_idade(ficha.data_nascimento)
+    return render(request, template, {
+        'form': form,
+        'ficha': ficha,
+        'paciente': ficha.paciente,
+        'publico': publico,
+        'texto_declaracao': TEXTO_DECLARACAO_ANAMNESE,
+        'menor': menor,
+        'titulo': 'Cadastro e anamnese',
     })
 

@@ -1,0 +1,96 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_repasses_uniodonto' %}" class="botao secundario">Voltar</a>
+        </div>
+
+        <form method="post" class="form-cartao" id="form-repasse">
+            {% csrf_token %}
+            {% for field in form %}
+            <div class="campo">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                    <div class="erro">{{ field.errors }}</div>
+                {% endif %}
+                {% if field.name == 'producao_bruta' %}
+                <p class="resumo" id="texto-sugerido">Sugerido pelos lançamentos Uniodonto do mês: R$ <span id="valor-sugerido">{{ sugerido }}</span></p>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% if not extrato %}
+            <button type="submit" class="botao secundario" formmethod="get">Atualizar sugestão</button>
+            {% endif %}
+            <p class="resumo" id="conferencia-repasse">
+                Líquido calculado (bruta − glosa − estorno − INSS − IRRF):
+                R$ <span id="liquido-calculado">{% if liquido_calculado is not None %}{{ liquido_calculado }}{% else %}—{% endif %}</span>
+                {% if diferenca is not None %}
+                · diferença vs recebido: R$ {{ diferenca }}
+                {% endif %}
+            </p>
+            <p class="resumo">A diferença é só conferência e não impede salvar.</p>
+            <button type="submit" class="botao">Salvar</button>
+        </form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var form = document.getElementById('form-repasse');
+    if (!form) return;
+    var bruta = form.querySelector('[name="producao_bruta"]');
+    var glosa = form.querySelector('[name="glosa"]');
+    var estorno = form.querySelector('[name="estorno"]');
+    var inss = form.querySelector('[name="inss_retido"]');
+    var irrf = form.querySelector('[name="irrf_retido"]');
+    var recebido = form.querySelector('[name="liquido_recebido"]');
+    var saida = document.getElementById('liquido-calculado');
+    var conferencia = document.getElementById('conferencia-repasse');
+    var dentista = form.querySelector('[name="dentista"]');
+    var competencia = form.querySelector('[name="competencia"]');
+    var valorSugerido = document.getElementById('valor-sugerido');
+    var urlSugestao = '{{ url_sugestao }}';
+    function numero(el) {
+        return parseFloat(el && el.value ? el.value : '0') || 0;
+    }
+    function atualizarConferencia() {
+        var calc = numero(bruta) - numero(glosa) - numero(estorno) - numero(inss) - numero(irrf);
+        if (saida) saida.textContent = calc.toFixed(2).replace('.', ',');
+        if (conferencia && recebido) {
+            var dif = calc - numero(recebido);
+            conferencia.innerHTML =
+                'Líquido calculado (bruta − glosa − estorno − INSS − IRRF): R$ ' +
+                calc.toFixed(2).replace('.', ',') +
+                ' · diferença vs recebido: R$ ' +
+                dif.toFixed(2).replace('.', ',');
+        }
+    }
+    function carregarSugestao() {
+        if (!urlSugestao || !competencia) return;
+        var params = new URLSearchParams();
+        if (dentista && dentista.value) params.set('dentista', dentista.value);
+        params.set('competencia', competencia.value || '');
+        fetch(urlSugestao + '?' + params.toString(), { headers: { 'Accept': 'application/json' } })
+            .then(function (resposta) { return resposta.json(); })
+            .then(function (dados) {
+                var valor = dados.sugerido || '0.00';
+                if (valorSugerido) valorSugerido.textContent = Number(valor).toFixed(2).replace('.', ',');
+                if (bruta) bruta.value = Number(valor).toFixed(2);
+                atualizarConferencia();
+            });
+    }
+    [bruta, glosa, estorno, inss, irrf, recebido].forEach(function (el) {
+        if (el) el.addEventListener('input', atualizarConferencia);
+    });
+    if (dentista) dentista.addEventListener('change', carregarSugestao);
+    if (competencia) competencia.addEventListener('change', carregarSugestao);
+    atualizarConferencia();
+    if (dentista && dentista.value) carregarSugestao();
+})();
+</script>
+{% endblock %}

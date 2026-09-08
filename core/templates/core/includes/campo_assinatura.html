@@ -1,0 +1,21 @@
+<div class="campo assinatura-campo">
+    <label for="{{ nome_campo }}-canvas">{{ rotulo|default:"assinatura" }}</label>
+    <p class="resumo">{{ dica|default:"Desenhe com o dedo ou o mouse. Limpe se precisar refazer." }}</p>
+    <div class="assinatura-quadro">
+        <canvas
+            id="{{ nome_campo }}-canvas"
+            class="assinatura-canvas"
+            width="640"
+            height="200"
+            tabindex="0"
+            aria-label="{{ rotulo|default:'assinatura' }}"
+        ></canvas>
+    </div>
+    <div class="acoes assinatura-acoes">
+        <button type="button" class="botao secundario" data-assinatura-limpar="{{ nome_campo }}">Limpar</button>
+    </div>
+    <input type="hidden" name="{{ nome_campo }}" id="id_{{ nome_campo }}" value="">
+    {% if erro %}
+    <div class="erro">{{ erro }}</div>
+    {% endif %}
+</div>

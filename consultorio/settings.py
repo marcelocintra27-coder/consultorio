@@ -24,7 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-g7^iy+r6z!tv37jaac$v$&@w2j79+5jw6y#%%^a5lfu9m74vc1'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes')
+# Local: DEBUG ligado para o runserver servir static dos finders.
+# Render define RENDER=true e o padrão fica desligado (produção).
+DEBUG = os.environ.get(
+    'DEBUG',
+    'False' if os.environ.get('RENDER') else 'True',
+).lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = ['consultorio-a7um.onrender.com', '127.0.0.1', 'localhost']
 
@@ -128,6 +133,8 @@ LOGOUT_REDIRECT_URL = 'entrar'
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',

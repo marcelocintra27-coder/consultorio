@@ -1,0 +1,79 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_fichas_anamnese' paciente.pk %}" class="botao secundario">Voltar</a>
+        </div>
+
+        <p class="resumo">{{ ficha.get_status_display }} · preenchida por {{ ficha.get_preenchida_por_display }}</p>
+
+        <div class="form-cartao">
+            <h2 class="secao-pagina">1. Dados do paciente</h2>
+            <p><strong>Nome:</strong> {{ ficha.nome_completo }}</p>
+            <p><strong>Nascimento:</strong> {{ ficha.data_nascimento|date:"d/m/Y" }}</p>
+            <p><strong>CPF:</strong> {{ ficha.cpf }}</p>
+            <p><strong>Telefone:</strong> {{ ficha.telefone }}</p>
+            <p><strong>WhatsApp:</strong> {{ ficha.whatsapp|default:"—" }}</p>
+            <p><strong>E-mail:</strong> {{ ficha.email|default:"—" }}</p>
+            <p><strong>Endereço:</strong> {{ ficha.endereco|default:"—" }}</p>
+            <p><strong>Cidade/UF:</strong> {{ ficha.cidade|default:"—" }} {% if ficha.uf %}/ {{ ficha.uf }}{% endif %}</p>
+            <p><strong>Profissão:</strong> {{ ficha.profissao|default:"—" }}</p>
+            <p><strong>Responsável legal:</strong> {{ ficha.nome_responsavel|default:"—" }}</p>
+
+            <h2 class="secao-pagina">2. Sua saúde</h2>
+            <p>{{ saude_rotulos|join:", "|default:"—" }}</p>
+            {% if ficha.saude_outra_texto %}<p><strong>Outra:</strong> {{ ficha.saude_outra_texto }}</p>{% endif %}
+            <p><strong>Alergia:</strong> {{ ficha.get_alergia_display }} {% if ficha.alergia_qual %}— {{ ficha.alergia_qual }}{% endif %}</p>
+            <p><strong>Medicamento:</strong> {{ ficha.get_usa_medicamento_display }} {% if ficha.medicamento_nome %}— {{ ficha.medicamento_nome }}{% endif %}</p>
+            <p><strong>Cirurgia/internação:</strong> {{ ficha.get_cirurgia_recente_display }} {% if ficha.cirurgia_qual %}— {{ ficha.cirurgia_qual }}{% endif %}</p>
+
+            <h2 class="secao-pagina">3. Sua saúde bucal</h2>
+            <p>{{ bucal_rotulos|join:", "|default:"—" }}</p>
+            <p><strong>Última consulta:</strong> {{ ficha.data_ultima_consulta|date:"d/m/Y"|default:"—" }}</p>
+            <p><strong>Experiência anterior:</strong> {{ ficha.get_experiencia_anterior_display }}</p>
+            {% if ficha.experiencia_relato %}<p>{{ ficha.experiencia_relato }}</p>{% endif %}
+            <p><strong>O que mais incomoda:</strong> {{ ficha.o_que_incomoda|default:"—" }}</p>
+            <p><strong>O que espera do tratamento:</strong> {{ ficha.o_que_espera|default:"—" }}</p>
+
+            <h2 class="secao-pagina">4. Hábitos</h2>
+            <p><strong>Fuma / nicotina:</strong> {{ ficha.get_fuma_display }}</p>
+            <p><strong>Bebida alcoólica:</strong> {{ ficha.get_bebida_alcoolica_display }}</p>
+            <p><strong>Range ou aperta os dentes:</strong> {{ ficha.get_range_dentes_display }}</p>
+            <p><strong>Gravidez:</strong> {{ ficha.get_gravidez_display }}</p>
+            <p><strong>Outra informação:</strong> {{ ficha.get_outra_info_saude_display }}</p>
+            {% if ficha.outra_info_relato %}<p>{{ ficha.outra_info_relato }}</p>{% endif %}
+
+            <h2 class="secao-pagina">5. Declaração</h2>
+            <p class="declaracao">{{ texto_declaracao }}</p>
+            <p>{% if ficha.aceitou_declaracao %}Paciente concordou com a declaração.{% else %}Declaração não marcada.{% endif %}</p>
+
+            <h2 class="secao-pagina">Assinaturas</h2>
+            {% for item in assinaturas %}
+            <p>
+                <strong>{{ item.get_papel_display }}</strong> — {{ item.nome_assinante }}
+                ({{ item.assinado_em|date:"d/m/Y H:i" }})<br>
+                <img src="{% url 'core:ver_imagem_assinatura' item.pk %}" alt="Assinatura de {{ item.nome_assinante }}" class="assinatura-miniatura">
+            </p>
+            {% empty %}
+            <p class="vazio">Nenhuma assinatura gravada.</p>
+            {% endfor %}
+
+            {% if pode_assinar_dentista %}
+            <form method="post" class="form-cartao" id="form-assinatura-dentista">
+                {% csrf_token %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_dentista_base64" rotulo="assinatura do cirurgião-dentista" dica="Desenhe para concluir a ficha." erro=form.assinatura_dentista_base64.errors %}
+                <button type="submit" class="botao">Concluir ficha</button>
+            </form>
+            {% endif %}
+        </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if pode_assinar_dentista %}
+<script src="{% static 'core/js/assinatura.js' %}"></script>
+{% endif %}
+{% endblock %}

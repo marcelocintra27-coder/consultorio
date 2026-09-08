@@ -1,0 +1,62 @@
+{% extends "core/base.html" %}
+
+{% block title %}Repasse Uniodonto{% endblock %}
+{% block titulo %}Repasse Uniodonto{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+            <a href="{% url 'core:cadastrar_repasse_uniodonto' %}" class="botao">Novo</a>
+        </div>
+
+        <form method="get" class="busca-form">
+            <label for="id_mes">competência</label>
+            <input id="id_mes" type="month" name="mes" value="{{ mes_input }}">
+            {% if dentistas %}
+            <label for="id_dentista_filtro">dentista</label>
+            <select name="dentista" id="id_dentista_filtro">
+                <option value="">Todas</option>
+                {% for d in dentistas %}
+                <option value="{{ d.pk }}" {% if dentista_filtro and d.pk == dentista_filtro.pk %}selected{% endif %}>{{ d.nome_completo }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+            <button type="submit" class="botao">Filtrar</button>
+        </form>
+
+        <div class="tabela-wrap">
+        <table>
+            <tr>
+                <th>Dentista</th>
+                <th>Competência</th>
+                <th class="valor">Produção bruta</th>
+                <th class="valor">Glosa</th>
+                <th class="valor">Estorno</th>
+                <th class="valor">INSS</th>
+                <th class="valor">IRRF</th>
+                <th class="valor">Líquido recebido</th>
+                <th></th>
+            </tr>
+            {% for extrato in extratos %}
+            <tr>
+                <td>{{ extrato.dentista.nome_completo }}</td>
+                <td>{{ extrato.competencia|date:"m/Y" }}</td>
+                <td class="valor">R$ {{ extrato.producao_bruta }}</td>
+                <td class="valor">R$ {{ extrato.glosa }}</td>
+                <td class="valor">R$ {{ extrato.estorno }}</td>
+                <td class="valor">R$ {{ extrato.inss_retido }}</td>
+                <td class="valor">R$ {{ extrato.irrf_retido }}</td>
+                <td class="valor">R$ {{ extrato.liquido_recebido }}</td>
+                <td>
+                    <a href="{% url 'core:editar_repasse_uniodonto' extrato.pk %}" class="botao">Editar</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="vazio">Nenhum extrato encontrado.</td>
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+        </div>
+
+        <p class="resumo">Prova do componente. As fichas (evolução, plano, anamnese e autorização de custo) entram nas próximas etapas.</p>
+
+        <form method="post" class="form-cartao" id="form-assinatura-teste">
+            {% csrf_token %}
+            {% for field in form %}
+                {% if field.name != 'imagem_base64' %}
+                <div class="campo">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}
+                    <div class="erro">{{ field.errors }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            {% endfor %}
+            {% include "core/includes/campo_assinatura.html" with nome_campo="imagem_base64" rotulo="assinatura" dica="Paciente ou dentista: desenhe com o dedo ou o mouse." erro=form.imagem_base64.errors %}
+            <button type="submit" class="botao">Salvar assinatura</button>
+        </form>
+
+        <h2 class="secao-pagina">Últimas assinaturas</h2>
+        <div class="tabela-wrap">
+        <table>
+            <tr>
+                <th>Quando</th>
+                <th>Papel</th>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Imagem</th>
+            </tr>
+            {% for item in recentes %}
+            <tr>
+                <td>{{ item.assinado_em|date:"d/m/Y H:i" }}</td>
+                <td>{{ item.get_papel_display }}</td>
+                <td>{{ item.nome_assinante }}</td>
+                <td>{{ item.get_tipo_assinatura_display }}</td>
+                <td>
+                    {% if item.imagem %}
+                    <img src="{% url 'core:ver_imagem_assinatura' item.pk %}" alt="Assinatura de {{ item.nome_assinante }}" class="assinatura-miniatura">
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="vazio">Nenhuma assinatura gravada.</td>
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/js/assinatura.js' %}"></script>
+{% endblock %}

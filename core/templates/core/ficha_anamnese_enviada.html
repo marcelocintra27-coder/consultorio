@@ -1,0 +1,14 @@
+{% extends "core/base.html" %}
+
+{% block title %}Ficha enviada{% endblock %}
+{% block titulo %}Cadastro e anamnese{% endblock %}
+
+{% block content %}
+        <div class="pagina-aviso">
+            {% if ja_enviada %}
+            <p>Esta ficha já foi enviada. A clínica confirma na consulta.</p>
+            {% else %}
+            <p>Recebemos sua ficha. A clínica confirma na consulta.</p>
+            {% endif %}
+        </div>
+{% endblock %}

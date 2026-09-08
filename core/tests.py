@@ -15,6 +15,8 @@ from .models import (
     LancamentoAtendimento,
     AuditoriaConsulta,
     ProcedimentoUniodonto,
+    RepasseUniodonto,
+    soma_producao_uniodonto,
 )
 from .tabela_uniodonto import (
     FATOR_US_UNIODONTO,
@@ -126,6 +128,12 @@ class AtendimentoProcedimentoTests(TestCase):
             ).status_code,
             403,
         )
+        self.assertEqual(
+            self.client.get(
+                '/convenios/uniodonto/repasses/', HTTP_HOST='localhost'
+            ).status_code,
+            403,
+        )
 
     def test_secretaria_nao_acessa_catalogo_nem_clinica(self):
         self.client.force_login(self.user_secretaria)
@@ -143,10 +151,17 @@ class AtendimentoProcedimentoTests(TestCase):
             ).status_code,
             403,
         )
+        self.assertEqual(
+            self.client.get(
+                '/convenios/uniodonto/repasses/', HTTP_HOST='localhost'
+            ).status_code,
+            403,
+        )
         home = self.client.get('/', HTTP_HOST='localhost').content.decode()
         self.assertNotIn('Acerto mensal', home)
         self.assertNotIn('Procedimentos', home)
         self.assertNotIn('Tabela Uniodonto', home)
+        self.assertNotIn('Repasse Uniodonto', home)
 
     def test_secretaria_nao_ve_valores_na_ficha(self):
         consulta = self._consulta(dentista=self.dentista)
@@ -357,13 +372,21 @@ class TabelaUniodontoTests(TestCase):
             ).status_code,
             403,
         )
+        self.assertEqual(
+            self.client.get(
+                '/convenios/uniodonto/repasses/', HTTP_HOST='localhost'
+            ).status_code,
+            403,
+        )
         home = self.client.get('/', HTTP_HOST='localhost').content.decode()
         self.assertNotIn('Tabela Uniodonto', home)
+        self.assertNotIn('Repasse Uniodonto', home)
 
     def test_home_admin_tem_card_tabela(self):
         self.client.force_login(self.admin)
         home = self.client.get('/', HTTP_HOST='localhost').content.decode()
         self.assertIn('Tabela Uniodonto', home)
+        self.assertIn('Repasse Uniodonto', home)
 
     def _consulta_uniodonto(self):
         uniodonto = Convenio.objects.get(nome=NOME_CONVENIO_UNIODONTO)
@@ -468,3 +491,484 @@ class TabelaUniodontoTests(TestCase):
         self.assertNotIn('85100196', html)
         self.assertIn('Consulta particular', html)
         self.assertIn('Particular', html)
+
+    def test_sugestao_producao_soma_valor_tabela_uniodonto(self):
+        consulta = self._consulta_uniodonto()
+        item = ProcedimentoUniodonto.objects.get(codigo='85200158')
+        uniodonto = Convenio.objects.get(nome=NOME_CONVENIO_UNIODONTO)
+        LancamentoAtendimento.objects.create(
+            consulta=consulta,
+            procedimento_uniodonto=item,
+            nome_procedimento=item.nome,
+            codigo_tuss=item.codigo,
+            dentista=self.dentista,
+            convenio=uniodonto,
+            particular=False,
+            valor_tabela=Decimal('352.00'),
+            percentual_desconto=Decimal('0.00'),
+            valor_final=Decimal('352.00'),
+            cadastrado_por=self.admin,
+        )
+        ipasgo = Convenio.objects.get(nome='Ipasgo')
+        paciente_ipasgo = Paciente.objects.create(
+            nome_completo='Paciente Ipasgo Repasse',
+            cpf='444.444.444-44',
+            data_nascimento=date(1990, 1, 1),
+            telefone='11966665555',
+            convenio=ipasgo,
+        )
+        consulta_ipasgo = Consulta.objects.create(
+            paciente=paciente_ipasgo,
+            data=date(2026, 9, 8),
+            hora_inicio=time(11, 0),
+            hora_fim=time(12, 0),
+            dentista=self.dentista,
+        )
+        procedimento = Procedimento.objects.create(
+            dentista=self.dentista,
+            nome='Consulta Ipasgo',
+        )
+        LancamentoAtendimento.objects.create(
+            consulta=consulta_ipasgo,
+            procedimento=procedimento,
+            nome_procedimento=procedimento.nome,
+            dentista=self.dentista,
+            convenio=ipasgo,
+            particular=False,
+            valor_tabela=Decimal('120.00'),
+            percentual_desconto=Decimal('0.00'),
+            valor_final=Decimal('120.00'),
+            cadastrado_por=self.admin,
+        )
+        self.assertEqual(
+            soma_producao_uniodonto(self.dentista, date(2026, 9, 1)),
+            Decimal('352.00'),
+        )
+
+    def test_cadastra_repasse_mesmo_com_diferenca(self):
+        consulta = self._consulta_uniodonto()
+        item = ProcedimentoUniodonto.objects.get(codigo='85200158')
+        self.client.force_login(self.admin)
+        self.client.post(
+            f'/consultas/{consulta.pk}/lancar/',
+            {
+                'procedimento_uniodonto': item.pk,
+                'valor_tabela': '352.00',
+                'percentual_desconto': '0',
+                'valor_final': '352.00',
+                'tipo': 'atendimento',
+            },
+            HTTP_HOST='localhost',
+        )
+        html = self.client.get(
+            f'/convenios/uniodonto/repasses/novo/?dentista={self.dentista.pk}&competencia=2026-09',
+            HTTP_HOST='localhost',
+        ).content.decode()
+        self.assertIn('352,00', html)
+        resposta = self.client.post(
+            '/convenios/uniodonto/repasses/novo/',
+            {
+                'dentista': self.dentista.pk,
+                'competencia': '2026-09',
+                'producao_bruta': '352.00',
+                'glosa': '20.00',
+                'estorno': '0',
+                'inss_retido': '30.00',
+                'irrf_retido': '10.00',
+                'liquido_recebido': '280.00',
+                'observacoes': '',
+            },
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        extrato = RepasseUniodonto.objects.get(
+            dentista=self.dentista, competencia=date(2026, 9, 1)
+        )
+        self.assertEqual(extrato.liquido_calculado, Decimal('292.00'))
+        self.assertEqual(extrato.liquido_recebido, Decimal('280.00'))
+        self.assertEqual(extrato.diferenca(), Decimal('12.00'))
+        lista = self.client.get(
+            '/convenios/uniodonto/repasses/', HTTP_HOST='localhost'
+        ).content.decode()
+        self.assertIn('R$ 280,00', lista)
+        duplicado = self.client.post(
+            '/convenios/uniodonto/repasses/novo/',
+            {
+                'dentista': self.dentista.pk,
+                'competencia': '2026-09',
+                'producao_bruta': '352.00',
+                'glosa': '0',
+                'estorno': '0',
+                'inss_retido': '0',
+                'irrf_retido': '0',
+                'liquido_recebido': '352.00',
+            },
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(duplicado.status_code, 200)
+        self.assertEqual(RepasseUniodonto.objects.count(), 1)
+
+    def test_sugestao_json_soma_lancamento_uniodonto(self):
+        consulta = self._consulta_uniodonto()
+        item = ProcedimentoUniodonto.objects.get(codigo='85200158')
+        self.client.force_login(self.admin)
+        self.client.post(
+            f'/consultas/{consulta.pk}/lancar/',
+            {
+                'procedimento_uniodonto': item.pk,
+                'valor_tabela': '352.00',
+                'percentual_desconto': '0',
+                'valor_final': '352.00',
+                'tipo': 'atendimento',
+            },
+            HTTP_HOST='localhost',
+        )
+        resposta = self.client.get(
+            '/convenios/uniodonto/repasses/sugestao/',
+            {'dentista': self.dentista.pk, 'competencia': '2026-09'},
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json()['sugerido'], '352.00')
+
+
+PNG_1PX = (
+    'data:image/png;base64,'
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII='
+)
+
+
+class AssinaturaEletronicaTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            'admin_assinatura', password='x', is_staff=True, is_superuser=True
+        )
+        self.paciente = Paciente.objects.create(
+            nome_completo='Paciente Assinatura',
+            cpf='555.555.555-55',
+            data_nascimento=date(1990, 1, 1),
+            telefone='11955554444',
+        )
+
+    def test_grava_png_hash_e_campos_icp_vazios(self):
+        self.client.force_login(self.admin)
+        resposta = self.client.post(
+            '/fichas/assinatura/',
+            {
+                'paciente': self.paciente.pk,
+                'papel': 'paciente',
+                'nome_assinante': 'Paciente Assinatura',
+                'cpf_assinante': '555.555.555-55',
+                'imagem_base64': PNG_1PX,
+            },
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        from .models import AssinaturaEletronica
+
+        item = AssinaturaEletronica.objects.get()
+        self.assertEqual(item.tipo_assinatura, 'manuscrita')
+        self.assertEqual(item.papel, 'paciente')
+        self.assertTrue(item.imagem)
+        self.assertEqual(len(item.hash_conteudo), 64)
+        self.assertEqual(len(item.hash_imagem), 64)
+        self.assertEqual(item.certificado_id, '')
+        self.assertEqual(item.status_verificacao, 'nao_aplicavel')
+        self.assertIsNone(item.pacote_assinatura)
+        html = self.client.get(
+            '/fichas/assinatura/', HTTP_HOST='localhost'
+        ).content.decode()
+        self.assertIn('Paciente Assinatura', html)
+        img = self.client.get(
+            f'/fichas/assinatura/{item.pk}/imagem/', HTTP_HOST='localhost'
+        )
+        self.assertEqual(img.status_code, 200)
+
+    def test_recusa_assinatura_vazia(self):
+        self.client.force_login(self.admin)
+        resposta = self.client.post(
+            '/fichas/assinatura/',
+            {
+                'papel': 'dentista',
+                'nome_assinante': 'Dentista',
+                'imagem_base64': '',
+            },
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 200)
+        from .models import AssinaturaEletronica
+
+        self.assertEqual(AssinaturaEletronica.objects.count(), 0)
+
+
+def _payload_anamnese(**extra):
+    dados = {
+        'nome_completo': 'Paciente Teste',
+        'data_nascimento': '1990-01-01',
+        'cpf': '111.111.111-11',
+        'telefone': '11999999999',
+        'whatsapp': '11988887777',
+        'email': 'paciente@example.com',
+        'endereco': 'Rua das Flores, 10',
+        'cidade': 'Goiânia',
+        'uf': 'GO',
+        'profissao': 'Comerciante',
+        'nome_responsavel': '',
+        'saude_condicoes': ['nenhuma'],
+        'saude_outra_texto': '',
+        'alergia': 'nao',
+        'alergia_qual': '',
+        'usa_medicamento': 'nao',
+        'medicamento_nome': '',
+        'cirurgia_recente': 'nao',
+        'cirurgia_qual': '',
+        'saude_bucal': ['nenhuma'],
+        'experiencia_anterior': 'nao',
+        'experiencia_relato': '',
+        'o_que_incomoda': 'sensibilidade',
+        'o_que_espera': 'tratamento tranquilo',
+        'fuma': 'nao',
+        'bebida_alcoolica': 'nao',
+        'range_dentes': 'nao',
+        'gravidez': 'nao_se_aplica',
+        'outra_info_saude': 'nao',
+        'outra_info_relato': '',
+        'aceitou_declaracao': 'on',
+        'assinatura_paciente_base64': PNG_1PX,
+        'acao': 'enviar',
+    }
+    dados.update(extra)
+    return dados
+
+
+class FichaCadastroAnamneseTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            'admin_anamnese', password='x', is_staff=True, is_superuser=True
+        )
+        self.paciente = Paciente.objects.create(
+            nome_completo='Paciente Teste',
+            cpf='111.111.111-11',
+            data_nascimento=date(1990, 1, 1),
+            telefone='11999999999',
+        )
+        self.menor = Paciente.objects.create(
+            nome_completo='Paciente Menor',
+            cpf='222.222.222-22',
+            data_nascimento=date(2015, 5, 20),
+            telefone='11911112222',
+        )
+
+    def _abrir_ficha(self, paciente):
+        self.client.force_login(self.admin)
+        resposta = self.client.post(
+            f'/pacientes/{paciente.pk}/anamnese/nova/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        from .models import FichaCadastroAnamnese
+
+        return FichaCadastroAnamnese.objects.filter(paciente=paciente).latest('pk')
+
+    def test_link_publico_sem_login_e_texto_da_declaracao(self):
+        from .anamnese import TEXTO_DECLARACAO_ANAMNESE
+
+        ficha = self._abrir_ficha(self.paciente)
+        self.client.logout()
+        resposta = self.client.get(
+            f'/f/a/{ficha.token}/', HTTP_HOST='localhost'
+        )
+        self.assertEqual(resposta.status_code, 200)
+        html = resposta.content.decode()
+        self.assertIn(TEXTO_DECLARACAO_ANAMNESE, html)
+        self.assertNotIn('Sair', html)
+
+    def test_lista_mostra_token_completo_no_link(self):
+        ficha = self._abrir_ficha(self.paciente)
+        token = str(ficha.token)
+        self.assertEqual(len(token), 36)
+        resposta = self.client.get(
+            f'/pacientes/{self.paciente.pk}/anamnese/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 200)
+        html = resposta.content.decode()
+        self.assertIn(token, html)
+        self.assertIn(f'/f/a/{token}/', html)
+
+    def test_paciente_envia_pelo_link_e_equipe_conclui(self):
+        from .models import AssinaturaEletronica, FichaCadastroAnamnese
+
+        ficha = self._abrir_ficha(self.paciente)
+        self.client.logout()
+        resposta = self.client.post(
+            f'/f/a/{ficha.token}/',
+            _payload_anamnese(),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        ficha.refresh_from_db()
+        self.paciente.refresh_from_db()
+        self.assertEqual(
+            ficha.status, FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA
+        )
+        self.assertEqual(ficha.preenchida_por, 'paciente')
+        self.assertEqual(self.paciente.endereco, 'Rua das Flores, 10')
+        self.assertEqual(
+            AssinaturaEletronica.objects.filter(
+                tipo_documento='anamnese', papel='paciente'
+            ).count(),
+            1,
+        )
+        self.client.force_login(self.admin)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/anamnese/{ficha.pk}/',
+            {'assinatura_dentista_base64': PNG_1PX},
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        ficha.refresh_from_db()
+        self.assertEqual(ficha.status, FichaCadastroAnamnese.Status.CONCLUIDA)
+        self.assertEqual(
+            AssinaturaEletronica.objects.filter(
+                tipo_documento='anamnese'
+            ).count(),
+            2,
+        )
+
+    def test_menor_exige_responsavel_e_assinatura_do_responsavel(self):
+        from .models import AssinaturaEletronica, FichaCadastroAnamnese
+
+        ficha = self._abrir_ficha(self.menor)
+        self.client.logout()
+        recusa = self.client.post(
+            f'/f/a/{ficha.token}/',
+            _payload_anamnese(
+                nome_completo='Paciente Menor',
+                data_nascimento='2015-05-20',
+                cpf='222.222.222-22',
+                telefone='11911112222',
+                nome_responsavel='',
+            ),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(recusa.status_code, 200)
+        ficha.refresh_from_db()
+        self.assertEqual(ficha.status, FichaCadastroAnamnese.Status.RASCUNHO)
+        ok = self.client.post(
+            f'/f/a/{ficha.token}/',
+            _payload_anamnese(
+                nome_completo='Paciente Menor',
+                data_nascimento='2015-05-20',
+                cpf='222.222.222-22',
+                telefone='11911112222',
+                nome_responsavel='Maria Responsável',
+                gravidez='nao_se_aplica',
+            ),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(ok.status_code, 302)
+        assinatura = AssinaturaEletronica.objects.get(
+            tipo_documento='anamnese', documento_id=ficha.pk
+        )
+        self.assertEqual(assinatura.papel, 'responsavel')
+        self.assertEqual(assinatura.nome_assinante, 'Maria Responsável')
+
+    def test_uma_ficha_aberta_por_paciente(self):
+        from django.db import IntegrityError
+        from .models import FichaCadastroAnamnese
+
+        primeira = self._abrir_ficha(self.paciente)
+        segunda_url = self.client.post(
+            f'/pacientes/{self.paciente.pk}/anamnese/nova/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(segunda_url.status_code, 302)
+        self.assertEqual(FichaCadastroAnamnese.objects.filter(
+            paciente=self.paciente
+        ).count(), 1)
+        with self.assertRaises(IntegrityError):
+            from django.db import transaction
+
+            with transaction.atomic():
+                FichaCadastroAnamnese.objects.create(
+                    paciente=self.paciente,
+                    nome_completo=self.paciente.nome_completo,
+                    data_nascimento=self.paciente.data_nascimento,
+                    cpf=self.paciente.cpf,
+                    telefone=self.paciente.telefone,
+                )
+        primeira.status = FichaCadastroAnamnese.Status.CONCLUIDA
+        primeira.save(update_fields=['status'])
+        outra = self._abrir_ficha(self.paciente)
+        self.assertNotEqual(outra.pk, primeira.pk)
+
+    def test_link_expirado_nao_abre_a_ficha(self):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        ficha = self._abrir_ficha(self.paciente)
+        ficha.token_expira_em = timezone.now() - timedelta(days=1)
+        ficha.save(update_fields=['token_expira_em'])
+        self.client.logout()
+        resposta = self.client.get(
+            f'/f/a/{ficha.token}/', HTTP_HOST='localhost'
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn('não está mais disponível', resposta.content.decode())
+
+    def test_renovar_link_depois_do_envio_nao_da_404(self):
+        from .models import FichaCadastroAnamnese
+
+        ficha = self._abrir_ficha(self.paciente)
+        self.client.logout()
+        self.client.post(
+            f'/f/a/{ficha.token}/',
+            _payload_anamnese(),
+            HTTP_HOST='localhost',
+        )
+        ficha.refresh_from_db()
+        self.assertEqual(
+            ficha.status, FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA
+        )
+        self.client.force_login(self.admin)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/anamnese/{ficha.pk}/link/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(
+            resposta.url,
+            f'/pacientes/{self.paciente.pk}/anamnese/{ficha.pk}/',
+        )
+
+    def test_equipe_conclui_com_duas_assinaturas(self):
+        from .models import AssinaturaEletronica, FichaCadastroAnamnese
+
+        ficha = self._abrir_ficha(self.paciente)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/anamnese/{ficha.pk}/editar/',
+            _payload_anamnese(
+                acao='concluir',
+                assinatura_dentista_base64=PNG_1PX,
+            ),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        ficha.refresh_from_db()
+        self.assertEqual(ficha.status, FichaCadastroAnamnese.Status.CONCLUIDA)
+        self.assertEqual(ficha.preenchida_por, 'equipe')
+        self.assertEqual(
+            AssinaturaEletronica.objects.filter(documento_id=ficha.pk).count(),
+            2,
+        )
+
+    def test_checklist_nenhuma_nao_mistura_com_outras(self):
+        ficha = self._abrir_ficha(self.paciente)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/anamnese/{ficha.pk}/editar/',
+            _payload_anamnese(saude_condicoes=['nenhuma', 'diabetes']),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'não marque as outras opções')
