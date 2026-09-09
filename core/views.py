@@ -19,6 +19,10 @@ from locacao.models import Dentista
 
 from .assinatura import gravar_assinatura_manuscrita
 from .evolucao import texto_para_hash_evolucao
+from .autorizacao import (
+    TEXTO_DECLARACAO_AUTORIZACAO,
+    texto_para_hash_autorizacao,
+)
 from .plano import (
     CIENCIA_ITENS,
     COMPLEXIDADE_ITENS,
@@ -53,8 +57,7 @@ from .models import (
     FichaCadastroAnamnese,
     RegistroEvolucaoClinica,
     FichaPlanoTratamento,
-    ItemConsentimentoProcedimento,
-    ResponsavelPlanoTratamento,
+    FichaAutorizacaoCusto,
 )
 from .forms import (
     ConvenioForm,
@@ -72,7 +75,9 @@ from .forms import (
     AssinaturaDentistaAnamneseForm,
     RegistroEvolucaoClinicaForm,
     FichaPlanoTratamentoForm,
+    FichaAutorizacaoCustoForm,
     montar_itens_formset,
+    montar_itens_autorizacao_formset,
     montar_profissionais_formset,
 )
 from .permissoes import (
@@ -618,6 +623,9 @@ def ficha_consulta(request, pk):
         'precos_json': json.dumps(precos),
         'itens_uniodonto_json': json.dumps(itens_uniodonto),
         'sugestoes_desconto_json': json.dumps(sugestoes_desconto),
+        'autorizacoes': consulta.autorizacoes_custo.select_related(
+            'solicitado_por'
+        ),
         'auditorias': consulta.auditorias.select_related('usuario')[:20]
         if pode_financeiro
         else [],
@@ -1576,6 +1584,252 @@ def _gravar_formset_itens(formset, ficha):
         item.ordem = indice
         item.save()
         item_form.save_m2m()
+
+
+def _ficha_autorizacao_aberta(paciente):
+    return FichaAutorizacaoCusto.objects.filter(
+        paciente=paciente,
+        status=FichaAutorizacaoCusto.Status.RASCUNHO,
+    ).first()
+
+
+def _criar_rascunho_autorizacao(paciente, usuario, consulta=None):
+    existente = _ficha_autorizacao_aberta(paciente)
+    if existente:
+        if consulta and existente.consulta_id is None:
+            existente.consulta = consulta
+            existente.save(update_fields=['consulta'])
+        return existente
+    ultima = paciente.fichas_anamnese.order_by('-criado_em').first()
+    return FichaAutorizacaoCusto.objects.create(
+        paciente=paciente,
+        consulta=consulta,
+        solicitado_por=usuario if usuario.is_authenticated else None,
+        nome_completo=paciente.nome_completo,
+        data_nascimento=paciente.data_nascimento,
+        cpf=paciente.cpf,
+        nome_responsavel=(ultima.nome_responsavel if ultima else ''),
+    )
+
+
+def listar_fichas_autorizacao(request, pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    return render(request, 'core/listar_fichas_autorizacao.html', {
+        'paciente': paciente,
+        'fichas': paciente.fichas_autorizacao_custo.select_related(
+            'consulta', 'solicitado_por'
+        ),
+        'ficha_aberta': _ficha_autorizacao_aberta(paciente),
+        'pode_registrar': usuario_pode_financeiro(request.user),
+    })
+
+
+@require_POST
+def nova_ficha_autorizacao(request, pk):
+    if not usuario_pode_financeiro(request.user):
+        raise PermissionDenied
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    consulta = None
+    consulta_id = request.POST.get('consulta')
+    if consulta_id:
+        consulta = get_object_or_404(
+            Consulta, pk=consulta_id, paciente=paciente
+        )
+    ficha = _criar_rascunho_autorizacao(
+        paciente, request.user, consulta=consulta
+    )
+    return redirect(
+        'core:editar_ficha_autorizacao',
+        pk=paciente.pk,
+        ficha_pk=ficha.pk,
+    )
+
+
+@require_POST
+def nova_ficha_autorizacao_consulta(request, pk):
+    if not usuario_pode_financeiro(request.user):
+        raise PermissionDenied
+    consulta = get_object_or_404(
+        Consulta.objects.select_related('paciente'), pk=pk
+    )
+    paciente = consulta.paciente
+    if not paciente.ativo:
+        raise PermissionDenied
+    ficha = _criar_rascunho_autorizacao(
+        paciente, request.user, consulta=consulta
+    )
+    return redirect(
+        'core:editar_ficha_autorizacao',
+        pk=paciente.pk,
+        ficha_pk=ficha.pk,
+    )
+
+
+def editar_ficha_autorizacao(request, pk, ficha_pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    ficha = get_object_or_404(
+        FichaAutorizacaoCusto, pk=ficha_pk, paciente=paciente
+    )
+    if ficha.status != FichaAutorizacaoCusto.Status.RASCUNHO:
+        return redirect(
+            'core:ver_ficha_autorizacao', pk=paciente.pk, ficha_pk=ficha.pk
+        )
+    if not usuario_pode_financeiro(request.user):
+        return redirect(
+            'core:ver_ficha_autorizacao', pk=paciente.pk, ficha_pk=ficha.pk
+        )
+    return _salvar_ficha_autorizacao(request, ficha)
+
+
+def ver_ficha_autorizacao(request, pk, ficha_pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    ficha = get_object_or_404(
+        FichaAutorizacaoCusto.objects.select_related(
+            'consulta', 'solicitado_por'
+        ),
+        pk=ficha_pk,
+        paciente=paciente,
+    )
+    if (
+        ficha.status == FichaAutorizacaoCusto.Status.RASCUNHO
+        and usuario_pode_financeiro(request.user)
+    ):
+        return redirect(
+            'core:editar_ficha_autorizacao', pk=paciente.pk, ficha_pk=ficha.pk
+        )
+    itens = list(ficha.itens.all())
+    assinatura = AssinaturaEletronica.objects.filter(
+        tipo_documento=AssinaturaEletronica.TipoDocumento.AUTORIZACAO_CUSTO,
+        documento_id=ficha.pk,
+        papel__in=[
+            AssinaturaEletronica.Papel.PACIENTE,
+            AssinaturaEletronica.Papel.RESPONSAVEL,
+        ],
+    ).first()
+    return render(request, 'core/ver_ficha_autorizacao.html', {
+        'paciente': paciente,
+        'ficha': ficha,
+        'itens': itens,
+        'assinatura': assinatura,
+        'texto_declaracao': TEXTO_DECLARACAO_AUTORIZACAO,
+        'titulo': 'Autorização de itens com custo',
+    })
+
+
+def _salvar_ficha_autorizacao(request, ficha):
+    exigir = request.method == 'POST' and request.POST.get('acao') == 'concluir'
+    if request.method == 'POST':
+        form = FichaAutorizacaoCustoForm(
+            request.POST,
+            instance=ficha,
+            exigir_completo=exigir,
+            coletar_paciente=exigir,
+        )
+        itens = montar_itens_autorizacao_formset(
+            exigir_completo=exigir,
+            instance=ficha,
+            data=request.POST,
+            prefix='itens',
+        )
+        forms_ok = form.is_valid() and itens.is_valid()
+        itens_preenchidos = [
+            item_form
+            for item_form in itens.forms
+            if item_form.is_valid() and item_form.linha_preenchida()
+        ]
+        if exigir and forms_ok and not itens_preenchidos:
+            form.add_error(None, 'Inclua ao menos um item autorizado.')
+            forms_ok = False
+        if forms_ok:
+            with transaction.atomic():
+                ficha = form.save(commit=False)
+                if exigir:
+                    ficha.status = FichaAutorizacaoCusto.Status.CONCLUIDA
+                else:
+                    ficha.status = FichaAutorizacaoCusto.Status.RASCUNHO
+                ficha.save()
+                _gravar_formset_autorizacao(itens, ficha)
+                if exigir:
+                    menor = eh_menor_de_idade(ficha.data_nascimento)
+                    papel = (
+                        AssinaturaEletronica.Papel.RESPONSAVEL
+                        if menor
+                        else AssinaturaEletronica.Papel.PACIENTE
+                    )
+                    nome = (
+                        ficha.nome_responsavel
+                        if menor
+                        else ficha.nome_completo
+                    )
+                    ficha.refresh_from_db()
+                    hash_doc = texto_para_hash_autorizacao(ficha)
+                    gravar_assinatura_manuscrita(
+                        tipo_documento=(
+                            AssinaturaEletronica.TipoDocumento.AUTORIZACAO_CUSTO
+                        ),
+                        documento_id=ficha.pk,
+                        papel=papel,
+                        nome_assinante=nome,
+                        imagem_data_url=form.cleaned_data[
+                            'assinatura_paciente_base64'
+                        ],
+                        conteudo_para_hash=hash_doc,
+                        paciente=ficha.paciente,
+                        cpf_assinante='' if menor else ficha.cpf,
+                        usuario=request.user,
+                        ip=_ip_do_pedido(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    )
+            messages.success(request, 'Autorização salva.')
+            if ficha.status == FichaAutorizacaoCusto.Status.RASCUNHO:
+                return redirect(
+                    'core:editar_ficha_autorizacao',
+                    pk=ficha.paciente_id,
+                    ficha_pk=ficha.pk,
+                )
+            return redirect(
+                'core:ver_ficha_autorizacao',
+                pk=ficha.paciente_id,
+                ficha_pk=ficha.pk,
+            )
+    else:
+        form = FichaAutorizacaoCustoForm(instance=ficha)
+        itens = montar_itens_autorizacao_formset(
+            instance=ficha, prefix='itens'
+        )
+    menor = eh_menor_de_idade(ficha.data_nascimento)
+    voltar_consulta = request.GET.get('consulta') or (
+        str(ficha.consulta_id) if ficha.consulta_id else ''
+    )
+    return render(request, 'core/form_ficha_autorizacao.html', {
+        'form': form,
+        'itens': itens,
+        'ficha': ficha,
+        'paciente': ficha.paciente,
+        'menor': menor,
+        'texto_declaracao': TEXTO_DECLARACAO_AUTORIZACAO,
+        'voltar_consulta': voltar_consulta,
+        'titulo': 'Autorização de itens com custo',
+    })
+
+
+def _gravar_formset_autorizacao(formset, ficha):
+    for indice, item_form in enumerate(formset.forms):
+        dados = item_form.cleaned_data
+        if not dados:
+            continue
+        if dados.get('DELETE'):
+            if item_form.instance.pk:
+                item_form.instance.delete()
+            continue
+        if not item_form.linha_preenchida():
+            if item_form.instance.pk:
+                item_form.instance.delete()
+            continue
+        item = item_form.save(commit=False)
+        item.ficha = ficha
+        item.ordem = indice
+        item.save()
 
 
 def _gravar_formset_profissionais(formset, ficha, dentista):

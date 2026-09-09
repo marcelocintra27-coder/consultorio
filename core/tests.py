@@ -1337,3 +1337,155 @@ class FichaPlanoTratamentoTests(TestCase):
         html = resposta.content.decode()
         self.assertIn('Não foi possível concluir', html)
         self.assertIn('data:image/png;base64,', html)
+
+
+class FichaAutorizacaoCustoTests(TestCase):
+    def setUp(self):
+        self.sala = Sala.objects.create(nome='Sala Autorizacao')
+        self.dentista = Dentista.objects.create(
+            nome_completo='Dentista Autorizacao',
+            sala=self.sala,
+            valor_hora=Decimal('200.00'),
+        )
+        self.paciente = Paciente.objects.create(
+            nome_completo='Paciente Autorizacao',
+            cpf='777.777.777-77',
+            data_nascimento=date(1990, 7, 7),
+            telefone='11977778888',
+        )
+        self.consulta = Consulta.objects.create(
+            paciente=self.paciente,
+            dentista=self.dentista,
+            data=date(2026, 9, 8),
+            hora_inicio=time(9, 0),
+            hora_fim=time(10, 0),
+        )
+        self.admin = User.objects.create_user(
+            'admin_autorizacao', password='x', is_staff=True, is_superuser=True
+        )
+        self.user_secretaria = User.objects.create_user(
+            'secretaria_autorizacao', password='x'
+        )
+        PerfilUsuario.objects.create(
+            usuario=self.user_secretaria,
+            dentista=None,
+            papel=PerfilUsuario.Papel.SECRETARIA,
+        )
+
+    def _abrir(self, consulta=None):
+        self.client.force_login(self.admin)
+        if consulta:
+            self.client.post(
+                f'/consultas/{consulta.pk}/autorizacao/novo/',
+                HTTP_HOST='localhost',
+            )
+        else:
+            self.client.post(
+                f'/pacientes/{self.paciente.pk}/autorizacao/novo/',
+                HTTP_HOST='localhost',
+            )
+        from .models import FichaAutorizacaoCusto
+
+        return FichaAutorizacaoCusto.objects.get(paciente=self.paciente)
+
+    def _payload(self, **extra):
+        dados = {
+            'consulta': str(self.consulta.pk),
+            'nome_completo': self.paciente.nome_completo,
+            'data_nascimento': '1990-07-07',
+            'cpf': self.paciente.cpf,
+            'nome_responsavel': '',
+            'aceitou_declaracao': 'on',
+            'assinatura_paciente_base64': PNG_1PX,
+            'itens-TOTAL_FORMS': '1',
+            'itens-INITIAL_FORMS': '0',
+            'itens-MIN_NUM_FORMS': '0',
+            'itens-MAX_NUM_FORMS': '1000',
+            'itens-0-tipo': 'radiografia',
+            'itens-0-descricao': 'Periapical do 26',
+            'itens-0-quantidade': '1',
+            'itens-0-valor': '80.00',
+            'acao': 'concluir',
+        }
+        dados.update(extra)
+        return dados
+
+    def test_conclui_com_assinatura_e_soma_na_consulta(self):
+        from .models import AssinaturaEletronica, FichaAutorizacaoCusto
+
+        ficha = self._abrir(consulta=self.consulta)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/autorizacao/{ficha.pk}/editar/',
+            self._payload(),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        ficha.refresh_from_db()
+        self.assertEqual(ficha.status, FichaAutorizacaoCusto.Status.CONCLUIDA)
+        self.assertEqual(ficha.itens.count(), 1)
+        self.assertEqual(ficha.consulta_id, self.consulta.pk)
+        self.assertEqual(
+            AssinaturaEletronica.objects.filter(
+                tipo_documento='autorizacao_custo',
+                papel='paciente',
+            ).count(),
+            1,
+        )
+        self.consulta.refresh_from_db()
+        self.assertEqual(self.consulta.valor_autorizacoes, Decimal('80.00'))
+        self.assertEqual(self.consulta.valor_a_cobrar, Decimal('80.00'))
+        html = self.client.get(
+            f'/pacientes/{self.paciente.pk}/autorizacao/{ficha.pk}/',
+            HTTP_HOST='localhost',
+        ).content.decode()
+        self.assertIn('radiografia', html.lower())
+        self.assertNotIn('Concluir e assinar', html)
+
+    def test_sem_consulta_e_segunda_autorizacao(self):
+        from .models import FichaAutorizacaoCusto
+
+        ficha = self._abrir()
+        self.client.post(
+            f'/pacientes/{self.paciente.pk}/autorizacao/{ficha.pk}/editar/',
+            self._payload(consulta=''),
+            HTTP_HOST='localhost',
+        )
+        ficha.refresh_from_db()
+        self.assertIsNone(ficha.consulta_id)
+        self.client.post(
+            f'/pacientes/{self.paciente.pk}/autorizacao/novo/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(
+            FichaAutorizacaoCusto.objects.filter(paciente=self.paciente).count(),
+            2,
+        )
+
+    def test_rascunho_nao_entra_no_total(self):
+        ficha = self._abrir(consulta=self.consulta)
+        self.client.post(
+            f'/pacientes/{self.paciente.pk}/autorizacao/{ficha.pk}/editar/',
+            self._payload(acao='rascunho', assinatura_paciente_base64=''),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(self.consulta.valor_autorizacoes, Decimal('0.00'))
+
+    def test_secretaria_nao_lanca(self):
+        ficha = self._abrir()
+        self.client.force_login(self.user_secretaria)
+        html = self.client.get(
+            f'/pacientes/{self.paciente.pk}/autorizacao/',
+            HTTP_HOST='localhost',
+        ).content.decode()
+        self.assertNotIn('Nova autorização', html)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/autorizacao/novo/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 403)
+        editar = self.client.get(
+            f'/pacientes/{self.paciente.pk}/autorizacao/{ficha.pk}/editar/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(editar.status_code, 302)
+

@@ -42,6 +42,11 @@ from .views import (
     nova_ficha_plano,
     editar_ficha_plano,
     ver_ficha_plano,
+    listar_fichas_autorizacao,
+    nova_ficha_autorizacao,
+    nova_ficha_autorizacao_consulta,
+    editar_ficha_autorizacao,
+    ver_ficha_autorizacao,
 )
 
 app_name = 'core'
@@ -111,6 +116,26 @@ urlpatterns = [
         ver_ficha_plano,
         name='ver_ficha_plano',
     ),
+    path(
+        'pacientes/<int:pk>/autorizacao/',
+        listar_fichas_autorizacao,
+        name='listar_fichas_autorizacao',
+    ),
+    path(
+        'pacientes/<int:pk>/autorizacao/novo/',
+        nova_ficha_autorizacao,
+        name='nova_ficha_autorizacao',
+    ),
+    path(
+        'pacientes/<int:pk>/autorizacao/<int:ficha_pk>/editar/',
+        editar_ficha_autorizacao,
+        name='editar_ficha_autorizacao',
+    ),
+    path(
+        'pacientes/<int:pk>/autorizacao/<int:ficha_pk>/',
+        ver_ficha_autorizacao,
+        name='ver_ficha_autorizacao',
+    ),
     path('convenios/', listar_convenios, name='listar_convenios'),
     path('convenios/cadastrar/', cadastrar_convenio, name='cadastrar_convenio'),
     path('convenios/<int:pk>/editar/', editar_convenio, name='editar_convenio'),
@@ -142,6 +167,11 @@ urlpatterns = [
     path('consultas/', listar_consultas, name='listar_consultas'),
     path('consultas/agendar/', agendar_consulta, name='agendar_consulta'),
     path('consultas/<int:pk>/', ficha_consulta, name='ficha_consulta'),
+    path(
+        'consultas/<int:pk>/autorizacao/novo/',
+        nova_ficha_autorizacao_consulta,
+        name='nova_ficha_autorizacao_consulta',
+    ),
     path(
         'consultas/<int:pk>/status/',
         alterar_status_consulta,

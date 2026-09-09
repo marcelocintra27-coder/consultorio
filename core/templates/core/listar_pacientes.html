@@ -32,6 +32,7 @@
                     <a href="{% url 'core:listar_fichas_anamnese' paciente.pk %}" class="botao secundario">Anamnese</a>
                     <a href="{% url 'core:ficha_evolucao_clinica' paciente.pk %}" class="botao secundario">Evolução</a>
                     <a href="{% url 'core:listar_fichas_plano' paciente.pk %}" class="botao secundario">Plano</a>
+                    <a href="{% url 'core:listar_fichas_autorizacao' paciente.pk %}" class="botao secundario">Autorização</a>
                 </td>
             </tr>
             {% empty %}

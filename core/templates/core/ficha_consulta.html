@@ -29,6 +29,46 @@
             <button type="submit" class="botao">Atualizar status</button>
         </form>
 
+        <h2 class="secao-pagina">Autorização de itens com custo</h2>
+        <div class="acoes">
+            {% if pode_financeiro %}
+            <form method="post" action="{% url 'core:nova_ficha_autorizacao_consulta' consulta.pk %}" class="form-inline">
+                {% csrf_token %}
+                <button type="submit" class="botao">Nova autorização</button>
+            </form>
+            {% endif %}
+            <a href="{% url 'core:listar_fichas_autorizacao' consulta.paciente_id %}" class="botao secundario">Ver todas do paciente</a>
+        </div>
+        <div class="tabela-wrap">
+        <table>
+            <tr>
+                <th>Data</th>
+                <th>Status</th>
+                <th>Valor</th>
+                <th></th>
+            </tr>
+            {% for ficha in autorizacoes %}
+            <tr>
+                <td>{{ ficha.criado_em|date:"d/m/Y H:i" }}</td>
+                <td>{{ ficha.get_status_display }}</td>
+                <td>{% if pode_financeiro %}R$ {{ ficha.valor_total }}{% else %}—{% endif %}</td>
+                <td>
+                    {% if ficha.status == 'rascunho' and pode_financeiro %}
+                    <a href="{% url 'core:editar_ficha_autorizacao' consulta.paciente_id ficha.pk %}" class="botao">Preencher</a>
+                    {% else %}
+                    <a href="{% url 'core:ver_ficha_autorizacao' consulta.paciente_id ficha.pk %}" class="botao">Ver</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="vazio">Nenhuma autorização nesta consulta.</td>
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+
+
         {% if pode_complementar and complementar_form %}
         <h2 class="secao-pagina">Completar dentista</h2>
         <form method="post" action="{% url 'core:complementar_dentista' consulta.pk %}" class="form-cartao">
@@ -87,6 +127,7 @@
             <p class="resumo">
                 Lançamentos: R$ {{ consulta.valor_lancamentos }}
                 · Materiais: R$ {{ consulta.valor_materiais }}
+                · Autorizações: R$ {{ consulta.valor_autorizacoes }}
                 · Total a cobrar: R$ {{ consulta.valor_a_cobrar }}
             </p>
 

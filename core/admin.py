@@ -18,6 +18,8 @@ from .models import (
     FichaPlanoTratamento,
     ItemConsentimentoProcedimento,
     ResponsavelPlanoTratamento,
+    FichaAutorizacaoCusto,
+    ItemAutorizacaoCusto,
 )
 
 
@@ -252,5 +254,21 @@ class FichaPlanoTratamentoAdmin(admin.ModelAdmin):
     autocomplete_fields = ('paciente',)
     readonly_fields = ('criado_em', 'atualizado_em')
     inlines = (ItemConsentimentoInline, ResponsavelPlanoInline)
+
+
+class ItemAutorizacaoCustoInline(admin.TabularInline):
+    model = ItemAutorizacaoCusto
+    extra = 0
+
+
+@admin.register(FichaAutorizacaoCusto)
+class FichaAutorizacaoCustoAdmin(admin.ModelAdmin):
+    list_display = ('paciente', 'status', 'consulta', 'criado_em')
+    list_filter = ('status',)
+    search_fields = ('paciente__nome_completo', 'cpf', 'nome_completo')
+    autocomplete_fields = ('paciente', 'consulta')
+    readonly_fields = ('criado_em', 'atualizado_em')
+    inlines = (ItemAutorizacaoCustoInline,)
+
 
 

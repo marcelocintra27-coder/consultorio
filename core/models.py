@@ -210,9 +210,22 @@ class Consulta(models.Model):
         return Decimal(total).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
     @property
+    def valor_autorizacoes(self):
+        total = ItemAutorizacaoCusto.objects.filter(
+            ficha__consulta_id=self.pk,
+            ficha__status=FichaAutorizacaoCusto.Status.CONCLUIDA,
+        ).aggregate(soma=Sum('valor'))['soma']
+        if total is None:
+            return Decimal('0.00')
+        return Decimal(total).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
     def valor_a_cobrar(self):
         return (
-            self.valor_convenio + self.valor_lancamentos + self.valor_materiais
+            self.valor_convenio
+            + self.valor_lancamentos
+            + self.valor_materiais
+            + self.valor_autorizacoes
         ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
@@ -1151,5 +1164,130 @@ class ResponsavelPlanoTratamento(models.Model):
 
     def __str__(self):
         return self.nome
+
+
+class FichaAutorizacaoCusto(models.Model):
+    class Status(models.TextChoices):
+        RASCUNHO = 'rascunho', 'rascunho'
+        CONCLUIDA = 'concluida', 'concluída'
+
+    paciente = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente',
+        on_delete=models.CASCADE,
+        related_name='fichas_autorizacao_custo',
+    )
+    consulta = models.ForeignKey(
+        Consulta,
+        verbose_name='consulta',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='autorizacoes_custo',
+    )
+    status = models.CharField(
+        'status',
+        max_length=20,
+        choices=Status.choices,
+        default=Status.RASCUNHO,
+    )
+    nome_completo = models.CharField('nome completo', max_length=200)
+    data_nascimento = models.DateField('data de nascimento')
+    cpf = models.CharField('CPF', max_length=18)
+    nome_responsavel = models.CharField(
+        'responsável legal',
+        max_length=200,
+        blank=True,
+    )
+    aceitou_declaracao = models.BooleanField(
+        'aceitou a declaração',
+        default=False,
+    )
+    arquivo = models.FileField(
+        upload_to='autorizacoes/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='Arquivo anexado (Raio-X, exame, laudo etc.)',
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+    atualizado_em = models.DateTimeField('atualizado em', auto_now=True)
+    solicitado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='solicitado por',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='fichas_autorizacao_custo_solicitadas',
+    )
+
+    class Meta:
+        verbose_name = 'autorização de itens com custo'
+        verbose_name_plural = 'autorizações de itens com custo'
+        ordering = ['-criado_em']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['paciente'],
+                condition=Q(status='rascunho'),
+                name='uma_autorizacao_custo_rascunho_por_paciente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.nome_completo} — {self.get_status_display()}'
+
+    @property
+    def valor_total(self):
+        total = self.itens.aggregate(soma=Sum('valor'))['soma']
+        if total is None:
+            return Decimal('0.00')
+        return Decimal(total).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+class ItemAutorizacaoCusto(models.Model):
+    class Tipo(models.TextChoices):
+        RECEITUARIO_IMPRESSO = 'receituario_impresso', 'receituário impresso'
+        RECEITUARIO_DIGITAL = 'receituario_digital', 'receituário digital/online'
+        RADIOGRAFIA = 'radiografia', 'radiografia (filme ou digital)'
+        FOTOGRAFIAS = 'fotografias', 'fotografias clínicas'
+        TOMOGRAFIA = 'tomografia', 'tomografia'
+        RESSONANCIA = 'ressonancia', 'ressonância magnética'
+        OUTROS_EXAMES = 'outros_exames', 'outros exames'
+        MATERIAIS = 'materiais', 'materiais utilizados'
+        LABORATORIO = 'laboratorio', 'laboratório / prótese'
+        OUTROS = 'outros', 'outros itens com custo'
+
+    ficha = models.ForeignKey(
+        FichaAutorizacaoCusto,
+        verbose_name='autorização',
+        on_delete=models.CASCADE,
+        related_name='itens',
+    )
+    ordem = models.PositiveIntegerField('ordem', default=0)
+    tipo = models.CharField('tipo', max_length=40, choices=Tipo.choices, blank=True)
+    descricao = models.CharField('descrição / detalhe', max_length=200, blank=True)
+    quantidade = models.PositiveIntegerField('quantidade', default=1)
+    valor = models.DecimalField(
+        'valor a cobrar',
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        verbose_name = 'item autorizado com custo'
+        verbose_name_plural = 'itens autorizados com custo'
+        ordering = ['ordem', 'pk']
+
+    def __str__(self):
+        return self.get_tipo_display() or 'item'
+
+    def save(self, *args, **kwargs):
+        if self.valor is not None:
+            self.valor = Decimal(self.valor).quantize(
+                Decimal('0.01'),
+                rounding=ROUND_HALF_UP,
+            )
+        super().save(*args, **kwargs)
 
 

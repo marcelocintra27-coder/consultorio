@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'core.apps.CoreConfig',
     'locacao.apps.LocacaoConfig',
+    'ia_seguranca',
 ]
 
 MIDDLEWARE = [

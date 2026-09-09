@@ -1,0 +1,57 @@
+{% extends "core/base.html" %}
+
+{% block title %}Autorização — {{ paciente.nome_completo }}{% endblock %}
+{% block titulo %}Autorização de itens com custo{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:editar_paciente' paciente.pk %}" class="botao secundario">Voltar</a>
+            {% if pode_registrar and not ficha_aberta %}
+            <form method="post" action="{% url 'core:nova_ficha_autorizacao' paciente.pk %}" class="form-inline">
+                {% csrf_token %}
+                <button type="submit" class="botao">Nova autorização</button>
+            </form>
+            {% endif %}
+        </div>
+
+        <p class="resumo">{{ paciente.nome_completo }} — preenchida no consultório. Depois de assinada, não se edita. Nova cobrança gera outra autorização.</p>
+
+        <div class="tabela-wrap">
+        <table>
+            <tr>
+                <th>Data</th>
+                <th>Status</th>
+                <th>Consulta</th>
+                <th>Valor</th>
+                <th>Por</th>
+                <th></th>
+            </tr>
+            {% for ficha in fichas %}
+            <tr>
+                <td>{{ ficha.criado_em|date:"d/m/Y H:i" }}</td>
+                <td>{{ ficha.get_status_display }}</td>
+                <td>
+                    {% if ficha.consulta %}
+                    {{ ficha.consulta.data|date:"d/m/Y" }} {{ ficha.consulta.hora_inicio|time:"H:i" }}
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+                <td>R$ {{ ficha.valor_total }}</td>
+                <td>{{ ficha.solicitado_por.get_full_name|default:ficha.solicitado_por.username|default:"—" }}</td>
+                <td>
+                    {% if ficha.status == 'rascunho' and pode_registrar %}
+                    <a href="{% url 'core:editar_ficha_autorizacao' paciente.pk ficha.pk %}" class="botao">Preencher</a>
+                    {% else %}
+                    <a href="{% url 'core:ver_ficha_autorizacao' paciente.pk ficha.pk %}" class="botao">Ver</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="vazio">Nenhuma autorização ainda.</td>
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            {% if voltar_consulta %}
+            <a href="{% url 'core:ficha_consulta' voltar_consulta %}" class="botao secundario">Voltar</a>
+            {% else %}
+            <a href="{% url 'core:listar_fichas_autorizacao' paciente.pk %}" class="botao secundario">Voltar</a>
+            {% endif %}
+        </div>
+        <p class="resumo">Paciente: {{ paciente.nome_completo }}. Salve rascunho se precisar; ao concluir, a assinatura trava a autorização.</p>
+
+        <form method="post" class="form-cartao" id="form-ficha-autorizacao">
+            {% csrf_token %}
+            {{ itens.management_form }}
+            {% if form.errors or itens.errors %}
+            <div class="erro">Não foi possível concluir. Confira os avisos junto dos campos e a assinatura.</div>
+            {% endif %}
+            {% if form.non_field_errors %}
+            <div class="erro">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <h2 class="secao-pagina">1. Paciente e consulta</h2>
+            {% include "core/includes/campo_form.html" with field=form.consulta %}
+            {% include "core/includes/campo_form.html" with field=form.nome_completo %}
+            {% include "core/includes/campo_form.html" with field=form.data_nascimento %}
+            {% include "core/includes/campo_form.html" with field=form.cpf %}
+            {% include "core/includes/campo_form.html" with field=form.nome_responsavel %}
+
+            <h2 class="secao-pagina">2. Itens autorizados</h2>
+            <div id="itens-rows">
+            {% for item_form in itens.forms %}
+            <div class="plano-item">
+                {{ item_form.id }}
+                {% include "core/includes/campo_form.html" with field=item_form.tipo %}
+                {% include "core/includes/campo_form.html" with field=item_form.descricao %}
+                <div class="grade-dois">
+                    {% include "core/includes/campo_form.html" with field=item_form.quantidade %}
+                    {% include "core/includes/campo_form.html" with field=item_form.valor %}
+                </div>
+                {% if item_form.DELETE %}
+                <div class="campo">
+                    <label>{{ item_form.DELETE }} remover este item</label>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            </div>
+            <template id="itens-empty">
+            <div class="plano-item">
+                {{ itens.empty_form.id }}
+                {% include "core/includes/campo_form.html" with field=itens.empty_form.tipo %}
+                {% include "core/includes/campo_form.html" with field=itens.empty_form.descricao %}
+                <div class="grade-dois">
+                    {% include "core/includes/campo_form.html" with field=itens.empty_form.quantidade %}
+                    {% include "core/includes/campo_form.html" with field=itens.empty_form.valor %}
+                </div>
+            </div>
+            </template>
+            <div class="acoes">
+                <button type="button" class="botao secundario" data-formset-add="itens">Adicionar item</button>
+            </div>
+
+            <h2 class="secao-pagina">3. Autorização</h2>
+            <p class="declaracao">{{ texto_declaracao }}</p>
+            <div class="campo aceite">
+                <label for="{{ form.aceitou_declaracao.id_for_label }}">
+                    {{ form.aceitou_declaracao }}
+                    {{ form.aceitou_declaracao.label }}
+                </label>
+                {% if form.aceitou_declaracao.errors %}
+                <div class="erro">{{ form.aceitou_declaracao.errors }}</div>
+                {% endif %}
+            </div>
+            {% if menor %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_paciente_base64" rotulo="assinatura do responsável legal" dica="O responsável legal assina no lugar do paciente menor de 18 anos." erro=form.assinatura_paciente_base64.errors valor=form.assinatura_paciente_base64.value %}
+            {% else %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_paciente_base64" rotulo="assinatura do paciente" dica="O paciente assina a autorização na presença da equipe." erro=form.assinatura_paciente_base64.errors valor=form.assinatura_paciente_base64.value %}
+            {% endif %}
+
+            <div class="acoes">
+                <button type="submit" class="botao secundario" name="acao" value="rascunho">Salvar rascunho</button>
+                <button type="submit" class="botao" name="acao" value="concluir">Concluir e assinar</button>
+            </div>
+        </form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/js/assinatura.js' %}"></script>
+<script src="{% static 'core/js/plano.js' %}"></script>
+{% endblock %}

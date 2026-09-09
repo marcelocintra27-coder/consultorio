@@ -11,6 +11,7 @@ from .anamnese import (
     UFS,
     eh_menor_de_idade,
 )
+from .autorizacao import TIPOS_QUE_EXIGEM_DESCRICAO
 from .plano import CIENCIA_ITENS, COMPLEXIDADE_ITENS
 from .models import (
     Convenio,
@@ -27,6 +28,8 @@ from .models import (
     FichaPlanoTratamento,
     ItemConsentimentoProcedimento,
     ResponsavelPlanoTratamento,
+    FichaAutorizacaoCusto,
+    ItemAutorizacaoCusto,
 )
 from locacao.models import Dentista
 
@@ -865,6 +868,138 @@ def montar_profissionais_formset(exigir_completo=False, **kwargs):
         FichaPlanoTratamento,
         ResponsavelPlanoTratamento,
         form=ResponsavelPlanoForm,
+        extra=1,
+        can_delete=True,
+    )
+    formset = factory(**kwargs)
+    for form in formset.forms:
+        form.exigir_completo = exigir_completo
+    return formset
+
+
+class FichaAutorizacaoCustoForm(forms.ModelForm):
+    aceitou_declaracao = forms.BooleanField(
+        label='li e concordo com a declaração',
+        required=False,
+    )
+    assinatura_paciente_base64 = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+
+    class Meta:
+        model = FichaAutorizacaoCusto
+        fields = [
+            'consulta',
+            'nome_completo',
+            'data_nascimento',
+            'cpf',
+            'nome_responsavel',
+            'aceitou_declaracao',
+        ]
+        widgets = {
+            'data_nascimento': forms.DateInput(
+                attrs={'type': 'date'}, format='%Y-%m-%d'
+            ),
+        }
+
+    def __init__(self, *args, exigir_completo=False, coletar_paciente=False, **kwargs):
+        self.exigir_completo = exigir_completo
+        self.coletar_paciente = coletar_paciente
+        super().__init__(*args, **kwargs)
+        self.fields['data_nascimento'].input_formats = ['%Y-%m-%d']
+        paciente = self.instance.paciente if self.instance.pk else None
+        consultas = Consulta.objects.none()
+        if paciente is not None:
+            consultas = Consulta.objects.filter(paciente=paciente).order_by(
+                '-data', '-hora_inicio'
+            )
+        self.fields['consulta'].queryset = consultas
+        self.fields['consulta'].required = False
+        self.fields['consulta'].empty_label = 'sem consulta vinculada'
+
+    def clean_assinatura_paciente_base64(self):
+        return _validar_png_opcional(
+            self.cleaned_data.get('assinatura_paciente_base64'),
+            self.coletar_paciente,
+        )
+
+    def clean(self):
+        dados = super().clean()
+        consulta = dados.get('consulta')
+        paciente = self.instance.paciente
+        if consulta and paciente and consulta.paciente_id != paciente.pk:
+            self.add_error('consulta', 'A consulta precisa ser deste paciente.')
+        if eh_menor_de_idade(dados.get('data_nascimento')) and not (
+            dados.get('nome_responsavel') or ''
+        ).strip():
+            self.add_error(
+                'nome_responsavel',
+                'Informe o responsável legal (paciente menor de 18 anos).',
+            )
+        if not self.exigir_completo:
+            return dados
+        if not dados.get('aceitou_declaracao'):
+            self.add_error(
+                'aceitou_declaracao',
+                'É preciso concordar com a declaração para concluir.',
+            )
+        return dados
+
+
+class ItemAutorizacaoCustoForm(forms.ModelForm):
+    class Meta:
+        model = ItemAutorizacaoCusto
+        fields = ['tipo', 'descricao', 'quantidade', 'valor']
+        widgets = {
+            'valor': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'quantidade': forms.NumberInput(attrs={'min': '1'}),
+        }
+
+    def __init__(self, *args, exigir_completo=False, **kwargs):
+        self.exigir_completo = exigir_completo
+        super().__init__(*args, **kwargs)
+        self.fields['tipo'].required = False
+        self.fields['valor'].required = False
+        self.fields['quantidade'].required = False
+
+    def linha_preenchida(self):
+        dados = self.cleaned_data
+        if dados.get('DELETE'):
+            return False
+        return bool(
+            (dados.get('tipo') or '').strip()
+            or (dados.get('descricao') or '').strip()
+            or dados.get('valor') is not None
+        )
+
+    def clean(self):
+        dados = super().clean()
+        if not self.exigir_completo or not self.linha_preenchida():
+            return dados
+        tipo = dados.get('tipo') or ''
+        if not tipo:
+            self.add_error('tipo', 'Escolha o tipo do item.')
+        if tipo in TIPOS_QUE_EXIGEM_DESCRICAO and not (
+            dados.get('descricao') or ''
+        ).strip():
+            self.add_error('descricao', 'Descreva o item.')
+        if dados.get('valor') is None:
+            self.add_error(
+                'valor',
+                'Informe o valor a cobrar (use 0,00 se não houver).',
+            )
+        quantidade = dados.get('quantidade')
+        if not quantidade:
+            dados['quantidade'] = 1
+        return dados
+
+
+def montar_itens_autorizacao_formset(exigir_completo=False, **kwargs):
+    factory = inlineformset_factory(
+        FichaAutorizacaoCusto,
+        ItemAutorizacaoCusto,
+        form=ItemAutorizacaoCustoForm,
         extra=1,
         can_delete=True,
     )
