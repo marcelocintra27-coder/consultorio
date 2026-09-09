@@ -12,3 +12,8 @@ core/untitled/
 .vscode/
 .idea/
 media/
+
+# Audios de teste local (nao versionar)
+*.mp3
+*.wav
+
