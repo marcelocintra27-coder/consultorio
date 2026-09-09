@@ -38,6 +38,10 @@ from .views import (
     ficha_anamnese_publica,
     ficha_anamnese_enviada,
     ficha_evolucao_clinica,
+    listar_fichas_plano,
+    nova_ficha_plano,
+    editar_ficha_plano,
+    ver_ficha_plano,
 )
 
 app_name = 'core'
@@ -86,6 +90,26 @@ urlpatterns = [
         'pacientes/<int:pk>/evolucao/',
         ficha_evolucao_clinica,
         name='ficha_evolucao_clinica',
+    ),
+    path(
+        'pacientes/<int:pk>/plano/',
+        listar_fichas_plano,
+        name='listar_fichas_plano',
+    ),
+    path(
+        'pacientes/<int:pk>/plano/novo/',
+        nova_ficha_plano,
+        name='nova_ficha_plano',
+    ),
+    path(
+        'pacientes/<int:pk>/plano/<int:ficha_pk>/editar/',
+        editar_ficha_plano,
+        name='editar_ficha_plano',
+    ),
+    path(
+        'pacientes/<int:pk>/plano/<int:ficha_pk>/',
+        ver_ficha_plano,
+        name='ver_ficha_plano',
     ),
     path('convenios/', listar_convenios, name='listar_convenios'),
     path('convenios/cadastrar/', cadastrar_convenio, name='cadastrar_convenio'),

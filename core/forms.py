@@ -3,7 +3,7 @@ from itertools import groupby
 
 from django import forms
 from django.utils import timezone
-from django.forms.models import ModelChoiceField, ModelChoiceIterator
+from django.forms.models import ModelChoiceField, ModelChoiceIterator, inlineformset_factory
 
 from .anamnese import (
     SAUDE_BUCAL,
@@ -11,6 +11,7 @@ from .anamnese import (
     UFS,
     eh_menor_de_idade,
 )
+from .plano import CIENCIA_ITENS, COMPLEXIDADE_ITENS
 from .models import (
     Convenio,
     Paciente,
@@ -23,6 +24,9 @@ from .models import (
     AssinaturaEletronica,
     FichaCadastroAnamnese,
     RegistroEvolucaoClinica,
+    FichaPlanoTratamento,
+    ItemConsentimentoProcedimento,
+    ResponsavelPlanoTratamento,
 )
 from locacao.models import Dentista
 
@@ -47,6 +51,9 @@ class PacienteForm(forms.ModelForm):
             'convenio',
             'carteirinha',
             'observacoes',
+            'instagram',
+            'facebook',
+            'outra_rede_social',
         ]
         widgets = {
             'cpf': forms.TextInput(attrs={'autocomplete': 'off'}),
@@ -630,5 +637,240 @@ class RegistroEvolucaoClinicaForm(forms.ModelForm):
             self.cleaned_data.get('assinatura_base64'),
             True,
         )
+
+
+class FichaPlanoTratamentoForm(forms.ModelForm):
+    ciencia_itens = forms.MultipleChoiceField(
+        label='itens informados',
+        choices=CIENCIA_ITENS,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+    )
+    complexidade_itens = forms.MultipleChoiceField(
+        label='procedimentos de maior complexidade',
+        choices=COMPLEXIDADE_ITENS,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+    )
+    uf = forms.ChoiceField(
+        label='UF',
+        choices=[('', '—')] + list(UFS),
+        required=False,
+    )
+    aceitou_declaracao = forms.BooleanField(
+        label='li e concordo com a declaração',
+        required=False,
+    )
+    assinatura_paciente_base64 = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+
+    class Meta:
+        model = FichaPlanoTratamento
+        fields = [
+            'nome_completo',
+            'data_nascimento',
+            'cpf',
+            'telefone',
+            'whatsapp',
+            'email',
+            'endereco',
+            'cidade',
+            'uf',
+            'profissao',
+            'nome_responsavel',
+            'plano_tratamento',
+            'ciencia_itens',
+            'aceitou_declaracao',
+            'local_assinatura',
+            'data_consentimento',
+            'complexidade_itens',
+        ]
+        widgets = {
+            'data_nascimento': forms.DateInput(
+                attrs={'type': 'date'}, format='%Y-%m-%d'
+            ),
+            'data_consentimento': forms.DateInput(
+                attrs={'type': 'date'}, format='%Y-%m-%d'
+            ),
+            'endereco': forms.Textarea(attrs={'rows': 2}),
+            'plano_tratamento': forms.Textarea(attrs={'rows': 6}),
+        }
+
+    def __init__(self, *args, exigir_completo=False, coletar_paciente=False, **kwargs):
+        self.exigir_completo = exigir_completo
+        self.coletar_paciente = coletar_paciente
+        super().__init__(*args, **kwargs)
+        self.fields['data_nascimento'].input_formats = ['%Y-%m-%d']
+        self.fields['data_consentimento'].input_formats = ['%Y-%m-%d']
+        self.fields['data_consentimento'].required = False
+
+    def clean_assinatura_paciente_base64(self):
+        return _validar_png_opcional(
+            self.cleaned_data.get('assinatura_paciente_base64'),
+            self.coletar_paciente,
+        )
+
+    def clean(self):
+        dados = super().clean()
+        if eh_menor_de_idade(dados.get('data_nascimento')) and not (
+            dados.get('nome_responsavel') or ''
+        ).strip():
+            self.add_error(
+                'nome_responsavel',
+                'Informe o responsável legal (paciente menor de 18 anos).',
+            )
+        if not self.exigir_completo:
+            return dados
+        if not (dados.get('plano_tratamento') or '').strip():
+            self.add_error('plano_tratamento', 'Descreva o plano de tratamento.')
+        if len(dados.get('ciencia_itens') or []) < len(CIENCIA_ITENS):
+            self.add_error(
+                'ciencia_itens',
+                'Marque todos os itens informados ao paciente.',
+            )
+        if not dados.get('aceitou_declaracao'):
+            self.add_error(
+                'aceitou_declaracao',
+                'É preciso concordar com a declaração para concluir.',
+            )
+        if not (dados.get('local_assinatura') or '').strip():
+            self.add_error('local_assinatura', 'Informe o local.')
+        if not dados.get('data_consentimento'):
+            self.add_error('data_consentimento', 'Informe a data.')
+        return dados
+
+
+class ItemConsentimentoForm(forms.ModelForm):
+    dentistas = forms.ModelMultipleChoiceField(
+        label='dentista responsável',
+        queryset=Dentista.objects.filter(ativo=True).order_by('nome_completo'),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+    )
+    assinatura_base64 = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    class Meta:
+        model = ItemConsentimentoProcedimento
+        fields = ['procedimento', 'descricao', 'dentistas', 'cro']
+        widgets = {
+            'descricao': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, exigir_completo=False, **kwargs):
+        self.exigir_completo = exigir_completo
+        super().__init__(*args, **kwargs)
+        self.fields['procedimento'].required = False
+        self.fields['cro'].required = False
+
+    def linha_preenchida(self):
+        dados = self.cleaned_data
+        if dados.get('DELETE'):
+            return False
+        return bool(
+            (dados.get('procedimento') or '').strip()
+            or (dados.get('descricao') or '').strip()
+            or dados.get('dentistas')
+            or (dados.get('cro') or '').strip()
+            or (dados.get('assinatura_base64') or '').strip()
+        )
+
+    def clean_assinatura_base64(self):
+        bruto = self.cleaned_data.get('assinatura_base64') or ''
+        if not self.exigir_completo:
+            if not bruto.strip():
+                return ''
+            return _validar_png_opcional(bruto, False)
+        return bruto
+
+    def clean(self):
+        dados = super().clean()
+        if not self.exigir_completo or not self.linha_preenchida():
+            return dados
+        if not (dados.get('procedimento') or '').strip():
+            self.add_error('procedimento', 'Informe o procedimento.')
+        if not dados.get('dentistas'):
+            self.add_error('dentistas', 'Marque o dentista responsável.')
+        if not (dados.get('cro') or '').strip():
+            self.add_error('cro', 'Informe o CRO.')
+        try:
+            dados['assinatura_base64'] = _validar_png_opcional(
+                dados.get('assinatura_base64'), True
+            )
+        except forms.ValidationError as exc:
+            self.add_error('assinatura_base64', exc)
+        return dados
+
+
+class ResponsavelPlanoForm(forms.ModelForm):
+    assinatura_base64 = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    class Meta:
+        model = ResponsavelPlanoTratamento
+        fields = ['nome', 'cro']
+
+    def __init__(self, *args, exigir_completo=False, **kwargs):
+        self.exigir_completo = exigir_completo
+        super().__init__(*args, **kwargs)
+        self.fields['nome'].required = False
+        self.fields['cro'].required = False
+
+    def linha_preenchida(self):
+        dados = self.cleaned_data
+        if dados.get('DELETE'):
+            return False
+        return bool(
+            (dados.get('nome') or '').strip()
+            or (dados.get('cro') or '').strip()
+            or (dados.get('assinatura_base64') or '').strip()
+        )
+
+    def clean(self):
+        dados = super().clean()
+        if not self.exigir_completo or not self.linha_preenchida():
+            return dados
+        if not (dados.get('nome') or '').strip():
+            self.add_error('nome', 'Informe o nome do profissional.')
+        if not (dados.get('cro') or '').strip():
+            self.add_error('cro', 'Informe o CRO.')
+        try:
+            dados['assinatura_base64'] = _validar_png_opcional(
+                dados.get('assinatura_base64'), True
+            )
+        except forms.ValidationError as exc:
+            self.add_error('assinatura_base64', exc)
+        return dados
+
+
+def montar_itens_formset(exigir_completo=False, dentista=None, **kwargs):
+    if dentista is not None and kwargs.get('data') is None:
+        kwargs.setdefault('initial', [{'dentistas': [dentista.pk]}])
+    factory = inlineformset_factory(
+        FichaPlanoTratamento,
+        ItemConsentimentoProcedimento,
+        form=ItemConsentimentoForm,
+        extra=1,
+        can_delete=True,
+    )
+    formset = factory(**kwargs)
+    for form in formset.forms:
+        form.exigir_completo = exigir_completo
+    formset.exigir_completo = exigir_completo
+    return formset
+
+
+def montar_profissionais_formset(exigir_completo=False, **kwargs):
+    factory = inlineformset_factory(
+        FichaPlanoTratamento,
+        ResponsavelPlanoTratamento,
+        form=ResponsavelPlanoForm,
+        extra=1,
+        can_delete=True,
+    )
+    formset = factory(**kwargs)
+    for form in formset.forms:
+        form.exigir_completo = exigir_completo
+    return formset
 
 

@@ -1,0 +1,74 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_fichas_plano' paciente.pk %}" class="botao secundario">Voltar</a>
+        </div>
+        <p class="resumo">{{ ficha.get_status_display }}</p>
+
+        <div class="form-cartao">
+            <h2 class="secao-pagina">1. Dados do paciente</h2>
+            <p><strong>Nome:</strong> {{ ficha.nome_completo }}</p>
+            <p><strong>Nascimento:</strong> {{ ficha.data_nascimento|date:"d/m/Y" }}</p>
+            <p><strong>CPF:</strong> {{ ficha.cpf }}</p>
+            <p><strong>Telefone:</strong> {{ ficha.telefone }}</p>
+            <p><strong>WhatsApp:</strong> {{ ficha.whatsapp|default:"—" }}</p>
+            <p><strong>E-mail:</strong> {{ ficha.email|default:"—" }}</p>
+            <p><strong>Endereço:</strong> {{ ficha.endereco|default:"—" }}</p>
+            <p><strong>Cidade/UF:</strong> {{ ficha.cidade|default:"—" }} {% if ficha.uf %}/ {{ ficha.uf }}{% endif %}</p>
+            <p><strong>Profissão:</strong> {{ ficha.profissao|default:"—" }}</p>
+            <p><strong>Responsável legal:</strong> {{ ficha.nome_responsavel|default:"—" }}</p>
+
+            <h2 class="secao-pagina">2. Plano de tratamento</h2>
+            <p>{{ ficha.plano_tratamento|linebreaksbr }}</p>
+
+            <h2 class="secao-pagina">3. Termo de ciência e consentimento</h2>
+            <p>{{ ciencia_rotulos|join:", "|default:"—" }}</p>
+            <p class="declaracao">{{ texto_declaracao }}</p>
+            <p>{% if ficha.aceitou_declaracao %}Paciente concordou com a declaração.{% endif %}</p>
+            <p><strong>Local:</strong> {{ ficha.local_assinatura }} · <strong>Data:</strong> {{ ficha.data_consentimento|date:"d/m/Y" }}</p>
+            {% if assinatura_paciente %}
+            <p>
+                <strong>{{ assinatura_paciente.get_papel_display }}</strong> — {{ assinatura_paciente.nome_assinante }}<br>
+                <img src="{% url 'core:ver_imagem_assinatura' assinatura_paciente.pk %}" alt="Assinatura" class="assinatura-miniatura">
+            </p>
+            {% endif %}
+
+            <h2 class="secao-pagina">4. Atendimento por mais de um profissional</h2>
+            <p class="declaracao">{{ texto_aviso }}</p>
+
+            <h2 class="secao-pagina">5. Procedimentos</h2>
+            {% for item in itens %}
+            <article class="plano-item">
+                <p><strong>Procedimento:</strong> {{ item.procedimento }}</p>
+                <p>{{ item.descricao|linebreaksbr }}</p>
+                <p><strong>Dentistas:</strong> {% for d in item.dentistas.all %}{{ d.nome_completo }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</p>
+                <p><strong>CRO:</strong> {{ item.cro }}</p>
+                {% if item.assinatura %}
+                <p>
+                    <img src="{% url 'core:ver_imagem_assinatura' item.assinatura.pk %}" alt="Assinatura do procedimento" class="assinatura-miniatura">
+                </p>
+                {% endif %}
+            </article>
+            {% empty %}
+            <p class="vazio">Nenhum procedimento.</p>
+            {% endfor %}
+
+            <h2 class="secao-pagina">6. Maior complexidade</h2>
+            <p>{{ complexidade_rotulos|join:", "|default:"Nenhum marcado." }}</p>
+
+            <h2 class="secao-pagina">7. Profissionais</h2>
+            {% for item in profissionais %}
+            <p>
+                <strong>{{ item.nome }}</strong> — CRO {{ item.cro }}
+                {% if item.assinatura %}
+                <br>
+                <img src="{% url 'core:ver_imagem_assinatura' item.assinatura.pk %}" alt="Assinatura de {{ item.nome }}" class="assinatura-miniatura">
+                {% endif %}
+            </p>
+            {% endfor %}
+        </div>
+{% endblock %}

@@ -14,7 +14,7 @@
     <div class="acoes assinatura-acoes">
         <button type="button" class="botao secundario" data-assinatura-limpar="{{ nome_campo }}">Limpar</button>
     </div>
-    <input type="hidden" name="{{ nome_campo }}" id="id_{{ nome_campo }}" value="">
+    <input type="hidden" name="{{ nome_campo }}" id="id_{{ nome_campo }}" value="{{ valor|default:'' }}">
     {% if erro %}
     <div class="erro">{{ erro }}</div>
     {% endif %}

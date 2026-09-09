@@ -529,6 +529,14 @@ h2.secao-pagina {
     color: var(--cor-primaria);
 }
 
+.plano-item {
+    border: 1px solid var(--cor-borda);
+    border-radius: var(--raio-card);
+    padding: 16px;
+    margin-bottom: 16px;
+    background: var(--cor-fundo);
+}
+
 @media (max-width: 640px) {
     .topo {
         flex-direction: column;

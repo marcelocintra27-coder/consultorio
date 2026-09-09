@@ -44,7 +44,7 @@
                 {% include "core/includes/campo_form.html" with field=form.nome_profissional %}
                 {% include "core/includes/campo_form.html" with field=form.cro %}
             </div>
-            {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_base64" rotulo="assinatura do profissional" dica="O dentista assina esta linha na presença do paciente." erro=form.assinatura_base64.errors %}
+            {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_base64" rotulo="assinatura do profissional" dica="O dentista assina esta linha na presença do paciente." erro=form.assinatura_base64.errors valor=form.assinatura_base64.value %}
             <button type="submit" class="botao">Salvar evolução</button>
         </form>
         {% endif %}

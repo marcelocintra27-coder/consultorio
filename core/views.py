@@ -19,6 +19,13 @@ from locacao.models import Dentista
 
 from .assinatura import gravar_assinatura_manuscrita
 from .evolucao import texto_para_hash_evolucao
+from .plano import (
+    CIENCIA_ITENS,
+    COMPLEXIDADE_ITENS,
+    TEXTO_AVISO_MULTIPLOS_PROFISSIONAIS,
+    TEXTO_DECLARACAO_PLANO,
+    texto_para_hash_plano,
+)
 from .anamnese import (
     SAUDE_BUCAL,
     SAUDE_CONDICOES,
@@ -45,6 +52,9 @@ from .models import (
     AssinaturaEletronica,
     FichaCadastroAnamnese,
     RegistroEvolucaoClinica,
+    FichaPlanoTratamento,
+    ItemConsentimentoProcedimento,
+    ResponsavelPlanoTratamento,
 )
 from .forms import (
     ConvenioForm,
@@ -61,6 +71,9 @@ from .forms import (
     FichaAnamneseForm,
     AssinaturaDentistaAnamneseForm,
     RegistroEvolucaoClinicaForm,
+    FichaPlanoTratamentoForm,
+    montar_itens_formset,
+    montar_profissionais_formset,
 )
 from .permissoes import (
     exige_financeiro,
@@ -1263,5 +1276,326 @@ def ficha_evolucao_clinica(request, pk):
         'pode_registrar': pode_registrar,
         'titulo': 'Evolução clínica',
     })
+
+
+def _ficha_plano_aberta(paciente):
+    return FichaPlanoTratamento.objects.filter(
+        paciente=paciente,
+        status=FichaPlanoTratamento.Status.RASCUNHO,
+    ).first()
+
+
+def _criar_rascunho_plano(paciente, usuario):
+    existente = _ficha_plano_aberta(paciente)
+    if existente:
+        return existente
+    ultima = paciente.fichas_anamnese.order_by('-criado_em').first()
+    return FichaPlanoTratamento.objects.create(
+        paciente=paciente,
+        criado_por=usuario if usuario.is_authenticated else None,
+        nome_completo=paciente.nome_completo,
+        data_nascimento=paciente.data_nascimento,
+        cpf=paciente.cpf,
+        telefone=paciente.telefone,
+        whatsapp=paciente.whatsapp or '',
+        email=paciente.email or '',
+        endereco=paciente.endereco or '',
+        cidade=(ultima.cidade if ultima else ''),
+        uf=(ultima.uf if ultima else ''),
+        profissao=(ultima.profissao if ultima else ''),
+        nome_responsavel=(ultima.nome_responsavel if ultima else ''),
+        data_consentimento=date.today(),
+    )
+
+
+def _assinaturas_mapa(tipo, ids):
+    return {
+        item.documento_id: item
+        for item in AssinaturaEletronica.objects.filter(
+            tipo_documento=tipo,
+            documento_id__in=ids,
+        )
+    }
+
+
+def listar_fichas_plano(request, pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    return render(request, 'core/listar_fichas_plano.html', {
+        'paciente': paciente,
+        'fichas': paciente.fichas_plano.all(),
+        'ficha_aberta': _ficha_plano_aberta(paciente),
+        'pode_registrar': usuario_pode_financeiro(request.user),
+    })
+
+
+@require_POST
+def nova_ficha_plano(request, pk):
+    if not usuario_pode_financeiro(request.user):
+        raise PermissionDenied
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    ficha = _criar_rascunho_plano(paciente, request.user)
+    return redirect('core:editar_ficha_plano', pk=paciente.pk, ficha_pk=ficha.pk)
+
+
+def editar_ficha_plano(request, pk, ficha_pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    ficha = get_object_or_404(
+        FichaPlanoTratamento, pk=ficha_pk, paciente=paciente
+    )
+    if ficha.status != FichaPlanoTratamento.Status.RASCUNHO:
+        return redirect(
+            'core:ver_ficha_plano', pk=paciente.pk, ficha_pk=ficha.pk
+        )
+    if not usuario_pode_financeiro(request.user):
+        return redirect(
+            'core:ver_ficha_plano', pk=paciente.pk, ficha_pk=ficha.pk
+        )
+    return _salvar_ficha_plano(request, ficha)
+
+
+def ver_ficha_plano(request, pk, ficha_pk):
+    paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
+    ficha = get_object_or_404(
+        FichaPlanoTratamento, pk=ficha_pk, paciente=paciente
+    )
+    if (
+        ficha.status == FichaPlanoTratamento.Status.RASCUNHO
+        and usuario_pode_financeiro(request.user)
+    ):
+        return redirect(
+            'core:editar_ficha_plano', pk=paciente.pk, ficha_pk=ficha.pk
+        )
+    itens = list(ficha.itens.prefetch_related('dentistas'))
+    profissionais = list(ficha.profissionais.all())
+    sig_ficha = _assinaturas_mapa(
+        AssinaturaEletronica.TipoDocumento.PLANO_TRATAMENTO, [ficha.pk]
+    )
+    sig_itens = _assinaturas_mapa(
+        AssinaturaEletronica.TipoDocumento.PLANO_PROCEDIMENTO,
+        [item.pk for item in itens],
+    )
+    sig_profs = _assinaturas_mapa(
+        AssinaturaEletronica.TipoDocumento.PLANO_PROFISSIONAL,
+        [item.pk for item in profissionais],
+    )
+    paciente_sig = AssinaturaEletronica.objects.filter(
+        tipo_documento=AssinaturaEletronica.TipoDocumento.PLANO_TRATAMENTO,
+        documento_id=ficha.pk,
+        papel__in=[
+            AssinaturaEletronica.Papel.PACIENTE,
+            AssinaturaEletronica.Papel.RESPONSAVEL,
+        ],
+    ).first()
+    for item in itens:
+        item.assinatura = sig_itens.get(item.pk)
+    for item in profissionais:
+        item.assinatura = sig_profs.get(item.pk)
+    return render(request, 'core/ver_ficha_plano.html', {
+        'paciente': paciente,
+        'ficha': ficha,
+        'itens': itens,
+        'profissionais': profissionais,
+        'assinatura_paciente': paciente_sig,
+        'ciencia_rotulos': rotulos_checklist(ficha.ciencia_itens, CIENCIA_ITENS),
+        'complexidade_rotulos': rotulos_checklist(
+            ficha.complexidade_itens, COMPLEXIDADE_ITENS
+        ),
+        'texto_aviso': TEXTO_AVISO_MULTIPLOS_PROFISSIONAIS,
+        'texto_declaracao': TEXTO_DECLARACAO_PLANO,
+        'titulo': 'Plano de tratamento e consentimento',
+    })
+
+
+def _salvar_ficha_plano(request, ficha):
+    exigir = request.method == 'POST' and request.POST.get('acao') == 'concluir'
+    dentista = dentista_do_usuario(request.user)
+    nome_sugerido = (
+        dentista.nome_completo
+        if dentista
+        else (request.user.get_full_name() or request.user.username)
+    )
+    if request.method == 'POST':
+        form = FichaPlanoTratamentoForm(
+            request.POST,
+            instance=ficha,
+            exigir_completo=exigir,
+            coletar_paciente=exigir,
+        )
+        itens = montar_itens_formset(
+            exigir_completo=exigir,
+            dentista=dentista,
+            instance=ficha,
+            data=request.POST,
+            prefix='itens',
+        )
+        profissionais = montar_profissionais_formset(
+            exigir_completo=exigir,
+            instance=ficha,
+            data=request.POST,
+            prefix='profissionais',
+        )
+        forms_ok = form.is_valid() and itens.is_valid() and profissionais.is_valid()
+        itens_preenchidos = [
+            item_form
+            for item_form in itens.forms
+            if item_form.is_valid() and item_form.linha_preenchida()
+        ]
+        profs_preenchidos = [
+            item_form
+            for item_form in profissionais.forms
+            if item_form.is_valid() and item_form.linha_preenchida()
+        ]
+        if exigir and forms_ok and not itens_preenchidos:
+            form.add_error(None, 'Inclua ao menos um procedimento com assinatura.')
+            forms_ok = False
+        if exigir and forms_ok and not profs_preenchidos:
+            form.add_error(None, 'Inclua a assinatura de ao menos um profissional.')
+            forms_ok = False
+        if forms_ok:
+            with transaction.atomic():
+                ficha = form.save(commit=False)
+                if exigir:
+                    ficha.status = FichaPlanoTratamento.Status.CONCLUIDA
+                else:
+                    ficha.status = FichaPlanoTratamento.Status.RASCUNHO
+                ficha.save()
+                sincronizar_paciente(ficha)
+                _gravar_formset_itens(itens, ficha)
+                _gravar_formset_profissionais(profissionais, ficha, dentista)
+                if exigir:
+                    menor = eh_menor_de_idade(ficha.data_nascimento)
+                    papel = (
+                        AssinaturaEletronica.Papel.RESPONSAVEL
+                        if menor
+                        else AssinaturaEletronica.Papel.PACIENTE
+                    )
+                    nome = (
+                        ficha.nome_responsavel
+                        if menor
+                        else ficha.nome_completo
+                    )
+                    hash_doc = texto_para_hash_plano(ficha)
+                    gravar_assinatura_manuscrita(
+                        tipo_documento=AssinaturaEletronica.TipoDocumento.PLANO_TRATAMENTO,
+                        documento_id=ficha.pk,
+                        papel=papel,
+                        nome_assinante=nome,
+                        imagem_data_url=form.cleaned_data['assinatura_paciente_base64'],
+                        conteudo_para_hash=hash_doc,
+                        paciente=ficha.paciente,
+                        cpf_assinante='' if menor else ficha.cpf,
+                        usuario=request.user,
+                        ip=_ip_do_pedido(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    )
+                    ficha.refresh_from_db()
+                    for item_form in itens.forms:
+                        if not item_form.linha_preenchida():
+                            continue
+                        item = item_form.instance
+                        gravar_assinatura_manuscrita(
+                            tipo_documento=AssinaturaEletronica.TipoDocumento.PLANO_PROCEDIMENTO,
+                            documento_id=item.pk,
+                            papel=papel,
+                            nome_assinante=nome,
+                            imagem_data_url=item_form.cleaned_data['assinatura_base64'],
+                            conteudo_para_hash=hash_doc,
+                            paciente=ficha.paciente,
+                            usuario=request.user,
+                            ip=_ip_do_pedido(request),
+                            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                        )
+                    for item_form in profissionais.forms:
+                        if not item_form.linha_preenchida():
+                            continue
+                        prof = item_form.instance
+                        gravar_assinatura_manuscrita(
+                            tipo_documento=AssinaturaEletronica.TipoDocumento.PLANO_PROFISSIONAL,
+                            documento_id=prof.pk,
+                            papel=AssinaturaEletronica.Papel.DENTISTA,
+                            nome_assinante=prof.nome,
+                            imagem_data_url=item_form.cleaned_data['assinatura_base64'],
+                            conteudo_para_hash=hash_doc,
+                            paciente=ficha.paciente,
+                            usuario=request.user,
+                            ip=_ip_do_pedido(request),
+                            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                        )
+            messages.success(request, 'Ficha salva.')
+            if ficha.status == FichaPlanoTratamento.Status.RASCUNHO:
+                return redirect(
+                    'core:editar_ficha_plano',
+                    pk=ficha.paciente_id,
+                    ficha_pk=ficha.pk,
+                )
+            return redirect(
+                'core:ver_ficha_plano',
+                pk=ficha.paciente_id,
+                ficha_pk=ficha.pk,
+            )
+    else:
+        form = FichaPlanoTratamentoForm(instance=ficha)
+        itens = montar_itens_formset(
+            instance=ficha, prefix='itens', dentista=dentista
+        )
+        profissionais = montar_profissionais_formset(
+            instance=ficha,
+            prefix='profissionais',
+            initial=[{'nome': nome_sugerido}] if not ficha.profissionais.exists() else None,
+        )
+    menor = eh_menor_de_idade(ficha.data_nascimento)
+    return render(request, 'core/form_ficha_plano.html', {
+        'form': form,
+        'itens': itens,
+        'profissionais': profissionais,
+        'ficha': ficha,
+        'paciente': ficha.paciente,
+        'menor': menor,
+        'texto_aviso': TEXTO_AVISO_MULTIPLOS_PROFISSIONAIS,
+        'texto_declaracao': TEXTO_DECLARACAO_PLANO,
+        'dentista_logado_id': dentista.pk if dentista else '',
+        'titulo': 'Plano de tratamento e consentimento',
+    })
+
+
+def _gravar_formset_itens(formset, ficha):
+    for indice, item_form in enumerate(formset.forms):
+        dados = item_form.cleaned_data
+        if not dados:
+            continue
+        if dados.get('DELETE'):
+            if item_form.instance.pk:
+                item_form.instance.delete()
+            continue
+        if not item_form.linha_preenchida():
+            if item_form.instance.pk:
+                item_form.instance.delete()
+            continue
+        item = item_form.save(commit=False)
+        item.ficha = ficha
+        item.ordem = indice
+        item.save()
+        item_form.save_m2m()
+
+
+def _gravar_formset_profissionais(formset, ficha, dentista):
+    for indice, item_form in enumerate(formset.forms):
+        dados = item_form.cleaned_data
+        if not dados:
+            continue
+        if dados.get('DELETE'):
+            if item_form.instance.pk:
+                item_form.instance.delete()
+            continue
+        if not item_form.linha_preenchida():
+            if item_form.instance.pk:
+                item_form.instance.delete()
+            continue
+        item = item_form.save(commit=False)
+        item.ficha = ficha
+        item.ordem = indice
+        if dentista and item.nome == dentista.nome_completo:
+            item.dentista = dentista
+        item.save()
 
 

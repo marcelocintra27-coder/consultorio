@@ -73,13 +73,13 @@
             </div>
 
             {% if menor %}
-                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_paciente_base64" rotulo="assinatura do responsável legal" dica="O responsável legal assina no lugar do paciente menor de 18 anos." erro=form.assinatura_paciente_base64.errors %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_paciente_base64" rotulo="assinatura do responsável legal" dica="O responsável legal assina no lugar do paciente menor de 18 anos." erro=form.assinatura_paciente_base64.errors valor=form.assinatura_paciente_base64.value %}
             {% else %}
-                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_paciente_base64" rotulo="assinatura do paciente" dica="Desenhe com o dedo ou o mouse." erro=form.assinatura_paciente_base64.errors %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_paciente_base64" rotulo="assinatura do paciente" dica="Desenhe com o dedo ou o mouse." erro=form.assinatura_paciente_base64.errors valor=form.assinatura_paciente_base64.value %}
             {% endif %}
 
             {% if not publico %}
-                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_dentista_base64" rotulo="assinatura do cirurgião-dentista" dica="Opcional agora: se o dentista assinar aqui, a ficha fica concluída. Senão, a equipe conclui depois." erro=form.assinatura_dentista_base64.errors %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_dentista_base64" rotulo="assinatura do cirurgião-dentista" dica="Opcional agora: se o dentista assinar aqui, a ficha fica concluída. Senão, a equipe conclui depois." erro=form.assinatura_dentista_base64.errors valor=form.assinatura_dentista_base64.value %}
             {% endif %}
 
             <div class="acoes">

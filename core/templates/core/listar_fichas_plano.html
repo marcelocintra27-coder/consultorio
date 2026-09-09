@@ -1,0 +1,45 @@
+{% extends "core/base.html" %}
+
+{% block title %}Plano — {{ paciente.nome_completo }}{% endblock %}
+{% block titulo %}Plano de tratamento e consentimento{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:editar_paciente' paciente.pk %}" class="botao secundario">Voltar</a>
+            {% if pode_registrar and not ficha_aberta %}
+            <form method="post" action="{% url 'core:nova_ficha_plano' paciente.pk %}" class="form-inline">
+                {% csrf_token %}
+                <button type="submit" class="botao">Nova ficha</button>
+            </form>
+            {% endif %}
+        </div>
+
+        <p class="resumo">{{ paciente.nome_completo }} — preenchida no consultório. Depois de concluída, não se edita.</p>
+
+        <div class="tabela-wrap">
+        <table>
+            <tr>
+                <th>Data</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+            {% for ficha in fichas %}
+            <tr>
+                <td>{{ ficha.criado_em|date:"d/m/Y H:i" }}</td>
+                <td>{{ ficha.get_status_display }}</td>
+                <td>
+                    {% if ficha.status == 'rascunho' and pode_registrar %}
+                    <a href="{% url 'core:editar_ficha_plano' paciente.pk ficha.pk %}" class="botao">Preencher</a>
+                    {% else %}
+                    <a href="{% url 'core:ver_ficha_plano' paciente.pk ficha.pk %}" class="botao">Ver</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="3" class="vazio">Nenhuma ficha ainda.</td>
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+{% endblock %}

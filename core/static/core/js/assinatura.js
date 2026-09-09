@@ -62,8 +62,6 @@
             }
         }
 
-        pintarFundo();
-
         canvas.addEventListener('pointerdown', iniciar);
         canvas.addEventListener('pointermove', mover);
         canvas.addEventListener('pointerup', parar);
@@ -78,9 +76,30 @@
             });
         }
 
+        pintarFundo();
+        var gravada = (hidden.value || '').trim();
+        if (gravada.indexOf('data:image') === 0) {
+            houveTraco = true;
+            var imagem = new Image();
+            imagem.onload = function () {
+                ctx.drawImage(imagem, 0, 0, canvas.width, canvas.height);
+                hidden.value = gravada;
+            };
+            imagem.src = gravada;
+        }
+
         var form = canvas.closest('form');
         if (form) {
             form.addEventListener('submit', function (evento) {
+                var bloco = canvas.closest('.plano-item');
+                if (bloco) {
+                    var procedimento = bloco.querySelector('[name$="-procedimento"]');
+                    var nomeProf = bloco.querySelector('[name$="-nome"]');
+                    var linhaVazia = true;
+                    if (procedimento && procedimento.value.trim()) linhaVazia = false;
+                    if (nomeProf && nomeProf.value.trim()) linhaVazia = false;
+                    if (linhaVazia) return;
+                }
                 if (!houveTraco || !hidden.value) {
                     evento.preventDefault();
                     canvas.focus();
@@ -101,6 +120,8 @@
             );
         });
     }
+
+    window.iniciarQuadrosAssinatura = iniciarQuadros;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', iniciarQuadros);

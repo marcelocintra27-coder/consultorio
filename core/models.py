@@ -71,6 +71,13 @@ class Paciente(models.Model):
     )
     carteirinha = models.CharField('número da carteirinha', max_length=40, blank=True)
     observacoes = models.TextField('observações', blank=True)
+    instagram = models.CharField('Instagram', max_length=120, blank=True)
+    facebook = models.CharField('Facebook', max_length=120, blank=True)
+    outra_rede_social = models.CharField(
+        'outra rede social',
+        max_length=200,
+        blank=True,
+    )
     cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
     ativo = models.BooleanField('ativo', default=True)
 
@@ -651,6 +658,8 @@ class AssinaturaEletronica(models.Model):
         COMPONENTE_TESTE = 'componente_teste', 'componente de teste'
         EVOLUCAO = 'evolucao', 'evolução'
         PLANO_TRATAMENTO = 'plano_tratamento', 'plano de tratamento / consentimento'
+        PLANO_PROCEDIMENTO = 'plano_procedimento', 'consentimento por procedimento'
+        PLANO_PROFISSIONAL = 'plano_profissional', 'assinatura profissional do plano'
         ANAMNESE = 'anamnese', 'cadastro / anamnese'
         AUTORIZACAO_CUSTO = 'autorizacao_custo', 'autorização de itens com custo'
 
@@ -1007,4 +1016,140 @@ class RegistroEvolucaoClinica(models.Model):
 
     def __str__(self):
         return f'{self.paciente.nome_completo} — {self.data}'
+
+
+class FichaPlanoTratamento(models.Model):
+    class Status(models.TextChoices):
+        RASCUNHO = 'rascunho', 'rascunho'
+        CONCLUIDA = 'concluida', 'concluída'
+
+    paciente = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente',
+        on_delete=models.CASCADE,
+        related_name='fichas_plano',
+    )
+    status = models.CharField(
+        'status',
+        max_length=20,
+        choices=Status.choices,
+        default=Status.RASCUNHO,
+    )
+    nome_completo = models.CharField('nome completo', max_length=200)
+    data_nascimento = models.DateField('data de nascimento')
+    cpf = models.CharField('CPF', max_length=18)
+    telefone = models.CharField('telefone', max_length=20)
+    whatsapp = models.CharField('WhatsApp', max_length=20, blank=True)
+    email = models.EmailField('e-mail', blank=True)
+    endereco = models.TextField('endereço', blank=True)
+    cidade = models.CharField('cidade', max_length=120, blank=True)
+    uf = models.CharField('UF', max_length=2, blank=True)
+    profissao = models.CharField('profissão', max_length=120, blank=True)
+    nome_responsavel = models.CharField(
+        'responsável legal',
+        max_length=200,
+        blank=True,
+    )
+    plano_tratamento = models.TextField('plano de tratamento', blank=True)
+    ciencia_itens = models.JSONField(
+        'itens de ciência informados',
+        default=list,
+        blank=True,
+    )
+    aceitou_declaracao = models.BooleanField(
+        'aceitou a declaração',
+        default=False,
+    )
+    local_assinatura = models.CharField('local', max_length=120, blank=True)
+    data_consentimento = models.DateField(
+        'data do consentimento',
+        null=True,
+        blank=True,
+    )
+    complexidade_itens = models.JSONField(
+        'procedimentos de maior complexidade',
+        default=list,
+        blank=True,
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+    atualizado_em = models.DateTimeField('atualizado em', auto_now=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='criado por',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='fichas_plano_criadas',
+    )
+
+    class Meta:
+        verbose_name = 'ficha de plano e consentimento'
+        verbose_name_plural = 'fichas de plano e consentimento'
+        ordering = ['-criado_em']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['paciente'],
+                condition=Q(status='rascunho'),
+                name='uma_ficha_plano_rascunho_por_paciente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.paciente.nome_completo} — {self.get_status_display()}'
+
+
+class ItemConsentimentoProcedimento(models.Model):
+    ficha = models.ForeignKey(
+        FichaPlanoTratamento,
+        verbose_name='ficha',
+        on_delete=models.CASCADE,
+        related_name='itens',
+    )
+    ordem = models.PositiveIntegerField('ordem', default=0)
+    procedimento = models.CharField('procedimento', max_length=200)
+    descricao = models.TextField('descrição', blank=True)
+    dentistas = models.ManyToManyField(
+        'locacao.Dentista',
+        verbose_name='dentistas responsáveis',
+        blank=True,
+        related_name='itens_consentimento_plano',
+    )
+    cro = models.CharField('CRO', max_length=80, blank=True)
+
+    class Meta:
+        verbose_name = 'item de consentimento de procedimento'
+        verbose_name_plural = 'itens de consentimento de procedimento'
+        ordering = ['ordem', 'pk']
+
+    def __str__(self):
+        return self.procedimento
+
+
+class ResponsavelPlanoTratamento(models.Model):
+    ficha = models.ForeignKey(
+        FichaPlanoTratamento,
+        verbose_name='ficha',
+        on_delete=models.CASCADE,
+        related_name='profissionais',
+    )
+    ordem = models.PositiveIntegerField('ordem', default=0)
+    nome = models.CharField('profissional', max_length=200)
+    cro = models.CharField('CRO', max_length=80)
+    dentista = models.ForeignKey(
+        'locacao.Dentista',
+        verbose_name='dentista',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assinaturas_plano',
+    )
+
+    class Meta:
+        verbose_name = 'profissional do plano'
+        verbose_name_plural = 'profissionais do plano'
+        ordering = ['ordem', 'pk']
+
+    def __str__(self):
+        return self.nome
+
 

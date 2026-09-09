@@ -1116,3 +1116,224 @@ class RegistroEvolucaoClinicaTests(TestCase):
         )
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(RegistroEvolucaoClinica.objects.count(), 0)
+
+
+class PacienteRedesSociaisTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            'admin_redes', password='x', is_staff=True, is_superuser=True
+        )
+        self.paciente = Paciente.objects.create(
+            nome_completo='Paciente Redes',
+            cpf='444.444.444-44',
+            data_nascimento=date(1991, 4, 4),
+            telefone='11944445555',
+        )
+
+    def test_salva_instagram_facebook_e_outra_rede(self):
+        self.client.force_login(self.admin)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/editar/',
+            {
+                'nome_completo': 'Paciente Redes',
+                'cpf': '444.444.444-44',
+                'data_nascimento': '1991-04-04',
+                'telefone': '11944445555',
+                'instagram': '@paciente.redes',
+                'facebook': 'paciente.redes',
+                'outra_rede_social': 'tiktok.com/@paciente',
+            },
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.paciente.refresh_from_db()
+        self.assertEqual(self.paciente.instagram, '@paciente.redes')
+        self.assertEqual(self.paciente.facebook, 'paciente.redes')
+        self.assertEqual(self.paciente.outra_rede_social, 'tiktok.com/@paciente')
+
+
+class FichaPlanoTratamentoTests(TestCase):
+    def setUp(self):
+        self.sala = Sala.objects.create(nome='Sala Plano')
+        self.dentista = Dentista.objects.create(
+            nome_completo='Dentista Plano',
+            sala=self.sala,
+            valor_hora=Decimal('200.00'),
+        )
+        self.paciente = Paciente.objects.create(
+            nome_completo='Paciente Plano',
+            cpf='666.666.666-66',
+            data_nascimento=date(1985, 6, 6),
+            telefone='11966667777',
+        )
+        self.admin = User.objects.create_user(
+            'admin_plano', password='x', is_staff=True, is_superuser=True
+        )
+        self.user_dentista = User.objects.create_user(
+            'dentista_plano', password='x', first_name='Carla'
+        )
+        PerfilUsuario.objects.create(
+            usuario=self.user_dentista,
+            dentista=self.dentista,
+            papel=PerfilUsuario.Papel.DENTISTA,
+        )
+        self.user_secretaria = User.objects.create_user(
+            'secretaria_plano', password='x', first_name='Amanda'
+        )
+        PerfilUsuario.objects.create(
+            usuario=self.user_secretaria,
+            dentista=None,
+            papel=PerfilUsuario.Papel.SECRETARIA,
+        )
+
+    def _abrir(self):
+        self.client.force_login(self.admin)
+        self.client.post(
+            f'/pacientes/{self.paciente.pk}/plano/novo/',
+            HTTP_HOST='localhost',
+        )
+        from .models import FichaPlanoTratamento
+
+        return FichaPlanoTratamento.objects.get(paciente=self.paciente)
+
+    def _payload(self, ficha, **extra):
+        from .plano import CIENCIA_ITENS
+
+        dados = {
+            'nome_completo': self.paciente.nome_completo,
+            'data_nascimento': '1985-06-06',
+            'cpf': self.paciente.cpf,
+            'telefone': self.paciente.telefone,
+            'whatsapp': '',
+            'email': '',
+            'endereco': 'Rua A',
+            'cidade': 'Goiânia',
+            'uf': 'GO',
+            'profissao': 'Autônomo',
+            'nome_responsavel': '',
+            'plano_tratamento': 'Restauração no dente 26 após avaliação clínica.',
+            'ciencia_itens': [chave for chave, _rotulo in CIENCIA_ITENS],
+            'aceitou_declaracao': 'on',
+            'local_assinatura': 'Goiânia',
+            'data_consentimento': '2026-09-08',
+            'complexidade_itens': ['cirurgias'],
+            'assinatura_paciente_base64': PNG_1PX,
+            'itens-TOTAL_FORMS': '1',
+            'itens-INITIAL_FORMS': '0',
+            'itens-MIN_NUM_FORMS': '0',
+            'itens-MAX_NUM_FORMS': '1000',
+            'itens-0-procedimento': 'Restauração',
+            'itens-0-descricao': 'Resina composta no 26',
+            'itens-0-dentistas': str(self.dentista.pk),
+            'itens-0-cro': 'CRO-GO 12345',
+            'itens-0-assinatura_base64': PNG_1PX,
+            'profissionais-TOTAL_FORMS': '1',
+            'profissionais-INITIAL_FORMS': '0',
+            'profissionais-MIN_NUM_FORMS': '0',
+            'profissionais-MAX_NUM_FORMS': '1000',
+            'profissionais-0-nome': 'Dentista Plano',
+            'profissionais-0-cro': 'CRO-GO 12345',
+            'profissionais-0-assinatura_base64': PNG_1PX,
+            'acao': 'concluir',
+        }
+        dados.update(extra)
+        return dados
+
+    def test_conclui_com_assinaturas(self):
+        from .models import AssinaturaEletronica, FichaPlanoTratamento
+
+        ficha = self._abrir()
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/plano/{ficha.pk}/editar/',
+            self._payload(ficha),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        ficha.refresh_from_db()
+        self.assertEqual(ficha.status, FichaPlanoTratamento.Status.CONCLUIDA)
+        self.assertEqual(ficha.itens.count(), 1)
+        self.assertEqual(
+            AssinaturaEletronica.objects.filter(
+                tipo_documento='plano_tratamento',
+                papel='paciente',
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            AssinaturaEletronica.objects.filter(
+                tipo_documento='plano_procedimento'
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            AssinaturaEletronica.objects.filter(
+                tipo_documento='plano_profissional'
+            ).count(),
+            1,
+        )
+        html = self.client.get(
+            f'/pacientes/{self.paciente.pk}/plano/{ficha.pk}/',
+            HTTP_HOST='localhost',
+        ).content.decode()
+        self.assertIn('Restauração', html)
+        self.assertNotIn('Concluir e assinar', html)
+
+    def test_secretaria_nao_lanca(self):
+        ficha = self._abrir()
+        self.client.force_login(self.user_secretaria)
+        html = self.client.get(
+            f'/pacientes/{self.paciente.pk}/plano/',
+            HTTP_HOST='localhost',
+        ).content.decode()
+        self.assertNotIn('Nova ficha', html)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/plano/novo/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 403)
+        editar = self.client.get(
+            f'/pacientes/{self.paciente.pk}/plano/{ficha.pk}/editar/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(editar.status_code, 302)
+
+    def test_rascunho_nao_exige_assinatura(self):
+        from .models import AssinaturaEletronica, FichaPlanoTratamento
+
+        ficha = self._abrir()
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/plano/{ficha.pk}/editar/',
+            self._payload(ficha, acao='rascunho', assinatura_paciente_base64=''),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 302)
+        ficha.refresh_from_db()
+        self.assertEqual(ficha.status, FichaPlanoTratamento.Status.RASCUNHO)
+        self.assertEqual(AssinaturaEletronica.objects.filter(
+            tipo_documento='plano_tratamento'
+        ).count(), 0)
+
+    def test_linha_nova_marca_dentista_logado(self):
+        ficha = self._abrir()
+        self.client.force_login(self.user_dentista)
+        resposta = self.client.get(
+            f'/pacientes/{self.paciente.pk}/plano/{ficha.pk}/editar/',
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 200)
+        html = resposta.content.decode()
+        self.assertIn(f'name="itens-0-dentistas"', html)
+        self.assertIn(f'value="{self.dentista.pk}"', html)
+        self.assertIn('checked', html)
+
+    def test_assinatura_permanece_quando_validacao_falha(self):
+        ficha = self._abrir()
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/plano/{ficha.pk}/editar/',
+            self._payload(ficha, plano_tratamento=''),
+            HTTP_HOST='localhost',
+        )
+        self.assertEqual(resposta.status_code, 200)
+        html = resposta.content.decode()
+        self.assertIn('Não foi possível concluir', html)
+        self.assertIn('data:image/png;base64,', html)

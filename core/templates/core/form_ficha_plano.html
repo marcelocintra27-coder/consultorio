@@ -1,0 +1,159 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_fichas_plano' paciente.pk %}" class="botao secundario">Voltar</a>
+        </div>
+        <p class="resumo">Paciente: {{ paciente.nome_completo }}. Salve rascunho se precisar; ao concluir, as assinaturas travam a ficha.</p>
+
+        <form method="post" class="form-cartao" id="form-ficha-plano">
+            {% csrf_token %}
+            {{ itens.management_form }}
+            {{ profissionais.management_form }}
+            {% if form.errors or itens.errors or profissionais.errors %}
+            <div class="erro">Não foi possível concluir. Confira os avisos junto dos campos e as assinaturas obrigatórias.</div>
+            {% endif %}
+            {% if form.non_field_errors %}
+            <div class="erro">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <h2 class="secao-pagina">1. Dados do paciente</h2>
+            {% include "core/includes/campo_form.html" with field=form.nome_completo %}
+            {% include "core/includes/campo_form.html" with field=form.data_nascimento %}
+            {% include "core/includes/campo_form.html" with field=form.cpf %}
+            <div class="grade-dois">
+                {% include "core/includes/campo_form.html" with field=form.telefone %}
+                {% include "core/includes/campo_form.html" with field=form.whatsapp %}
+            </div>
+            {% include "core/includes/campo_form.html" with field=form.email %}
+            {% include "core/includes/campo_form.html" with field=form.endereco %}
+            <div class="grade-dois">
+                {% include "core/includes/campo_form.html" with field=form.cidade %}
+                {% include "core/includes/campo_form.html" with field=form.uf %}
+            </div>
+            {% include "core/includes/campo_form.html" with field=form.profissao %}
+            {% include "core/includes/campo_form.html" with field=form.nome_responsavel %}
+
+            <h2 class="secao-pagina">2. Plano de tratamento</h2>
+            {% include "core/includes/campo_form.html" with field=form.plano_tratamento %}
+
+            <h2 class="secao-pagina">3. Termo de ciência e consentimento</h2>
+            {% include "core/includes/campo_form.html" with field=form.ciencia_itens extra_class="grupo-opcoes" %}
+            <p class="declaracao">{{ texto_declaracao }}</p>
+            <div class="campo aceite">
+                <label for="{{ form.aceitou_declaracao.id_for_label }}">
+                    {{ form.aceitou_declaracao }}
+                    {{ form.aceitou_declaracao.label }}
+                </label>
+                {% if form.aceitou_declaracao.errors %}
+                <div class="erro">{{ form.aceitou_declaracao.errors }}</div>
+                {% endif %}
+            </div>
+            <div class="grade-dois">
+                {% include "core/includes/campo_form.html" with field=form.local_assinatura %}
+                {% include "core/includes/campo_form.html" with field=form.data_consentimento %}
+            </div>
+            {% if menor %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_paciente_base64" rotulo="assinatura do responsável legal" dica="O responsável legal assina no lugar do paciente menor de 18 anos." erro=form.assinatura_paciente_base64.errors valor=form.assinatura_paciente_base64.value %}
+            {% else %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_paciente_base64" rotulo="assinatura do paciente" dica="O paciente assina o termo na presença do dentista." erro=form.assinatura_paciente_base64.errors valor=form.assinatura_paciente_base64.value %}
+            {% endif %}
+
+            <h2 class="secao-pagina">4. Atendimento por mais de um profissional</h2>
+            <p class="declaracao">{{ texto_aviso }}</p>
+
+            <h2 class="secao-pagina">5. Consentimento para procedimentos</h2>
+            <div id="itens-rows">
+            {% for item_form in itens.forms %}
+            <div class="plano-item">
+                {{ item_form.id }}
+                {% include "core/includes/campo_form.html" with field=item_form.procedimento %}
+                {% include "core/includes/campo_form.html" with field=item_form.descricao %}
+                {% include "core/includes/campo_form.html" with field=item_form.dentistas extra_class="grupo-opcoes" %}
+                {% include "core/includes/campo_form.html" with field=item_form.cro %}
+                {% with nome_ass=item_form.prefix|add:"-assinatura_base64" %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo=nome_ass rotulo="assinatura do paciente neste procedimento" erro=item_form.assinatura_base64.errors valor=item_form.assinatura_base64.value %}
+                {% endwith %}
+                {% if item_form.DELETE %}
+                <div class="campo aceite">
+                    <label>{{ item_form.DELETE }} Remover esta linha</label>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            </div>
+            <template id="itens-empty">
+            <div class="plano-item">
+                {{ itens.empty_form.id }}
+                {% include "core/includes/campo_form.html" with field=itens.empty_form.procedimento %}
+                {% include "core/includes/campo_form.html" with field=itens.empty_form.descricao %}
+                {% include "core/includes/campo_form.html" with field=itens.empty_form.dentistas extra_class="grupo-opcoes" %}
+                {% include "core/includes/campo_form.html" with field=itens.empty_form.cro %}
+                {% with nome_ass=itens.empty_form.prefix|add:"-assinatura_base64" %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo=nome_ass rotulo="assinatura do paciente neste procedimento" %}
+                {% endwith %}
+                {% if itens.empty_form.DELETE %}
+                <div class="campo aceite">
+                    <label>{{ itens.empty_form.DELETE }} Remover esta linha</label>
+                </div>
+                {% endif %}
+            </div>
+            </template>
+            <div class="acoes">
+                <button type="button" class="botao secundario" data-formset-add="itens" data-dentista-logado="{{ dentista_logado_id }}">Adicionar procedimento</button>
+            </div>
+
+            <h2 class="secao-pagina">6. Procedimentos de maior complexidade</h2>
+            {% include "core/includes/campo_form.html" with field=form.complexidade_itens extra_class="grupo-opcoes" %}
+
+            <h2 class="secao-pagina">7. Assinatura dos profissionais responsáveis</h2>
+            <div id="profissionais-rows">
+            {% for prof_form in profissionais.forms %}
+            <div class="plano-item">
+                {{ prof_form.id }}
+                <div class="grade-dois">
+                    {% include "core/includes/campo_form.html" with field=prof_form.nome %}
+                    {% include "core/includes/campo_form.html" with field=prof_form.cro %}
+                </div>
+                {% with nome_ass=prof_form.prefix|add:"-assinatura_base64" %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo=nome_ass rotulo="assinatura do profissional" erro=prof_form.assinatura_base64.errors valor=prof_form.assinatura_base64.value %}
+                {% endwith %}
+                {% if prof_form.DELETE %}
+                <div class="campo aceite">
+                    <label>{{ prof_form.DELETE }} Remover</label>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            </div>
+            <template id="profissionais-empty">
+            <div class="plano-item">
+                {{ profissionais.empty_form.id }}
+                <div class="grade-dois">
+                    {% include "core/includes/campo_form.html" with field=profissionais.empty_form.nome %}
+                    {% include "core/includes/campo_form.html" with field=profissionais.empty_form.cro %}
+                </div>
+                {% with nome_ass=profissionais.empty_form.prefix|add:"-assinatura_base64" %}
+                {% include "core/includes/campo_assinatura.html" with nome_campo=nome_ass rotulo="assinatura do profissional" %}
+                {% endwith %}
+            </div>
+            </template>
+            <div class="acoes">
+                <button type="button" class="botao secundario" data-formset-add="profissionais">Adicionar profissional</button>
+            </div>
+
+            <div class="acoes">
+                <button type="submit" class="botao secundario" name="acao" value="rascunho">Salvar rascunho</button>
+                <button type="submit" class="botao" name="acao" value="concluir">Concluir e assinar</button>
+            </div>
+        </form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/js/assinatura.js' %}"></script>
+<script src="{% static 'core/js/plano.js' %}"></script>
+{% endblock %}

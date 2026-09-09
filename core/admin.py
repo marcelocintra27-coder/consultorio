@@ -15,6 +15,9 @@ from .models import (
     AssinaturaEletronica,
     FichaCadastroAnamnese,
     RegistroEvolucaoClinica,
+    FichaPlanoTratamento,
+    ItemConsentimentoProcedimento,
+    ResponsavelPlanoTratamento,
 )
 
 
@@ -229,5 +232,25 @@ class RegistroEvolucaoClinicaAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = ('paciente', 'dentista')
     readonly_fields = ('criado_em',)
+
+
+class ItemConsentimentoInline(admin.TabularInline):
+    model = ItemConsentimentoProcedimento
+    extra = 0
+
+
+class ResponsavelPlanoInline(admin.TabularInline):
+    model = ResponsavelPlanoTratamento
+    extra = 0
+
+
+@admin.register(FichaPlanoTratamento)
+class FichaPlanoTratamentoAdmin(admin.ModelAdmin):
+    list_display = ('paciente', 'status', 'criado_em')
+    list_filter = ('status',)
+    search_fields = ('paciente__nome_completo', 'cpf', 'nome_completo')
+    autocomplete_fields = ('paciente',)
+    readonly_fields = ('criado_em', 'atualizado_em')
+    inlines = (ItemConsentimentoInline, ResponsavelPlanoInline)
 
 
