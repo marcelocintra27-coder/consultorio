@@ -18,6 +18,7 @@ urlpatterns = [
     path('sair/', sair, name='sair'),
     path('', include('core.urls')),
     path('locacao/', include('locacao.urls')),
+    path('ia_seguranca/', include('ia_seguranca.urls')),
 ]
 
 if settings.DEBUG:

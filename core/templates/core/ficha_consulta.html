@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load static %}
 
 {% block title %}Consulta — {{ consulta.paciente.nome_completo }}{% endblock %}
 {% block titulo %}
@@ -28,6 +29,32 @@
             </div>
             <button type="submit" class="botao">Atualizar status</button>
         </form>
+
+        <h2 class="secao-pagina">Evolucao por voz</h2>
+        <div class="form-cartao">
+            <div class="acoes">
+                <button type="button" id="btn-gravar" class="botao"
+                        data-url="{% url 'ia_seguranca:transcrever_consulta' consulta.pk %}"
+                        data-csrf="{{ csrf_token }}">Gravar evolucao</button>
+            </div>
+            <p id="gravador-status"></p>
+            <div id="gravador-resultado" hidden>
+                <div class="campo">
+                    <label for="gravador-texto">transcricao</label>
+                    <textarea id="gravador-texto" name="gravador-texto" rows="8"></textarea>
+                </div>
+                <form method="post" action="{% url 'ia_seguranca:salvar_evolucao' consulta.pk %}" id="form-salvar-evolucao">
+                  {% csrf_token %}
+                  <input type="hidden" name="texto" id="campo-texto-final">
+                  <input type="hidden" name="registro_id" id="campo-registro-id">
+                  <p>
+                    <label for="campo-procedimento">Procedimento / etapa (obrigatorio):</label>
+                    <input type="text" name="procedimento_etapa" id="campo-procedimento" required>
+                  </p>
+                  <button type="submit" class="botao">Salvar como evolucao clinica</button>
+                </form>
+            </div>
+        </div>
 
         <h2 class="secao-pagina">Autorização de itens com custo</h2>
         <div class="acoes">
@@ -221,6 +248,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'core/js/gravador_voz.js' %}"></script>
 {% if pode_lancar and lancamento_form %}
 <script>
 (function () {
