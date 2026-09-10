@@ -13,15 +13,45 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _carregar_dotenv(caminho):
+    """Preenche os.environ com chaves ausentes a partir de um .env local.
+
+    Não sobrescreve variáveis já definidas (ex.: painel do Render).
+    """
+    if not caminho.is_file():
+        return
+    for linha in caminho.read_text(encoding='utf-8').splitlines():
+        linha = linha.strip()
+        if not linha or linha.startswith('#') or '=' not in linha:
+            continue
+        chave, _, valor = linha.partition('=')
+        chave = chave.strip()
+        valor = valor.strip().strip('"').strip("'")
+        if chave:
+            os.environ.setdefault(chave, valor)
+
+
+_carregar_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-g7^iy+r6z!tv37jaac$v$&@w2j79+5jw6y#%%^a5lfu9m74vc1'
+# Produção (Render): definir SECRET_KEY no painel do serviço (Environment).
+# Local: copiar .env.example para .env e gerar uma chave (não versionar o .env).
+SECRET_KEY = os.environ.get('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        'SECRET_KEY não está configurada. Defina a variável de ambiente '
+        'SECRET_KEY (no Render: Environment do serviço; no desenvolvimento: '
+        'arquivo .env na raiz do projeto, fora do Git).'
+    )
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Local: DEBUG ligado para o runserver servir static dos finders.
