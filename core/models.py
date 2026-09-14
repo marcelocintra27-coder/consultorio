@@ -985,7 +985,72 @@ class FichaCadastroAnamnese(models.Model):
         )
 
 
+class DigitalizacaoFicha(models.Model):
+    class Tipo(models.TextChoices):
+        ANAMNESE = 'anamnese', 'Anamnese'
+        EVOLUCAO = 'evolucao', 'Evolução'
+        OUTRO = 'outro', 'Outro'
+
+    class Status(models.TextChoices):
+        PENDENTE_REVISAO = 'pendente_revisao', 'Pendente de revisão'
+        CONFIRMADA = 'confirmada', 'Confirmada'
+
+    paciente = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='digitalizacoes',
+    )
+    imagem = models.FileField(
+        'imagem',
+        upload_to='fichas_legado/%Y/%m/',
+    )
+    tipo = models.CharField(
+        'tipo',
+        max_length=20,
+        choices=Tipo.choices,
+        default=Tipo.OUTRO,
+    )
+    texto_bruto_ia = models.JSONField(
+        'texto bruto da IA',
+        default=dict,
+        blank=True,
+    )
+    status = models.CharField(
+        'status',
+        max_length=30,
+        choices=Status.choices,
+        default=Status.PENDENTE_REVISAO,
+    )
+    digitalizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='digitalizado por',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='fichas_digitalizadas',
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'digitalização de ficha'
+        verbose_name_plural = 'digitalizações de ficha'
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        paciente = (
+            self.paciente.nome_completo if self.paciente_id else 'sem paciente'
+        )
+        return f'{paciente} — {self.get_tipo_display()}'
+
+
 class RegistroEvolucaoClinica(models.Model):
+    class Origem(models.TextChoices):
+        NATIVO = 'nativo', 'Nativo'
+        LEGADO_FICHA_FISICA = 'legado_ficha_fisica', 'Legado - ficha física'
+
     paciente = models.ForeignKey(
         Paciente,
         verbose_name='paciente',
@@ -1020,6 +1085,20 @@ class RegistroEvolucaoClinica(models.Model):
         null=True,
         blank=True,
         related_name='registros_evolucao_clinica_criados',
+    )
+    origem = models.CharField(
+        'origem',
+        max_length=30,
+        choices=Origem.choices,
+        default=Origem.NATIVO,
+    )
+    digitalizado_de = models.ForeignKey(
+        DigitalizacaoFicha,
+        verbose_name='digitalizado de',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='evolucoes_geradas',
     )
 
     class Meta:

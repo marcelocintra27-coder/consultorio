@@ -14,6 +14,7 @@ from .models import (
     RepasseUniodonto,
     AssinaturaEletronica,
     FichaCadastroAnamnese,
+    DigitalizacaoFicha,
     RegistroEvolucaoClinica,
     FichaPlanoTratamento,
     ItemConsentimentoProcedimento,
@@ -233,6 +234,20 @@ class RegistroEvolucaoClinicaAdmin(admin.ModelAdmin):
         'cro',
     )
     autocomplete_fields = ('paciente', 'dentista')
+    readonly_fields = ('criado_em',)
+
+
+@admin.register(DigitalizacaoFicha)
+class DigitalizacaoFichaAdmin(admin.ModelAdmin):
+    list_display = (
+        'paciente',
+        'tipo',
+        'status',
+        'criado_em',
+    )
+    list_filter = ('tipo', 'status')
+    search_fields = ('paciente__nome_completo',)
+    autocomplete_fields = ('paciente',)
     readonly_fields = ('criado_em',)
 
 
