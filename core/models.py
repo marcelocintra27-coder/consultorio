@@ -987,6 +987,7 @@ class FichaCadastroAnamnese(models.Model):
 
 class DigitalizacaoFicha(models.Model):
     class Tipo(models.TextChoices):
+        CADASTRO = 'cadastro', 'Cadastro'
         ANAMNESE = 'anamnese', 'Anamnese'
         EVOLUCAO = 'evolucao', 'Evolução'
         OUTRO = 'outro', 'Outro'

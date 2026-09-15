@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth import logout
-from django.contrib.auth.decorators import login_not_required
+from django.contrib.auth.decorators import login_not_required, login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Q
@@ -71,6 +71,7 @@ from .forms import (
     ComplementarDentistaForm,
     RepasseUniodontoForm,
     AssinaturaTesteForm,
+    DigitalizacaoFichaForm,
     FichaAnamneseForm,
     AssinaturaDentistaAnamneseForm,
     RegistroEvolucaoClinicaForm,
@@ -134,6 +135,30 @@ def editar_paciente(request, pk):
         'form': form,
         'titulo': 'Editar Paciente',
         'paciente': paciente,
+    })
+
+
+@login_required
+def digitalizacao_upload(request):
+    if request.method == 'POST':
+        form = DigitalizacaoFichaForm(request.POST, request.FILES)
+        if form.is_valid():
+            digitalizacao = form.save(commit=False)
+            digitalizacao.digitalizado_por = request.user
+            digitalizacao.save()
+            messages.success(
+                request,
+                'Digitalização enviada. A ficha ficou pendente de revisão.',
+            )
+            return redirect('core:digitalizacao_upload')
+        messages.error(
+            request,
+            'Não foi possível enviar. Confira os avisos no formulário.',
+        )
+    else:
+        form = DigitalizacaoFichaForm()
+    return render(request, 'core/digitalizacao_upload.html', {
+        'form': form,
     })
 
 

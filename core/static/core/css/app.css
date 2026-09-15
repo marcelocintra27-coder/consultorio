@@ -326,6 +326,12 @@ th.valor {
     margin-top: 4px;
 }
 
+.erro ul,
+.erro .errorlist {
+    margin: 4px 0 0;
+    padding-left: 18px;
+}
+
 .form-inline,
 .form-pago,
 .form-forma,

@@ -4,6 +4,7 @@ from .views import (
     listar_pacientes,
     cadastrar_paciente,
     editar_paciente,
+    digitalizacao_upload,
     listar_convenios,
     cadastrar_convenio,
     editar_convenio,
@@ -53,6 +54,7 @@ app_name = 'core'
 
 urlpatterns = [
     path('', inicio, name='inicio'),
+    path('digitalizacao/nova/', digitalizacao_upload, name='digitalizacao_upload'),
     path('pacientes/', listar_pacientes, name='listar_pacientes'),
     path('pacientes/cadastrar/', cadastrar_paciente, name='cadastrar_paciente'),
     path('pacientes/<int:pk>/editar/', editar_paciente, name='editar_paciente'),

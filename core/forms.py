@@ -24,6 +24,7 @@ from .models import (
     RepasseUniodonto,
     AssinaturaEletronica,
     FichaCadastroAnamnese,
+    DigitalizacaoFicha,
     RegistroEvolucaoClinica,
     FichaPlanoTratamento,
     ItemConsentimentoProcedimento,
@@ -63,6 +64,18 @@ class PacienteForm(forms.ModelForm):
             'endereco': forms.Textarea(attrs={'rows': 2}),
             'observacoes': forms.Textarea(attrs={'rows': 3}),
         }
+
+
+class DigitalizacaoFichaForm(forms.ModelForm):
+    paciente = forms.ModelChoiceField(
+        label='paciente',
+        queryset=Paciente.objects.filter(ativo=True).order_by('nome_completo'),
+        required=False,
+    )
+
+    class Meta:
+        model = DigitalizacaoFicha
+        fields = ['paciente', 'imagem', 'tipo']
 
 
 class ConvenioForm(forms.ModelForm):

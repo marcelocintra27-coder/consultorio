@@ -1,0 +1,50 @@
+{% extends "core/base.html" %}
+
+{% block title %}Nova digitalização de ficha{% endblock %}
+{% block titulo %}Nova digitalização de ficha{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+        </div>
+
+        <form method="post" class="form-cartao" enctype="multipart/form-data">
+            {% csrf_token %}
+            {% if form.errors %}
+            <div class="mensagem error">
+                Não foi possível enviar a digitalização. Confira os avisos abaixo.
+            </div>
+            <div class="erro">{{ form.errors }}</div>
+            {% endif %}
+            {% if form.non_field_errors %}
+            <div class="erro">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="campo">
+                <label for="{{ form.paciente.id_for_label }}">{{ form.paciente.label }}</label>
+                {{ form.paciente }}
+                {% if form.paciente.errors %}
+                <div class="erro">{{ form.paciente.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="campo">
+                <label for="{{ form.imagem.id_for_label }}">{{ form.imagem.label }}</label>
+                {{ form.imagem }}
+                {% if form.imagem.errors %}
+                <div class="erro">{{ form.imagem.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="campo">
+                <label for="{{ form.tipo.id_for_label }}">{{ form.tipo.label }}</label>
+                {{ form.tipo }}
+                {% if form.tipo.errors %}
+                <div class="erro">{{ form.tipo.errors }}</div>
+                {% endif %}
+            </div>
+
+            <button type="submit" class="botao">Salvar</button>
+        </form>
+{% endblock %}
