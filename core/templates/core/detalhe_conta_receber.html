@@ -1,0 +1,83 @@
+{% extends "core/base.html" %}
+
+{% block title %}Conta a receber{% endblock %}
+{% block titulo %}Financeiro administrativo{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+<section class="secao" aria-labelledby="titulo-conta">
+    <h2 id="titulo-conta">{{ conta.descricao }}</h2>
+    <dl class="consulta-detalhes">
+        <div><dt>Paciente</dt><dd>{{ conta.paciente.nome_completo }}</dd></div>
+        <div><dt>Emissão</dt><dd>{{ conta.data_emissao|date:"d/m/Y" }}</dd></div>
+        <div><dt>Valor original</dt><dd>R$ {{ conta.valor_original }}</dd></div>
+        <div><dt>Saldo</dt><dd>R$ {{ conta.saldo }}</dd></div>
+        <div><dt>Situação</dt><dd>{{ conta.situacao|capfirst }}</dd></div>
+    </dl>
+    <div class="acoes">
+        <a href="{% url 'core:listar_contas_receber' %}" class="botao secundario">Voltar para contas</a>
+    </div>
+</section>
+
+<section class="secao" aria-labelledby="titulo-parcelas">
+    <h2 id="titulo-parcelas">Parcelas e recebimentos</h2>
+    <div class="tabela-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Parcela</th>
+                    <th scope="col">Vencimento</th>
+                    <th scope="col">Original</th>
+                    <th scope="col">Saldo</th>
+                    <th scope="col">Situação</th>
+                    <th scope="col">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for parcela in conta.parcelas.all %}
+                <tr>
+                    <td>{{ parcela.numero }}</td>
+                    <td>{{ parcela.vencimento|date:"d/m/Y" }}</td>
+                    <td>R$ {{ parcela.valor_original }}</td>
+                    <td>R$ {{ parcela.saldo }}</td>
+                    <td>{{ parcela.situacao|capfirst }}</td>
+                    <td>{% if parcela.saldo > 0 %}<a href="{% url 'core:registrar_recebimento' parcela.pk %}" class="botao">Registrar recebimento</a>{% endif %}</td>
+                </tr>
+                {% for recebimento in parcela.recebimentos.all %}
+                <tr>
+                    <td colspan="2">{{ recebimento.get_tipo_display|capfirst }} em {{ recebimento.recebido_em|date:"d/m/Y H:i" }}</td>
+                    <td>R$ {{ recebimento.valor }}</td>
+                    <td>{% if recebimento.desconto %}Desconto: R$ {{ recebimento.desconto }}{% endif %}</td>
+                    <td>{{ recebimento.operador.get_full_name|default:recebimento.operador.username }}</td>
+                    <td>
+                        {% if recebimento.tipo == 'recebimento' %}
+                        <a href="{% url 'core:ver_recibo_recebimento' recebimento.pk %}" class="botao secundario">Recibo</a>
+                        <a href="{% url 'core:estornar_recebimento' recebimento.pk %}" class="botao perigo">Estornar</a>
+                        {% else %}Origem: #{{ recebimento.recebimento_original_id }}{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% empty %}
+                <tr><td colspan="6" class="vazio">Não há parcelas.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="secao" aria-labelledby="titulo-auditoria-financeira">
+    <h2 id="titulo-auditoria-financeira">Auditoria financeira</h2>
+    <div class="tabela-wrap">
+        <table>
+            <thead><tr><th scope="col">Data e hora</th><th scope="col">Usuário</th><th scope="col">Ação</th><th scope="col">Descrição</th></tr></thead>
+            <tbody>
+                {% for item in conta.auditorias_financeiras.all %}
+                <tr><td>{{ item.criado_em|date:"d/m/Y H:i" }}</td><td>{{ item.usuario.get_full_name|default:item.usuario.username }}</td><td>{{ item.get_acao_display }}</td><td>{{ item.descricao }}</td></tr>
+                {% empty %}
+                <tr><td colspan="4" class="vazio">Nenhum evento registrado.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

@@ -1,10 +1,216 @@
 {% extends "core/base.html" %}
 
-{% block title %}Consultório Odontológico{% endblock %}
-{% block titulo %}Sistema de Gestão do Consultório{% endblock %}
+{% block title %}{% if dashboard_secretaria %}Início | Secretária{% elif dashboard_dentista %}Início clínico | Dentista{% elif dashboard_administrador %}Início administrativo{% else %}Consultório Odontológico{% endif %}{% endblock %}
+{% block titulo %}{% if dashboard_secretaria %}Rotina da secretária{% elif dashboard_dentista %}Rotina clínica{% elif dashboard_administrador %}Visão administrativa{% else %}Sistema de Gestão do Consultório{% endif %}{% endblock %}
 {% block container_class %}largo{% endblock %}
 
 {% block content %}
+    {% if dashboard_administrador %}
+    <section class="secao" aria-labelledby="titulo-dashboard-administrador">
+        <h2 id="titulo-dashboard-administrador">Painel administrativo</h2>
+        <p class="subtitulo">Visão operacional agregada e acesso às configurações autorizadas da clínica.</p>
+
+        <div class="cards dashboard-indicadores">
+            <article class="card card-indicador">
+                <h3>Consultas em andamento</h3>
+                <p class="numero-indicador">{{ consultas_em_andamento }}</p>
+                <p>Agendadas, confirmadas ou com paciente presente.</p>
+            </article>
+            <article class="card card-indicador">
+                <h3>Dentistas ativos</h3>
+                <p class="numero-indicador">{{ dentistas_ativos }}</p>
+                <p>Profissionais ativos no cadastro atual.</p>
+            </article>
+            <article class="card card-indicador">
+                <h3>Salas ativas</h3>
+                <p class="numero-indicador">{{ salas_ativas }}</p>
+                <p>Salas disponíveis no cadastro atual.</p>
+            </article>
+            <article class="card card-indicador">
+                <h3>Perfis configurados</h3>
+                <p class="numero-indicador">{{ perfis_configurados }}</p>
+                <p>Vínculos de acesso cadastrados.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="secao" aria-labelledby="titulo-atalhos-administracao">
+        <h2 id="titulo-atalhos-administracao">Administração</h2>
+        <div class="acoes" aria-label="Atalhos administrativos">
+            <a href="{% url 'core:administracao' %}" class="botao">Gerenciar acesso e configurações</a>
+            <a href="{% url 'core:listar_contas_receber' %}" class="botao secundario">Contas a receber</a>
+            <a href="{% url 'core:listar_consultas' %}" class="botao secundario">Ver agenda</a>
+            <a href="{% url 'core:listar_pagamentos_consulta' %}" class="botao secundario">Financeiro atual</a>
+            <a href="{% url 'core:listar_tabela_uniodonto' %}" class="botao secundario">Tabela Uniodonto</a>
+            <a href="{% url 'core:listar_repasses_uniodonto' %}" class="botao secundario">Repasse Uniodonto</a>
+        </div>
+    </section>
+    {% elif dashboard_secretaria %}
+    <section class="secao dashboard-secretaria" aria-labelledby="titulo-dashboard-secretaria">
+        <h2 id="titulo-dashboard-secretaria">Agenda de hoje</h2>
+        <p class="subtitulo">Acompanhe a operação do dia e acesse as ações mais frequentes.</p>
+
+        <div class="cards dashboard-indicadores">
+            <article class="card card-indicador">
+                <h3>Consultas do dia</h3>
+                <p class="numero-indicador">{{ total_consultas_hoje }}</p>
+                <p>Total previsto para {{ hoje|date:"d/m/Y" }}.</p>
+            </article>
+            <article class="card card-indicador">
+                <h3>Agendadas</h3>
+                <p class="numero-indicador">{{ consultas_agendadas_hoje }}</p>
+                <p>Consultas aguardando atendimento.</p>
+            </article>
+            <article class="card card-indicador">
+                <h3>Realizadas</h3>
+                <p class="numero-indicador">{{ consultas_realizadas_hoje }}</p>
+                <p>Atendimentos concluídos hoje.</p>
+            </article>
+            <article class="card card-indicador">
+                <h3>Canceladas</h3>
+                <p class="numero-indicador">{{ consultas_canceladas_hoje }}</p>
+                <p>Cancelamentos registrados hoje.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="secao" aria-labelledby="titulo-atalhos-secretaria">
+        <h2 id="titulo-atalhos-secretaria">Atalhos de operação</h2>
+        <div class="acoes" aria-label="Ações rápidas">
+            <a href="{% url 'core:agendar_consulta' %}" class="botao">Agendar consulta</a>
+            <a href="{% url 'core:listar_consultas' %}" class="botao secundario">Ver agenda</a>
+            <a href="{% url 'core:cadastrar_paciente' %}" class="botao secundario">Cadastrar paciente</a>
+            <a href="{% url 'core:listar_pacientes' %}" class="botao secundario">Buscar pacientes</a>
+        </div>
+    </section>
+
+    <section class="secao" aria-labelledby="titulo-proximas-consultas">
+        <h2 id="titulo-proximas-consultas">Consultas de hoje</h2>
+        {% if consultas_hoje %}
+        <div class="tabela-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">Horário</th>
+                        <th scope="col">Paciente</th>
+                        <th scope="col">Dentista</th>
+                        <th scope="col">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for consulta in consultas_hoje %}
+                    <tr>
+                        <td>{{ consulta.hora_inicio|time:"H:i" }}</td>
+                        <td><a href="{% url 'core:ficha_consulta' consulta.pk %}">{{ consulta.paciente.nome_completo }}</a></td>
+                        <td>{{ consulta.dentista|default:"Não informado" }}</td>
+                        <td>{{ consulta.get_status_display }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="vazio">Não há consultas agendadas para hoje.</p>
+        {% endif %}
+    </section>
+    {% elif dashboard_dentista %}
+    <section class="secao" aria-labelledby="titulo-dashboard-dentista">
+        <h2 id="titulo-dashboard-dentista">Agenda clínica de hoje</h2>
+        <p class="subtitulo">Acompanhe os atendimentos vinculados ao seu perfil e priorize as pendências clínicas.</p>
+
+        <div class="cards dashboard-indicadores">
+            <article class="card card-indicador">
+                <h3>Consultas de hoje</h3>
+                <p class="numero-indicador">{{ total_consultas_hoje }}</p>
+                <p>Agenda vinculada para {{ hoje|date:"d/m/Y" }}.</p>
+            </article>
+            <article class="card card-indicador">
+                <h3>Em atendimento</h3>
+                <p class="numero-indicador">{{ consultas_em_atendimento_hoje }}</p>
+                <p>Pacientes que já chegaram para atendimento.</p>
+            </article>
+            <article class="card card-indicador">
+                <h3>Anamneses pendentes</h3>
+                <p class="numero-indicador">{{ anamneses_pendentes|length }}</p>
+                <p>Fichas aguardando avaliação clínica.</p>
+            </article>
+            <article class="card card-indicador">
+                <h3>Documentos pendentes</h3>
+                <p class="numero-indicador">{{ autorizacoes_pendentes|length }}</p>
+                <p>Autorizações em rascunho das suas consultas.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="secao" aria-labelledby="titulo-atalhos-dentista">
+        <h2 id="titulo-atalhos-dentista">Atalhos clínicos</h2>
+        <div class="acoes" aria-label="Ações rápidas clínicas">
+            <a href="{% url 'core:listar_consultas' %}" class="botao">Minha agenda</a>
+            <a href="{% url 'core:listar_pacientes' %}" class="botao secundario">Buscar pacientes</a>
+            <a href="{% url 'core:listar_materiais_dia' %}" class="botao secundario">Materiais utilizados</a>
+        </div>
+    </section>
+
+    <section class="secao" aria-labelledby="titulo-atendimentos-dentista">
+        <h2 id="titulo-atendimentos-dentista">Atendimentos de hoje</h2>
+        {% if consultas_hoje %}
+        <div class="tabela-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">Horário</th>
+                        <th scope="col">Paciente</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Ação clínica</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for consulta in consultas_hoje %}
+                    <tr>
+                        <td>{{ consulta.hora_inicio|time:"H:i" }}</td>
+                        <td>{{ consulta.paciente.nome_completo }}</td>
+                        <td>{{ consulta.get_status_display }}</td>
+                        <td><a href="{% url 'core:ficha_consulta' consulta.pk %}" class="botao secundario">Abrir ficha</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="vazio">Não há consultas vinculadas para hoje.</p>
+        {% endif %}
+    </section>
+
+    <section class="secao" aria-labelledby="titulo-pendencias-clinicas">
+        <h2 id="titulo-pendencias-clinicas">Pendências clínicas</h2>
+        <div class="consulta-detalhes">
+            <article class="subsecao-consulta">
+                <h3>Anamneses aguardando dentista</h3>
+                {% if anamneses_pendentes %}
+                <ul>
+                    {% for ficha in anamneses_pendentes %}
+                    <li><a href="{% url 'core:listar_fichas_anamnese' ficha.paciente.pk %}">{{ ficha.paciente.nome_completo }}</a></li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="vazio">Não há anamneses aguardando sua avaliação.</p>
+                {% endif %}
+            </article>
+            <article class="subsecao-consulta">
+                <h3>Autorizações em rascunho</h3>
+                {% if autorizacoes_pendentes %}
+                <ul>
+                    {% for ficha in autorizacoes_pendentes %}
+                    <li><a href="{% url 'core:listar_fichas_autorizacao' ficha.paciente.pk %}">{{ ficha.paciente.nome_completo }}</a></li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="vazio">Não há autorizações em rascunho nas suas consultas.</p>
+                {% endif %}
+            </article>
+        </div>
+    </section>
+    {% else %}
     <section class="secao">
         <h2>Consultório</h2>
         <p class="subtitulo">Dia a dia de cada dentista — agenda, pacientes e o que entra no atendimento.</p>
@@ -44,6 +250,18 @@
                 <h3>Pagamentos</h3>
                 <p>Forma de pagamento de cada consulta.</p>
                 <a href="{% url 'core:listar_pagamentos_consulta' %}" class="botao">Acessar</a>
+            </div>
+
+            <div class="card">
+                <h3>Inadimplência</h3>
+                <p>Parcelas vencidas com saldo financeiro em aberto.</p>
+                <a href="{% url 'core:listar_inadimplencia' %}" class="botao">Acessar</a>
+            </div>
+
+            <div class="card">
+                <h3>Contas a pagar</h3>
+                <p>Fornecedores, aprovações e baixas administrativas.</p>
+                <a href="{% url 'core:listar_contas_pagar' %}" class="botao">Acessar</a>
             </div>
 
             <div class="card">
@@ -91,6 +309,7 @@
             </div>
         </div>
     </section>
+    {% endif %}
     {% endif %}
 {% endblock %}
 

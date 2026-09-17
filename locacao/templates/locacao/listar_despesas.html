@@ -25,6 +25,7 @@
                 <th>Tipo</th>
                 <th>Pago por</th>
                 <th>Cota</th>
+                <th>Conta/pagamento</th>
                 <th></th>
             </tr>
             {% for despesa in despesas %}
@@ -35,13 +36,14 @@
                 <td>{{ despesa.get_tipo_display }}</td>
                 <td>{{ despesa.pago_por }}</td>
                 <td>R$ {{ despesa.valor_cota }}</td>
+                <td>{% if despesa.conta_pagar %}Conta #{{ despesa.conta_pagar_id }}{% if despesa.data_efetiva_pagamento %} · paga em {{ despesa.data_efetiva_pagamento|date:"d/m/Y" }}{% endif %}{% else %}Sem vínculo{% endif %}</td>
                 <td>
                     <a href="{% url 'locacao:editar_despesa' despesa.pk %}" class="botao">Editar</a>
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="7">Nenhuma despesa encontrada.</td>
+                <td colspan="8">Nenhuma despesa encontrada.</td>
             </tr>
             {% endfor %}
         </table>

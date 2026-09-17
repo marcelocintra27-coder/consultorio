@@ -1,0 +1,91 @@
+{% extends "core/base.html" %}
+
+{% block title %}Relatórios financeiros{% endblock %}
+{% block titulo %}Financeiro administrativo{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+<section class="secao" aria-labelledby="titulo-relatorios">
+    <h2 id="titulo-relatorios">Relatórios financeiros</h2>
+    <p class="subtitulo">Consolidação somente para consulta. Valores realizados e previstos não são misturados.</p>
+
+    <form method="get" class="busca-form" novalidate>
+        <div class="campo">
+            <label for="{{ form.data_inicial.id_for_label }}">Data inicial</label>
+            {{ form.data_inicial }}
+            {{ form.data_inicial.errors }}
+        </div>
+        <div class="campo">
+            <label for="{{ form.data_final.id_for_label }}">Data final</label>
+            {{ form.data_final }}
+            {{ form.data_final.errors }}
+        </div>
+        <button type="submit" class="botao">Atualizar</button>
+    </form>
+
+    <h3>Realizado / caixa</h3>
+    <p class="subtitulo">Movimentos efetivamente registrados nos caixas diários entre {{ data_inicial|date:"d/m/Y" }} e {{ data_final|date:"d/m/Y" }}.</p>
+    <dl class="consulta-detalhes">
+        <div><dt>Entradas realizadas</dt><dd>R$ {{ entradas_realizadas }}</dd></div>
+        <div><dt>Saídas realizadas</dt><dd>R$ {{ saidas_realizadas }}</dd></div>
+        <div><dt>Resultado realizado</dt><dd>R$ {{ resultado_realizado }}</dd></div>
+    </dl>
+    <p class="subtitulo">Taxas de conciliação: R$ {{ taxas_conciliacao }} · Divergências registradas: R$ {{ divergencias_conciliacao }}. Esses componentes são exibidos separadamente e não geram novo movimento de caixa.</p>
+
+    <h3>Recebimentos por forma de pagamento</h3>
+    <div class="tabela-wrap">
+        <table>
+            <thead><tr><th scope="col">Forma</th><th scope="col">Recebimentos</th><th scope="col">Estornos</th><th scope="col">Descontos</th><th scope="col">Líquido</th></tr></thead>
+            <tbody>
+                {% for grupo in recebimentos_por_forma %}
+                <tr><td>{{ grupo.forma }}</td><td>R$ {{ grupo.recebido }}</td><td>R$ {{ grupo.estornado }}</td><td>R$ {{ grupo.desconto }}</td><td>R$ {{ grupo.liquido }}</td></tr>
+                {% empty %}
+                <tr><td colspan="5" class="vazio">Nenhum recebimento registrado no período.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3>Previsto / competência</h3>
+    <p class="subtitulo">Usa somente vencimentos e competências efetivamente cadastrados; não atribui competência artificial a registros legados.</p>
+    <dl class="consulta-detalhes">
+        <div><dt>Parcelas previstas a receber</dt><dd>R$ {{ previsto_receber }}</dd></div>
+        <div><dt>Contas a pagar previstas</dt><dd>R$ {{ previsto_pagar_contas }}</dd></div>
+        <div><dt>Despesas legadas sem conta vinculada</dt><dd>R$ {{ previsto_despesas_legadas }}</dd></div>
+        <div><dt>Resultado previsto</dt><dd>R$ {{ resultado_previsto }}</dd></div>
+    </dl>
+
+    <h3>Despesas por categoria</h3>
+    <div class="tabela-wrap">
+        <table>
+            <thead><tr><th scope="col">Categoria/origem</th><th scope="col">Valor de competência</th></tr></thead>
+            <tbody>
+                {% for despesa in despesas_por_categoria %}
+                <tr><td>{{ despesa.categoria__nome }}</td><td>R$ {{ despesa.total }}</td></tr>
+                {% empty %}
+                <tr><td colspan="2" class="vazio">Nenhuma despesa de competência no período.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3>Inadimplência, fechamentos e repasses</h3>
+    <dl class="consulta-detalhes">
+        <div><dt>Parcelas vencidas em aberto</dt><dd>{{ quantidade_vencida }} · R$ {{ saldo_vencido }}</dd></div>
+        <div><dt>Repasses Uniodonto registrados</dt><dd>R$ {{ total_repasses }}</dd></div>
+    </dl>
+    <div class="tabela-wrap">
+        <table>
+            <thead><tr><th scope="col">Data</th><th scope="col">Responsável</th><th scope="col">Esperado</th><th scope="col">Contado</th><th scope="col">Diferença</th></tr></thead>
+            <tbody>
+                {% for fechamento in fechamentos %}
+                <tr><td>{{ fechamento.data|date:"d/m/Y" }}</td><td>{{ fechamento.fechado_por }}</td><td>R$ {{ fechamento.saldo_esperado }}</td><td>R$ {{ fechamento.saldo_contado }}</td><td>R$ {{ fechamento.diferenca }}</td></tr>
+                {% empty %}
+                <tr><td colspan="5" class="vazio">Nenhum caixa fechado no período.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="subtitulo">Repasses Uniodonto, despesas, dívidas, rateios e acertos mantêm seus conceitos próprios. Esta tela não cria, altera ou reconcilia nenhum registro.</p>
+</section>
+{% endblock %}

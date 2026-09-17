@@ -1,0 +1,26 @@
+{% extends "core/base.html" %}
+{% block title %}Contas a pagar{% endblock %}
+{% block titulo %}Financeiro administrativo{% endblock %}
+{% block container_class %}largo{% endblock %}
+{% block content %}
+<section class="secao" aria-labelledby="titulo-contas-pagar">
+    <h2 id="titulo-contas-pagar">Contas a pagar</h2>
+    <p class="subtitulo">Títulos administrativos separados de despesas, rateios e acertos de locação.</p>
+    <div class="acoes">
+        <a href="{% url 'core:listar_fornecedores' %}" class="botao secundario">Fornecedores</a>
+        <a href="{% url 'core:listar_categorias_conta_pagar' %}" class="botao secundario">Categorias</a>
+        <a href="{% url 'core:criar_conta_pagar' %}" class="botao">Nova conta a pagar</a>
+    </div>
+    <form method="get" class="busca-form">
+        <label class="sr-only" for="id-q">Buscar conta</label>
+        <input id="id-q" name="q" value="{{ termo }}" placeholder="Fornecedor ou descrição">
+        <label class="sr-only" for="id-situacao">Situação</label>
+        <select id="id-situacao" name="situacao"><option value="">Todas as situações</option>{% for valor, rotulo in situacoes %}<option value="{{ valor }}"{% if situacao == valor %} selected{% endif %}>{{ rotulo|capfirst }}</option>{% endfor %}</select>
+        <button type="submit" class="botao">Filtrar</button>
+    </form>
+    <div class="tabela-wrap"><table><thead><tr><th>Fornecedor</th><th>Descrição</th><th>Competência</th><th>Vencimento</th><th>Original</th><th>Saldo</th><th>Situação</th><th></th></tr></thead><tbody>
+    {% for conta in contas %}<tr><td>{{ conta.fornecedor.nome }}</td><td>{{ conta.descricao }}</td><td>{{ conta.competencia|date:"d/m/Y" }}</td><td>{{ conta.vencimento|date:"d/m/Y" }}</td><td>R$ {{ conta.valor_original }}</td><td>R$ {{ conta.saldo }}</td><td>{{ conta.get_situacao_display|capfirst }}</td><td><a href="{% url 'core:detalhe_conta_pagar' conta.pk %}" class="botao secundario">Detalhes</a></td></tr>
+    {% empty %}<tr><td colspan="8" class="vazio">Nenhuma conta a pagar encontrada.</td></tr>{% endfor %}
+    </tbody></table></div>
+</section>
+{% endblock %}

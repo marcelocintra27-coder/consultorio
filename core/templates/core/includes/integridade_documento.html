@@ -1,0 +1,29 @@
+<section class="form-cartao" aria-label="Integridade e retificações">
+    {% if integridade.integra %}
+    <p>Integridade conferida com os hashes registrados.</p>
+    {% if url_retificar %}<a class="botao secundario" href="{{ url_retificar }}">Registrar retificação</a>{% endif %}
+    {% else %}
+    <div role="alert">
+        <strong>Integridade não confirmada</strong>
+        <ul>{% for ocorrencia in integridade.ocorrencias %}<li>{{ ocorrencia }}</li>{% endfor %}</ul>
+        <p>O original foi preservado. Operações que exigem integridade estão bloqueadas.</p>
+    </div>
+    {% endif %}
+    {% for registro in retificacoes %}
+    <article>
+        <h3>Retificação {{ forloop.counter }}</h3>
+        <p>{{ registro.criado_em|date:"d/m/Y H:i:s" }} · {{ registro.nome_profissional }} · CRO {{ registro.cro }} · Usuário: {{ registro.autor }}</p>
+        <p><strong>Justificativa:</strong> {{ registro.justificativa|linebreaksbr }}</p>
+        <p><strong>Anotação complementar:</strong> {{ registro.conteudo|linebreaksbr }}</p>
+        {% if registro.integridade.integra %}
+        <p>Integridade da retificação conferida.</p>
+        <img class="assinatura-miniatura" src="{% url 'core:ver_imagem_assinatura' registro.assinatura.pk %}" alt="Assinatura de {{ registro.nome_profissional }}">
+        {% else %}
+        <div role="alert"><strong>Integridade da retificação não confirmada</strong>
+            <ul>{% for ocorrencia in registro.integridade.ocorrencias %}<li>{{ ocorrencia }}</li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+        <p class="resumo">Não substitui consentimentos, procedimentos autorizados ou lançamentos financeiros.</p>
+    </article>
+    {% endfor %}
+</section>

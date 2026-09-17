@@ -1,0 +1,7 @@
+{% extends "core/base.html" %}
+{% block title %}Formas de pagamento{% endblock %}
+{% block titulo %}Financeiro administrativo{% endblock %}
+{% block container_class %}largo{% endblock %}
+{% block content %}
+<section class="secao" aria-labelledby="titulo-formas"><h2 id="titulo-formas">Formas de pagamento</h2><p class="subtitulo">Configurações para novos recebimentos. Registros legados permanecem inalterados.</p><div class="acoes"><a class="botao" href="{% url 'core:cadastrar_forma_pagamento_configuravel' %}">Nova forma</a></div><div class="tabela-wrap"><table><thead><tr><th>Nome</th><th>Código</th><th>Taxa</th><th>Prazo</th><th>Destino</th><th>Situação</th><th></th></tr></thead><tbody>{% for forma in formas %}<tr><td>{{ forma.nome }}</td><td>{{ forma.codigo }}</td><td>{% if forma.tipo_taxa == 'nenhuma' %}Sem taxa{% else %}{{ forma.get_tipo_taxa_display|capfirst }}: {{ forma.valor_taxa }}{% endif %}</td><td>{{ forma.prazo_recebimento_dias|default:"—" }}{% if forma.prazo_recebimento_dias is not None %} dias{% endif %}</td><td>{{ forma.conta_destino|default:"—" }}</td><td>{% if forma.ativo %}Ativa{% else %}Inativa{% endif %}</td><td><a class="botao secundario" href="{% url 'core:editar_forma_pagamento_configuravel' forma.pk %}">Editar</a></td></tr>{% empty %}<tr><td colspan="7" class="vazio">Nenhuma forma configurada.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

@@ -9,28 +9,40 @@
 {% block container_class %}largo{% endblock %}
 
 {% block content %}
-        <div class="acoes">
-            <a href="{% url 'core:listar_consultas' %}?data={{ consulta.data|date:'Y-m-d' }}" class="botao secundario">Voltar</a>
-        </div>
+    <div class="acoes">
+        <a href="{% url 'core:listar_consultas' %}?data={{ consulta.data|date:'Y-m-d' }}" class="botao secundario">Voltar para agenda</a>
+    </div>
 
-        <p class="resumo">
-            {{ consulta.paciente.nome_completo }}
-            · {{ consulta.data|date:"d/m/Y" }}
-            {{ consulta.hora_inicio|time:"H:i" }}–{{ consulta.hora_fim|time:"H:i" }}
-            · Dentista: {% if consulta.dentista %}{{ consulta.dentista.nome_completo }}{% else %}não informado{% endif %}
-            · Status: {{ consulta.get_status_display }}
-        </p>
+    <section class="consulta-cabecalho" aria-labelledby="titulo-resumo-consulta">
+        <h2 id="titulo-resumo-consulta">Resumo da consulta</h2>
+        <dl class="consulta-detalhes">
+            <div><dt>Paciente</dt><dd>{{ consulta.paciente.nome_completo }}</dd></div>
+            <div><dt>Data e horário</dt><dd>{{ consulta.data|date:"d/m/Y" }} · {{ consulta.hora_inicio|time:"H:i" }}–{{ consulta.hora_fim|time:"H:i" }}</dd></div>
+            <div><dt>Dentista</dt><dd>{% if consulta.dentista %}{{ consulta.dentista.nome_completo }}{% else %}Não informado{% endif %}</dd></div>
+            <div><dt>Situação</dt><dd>{{ consulta.get_status_display }}</dd></div>
+        </dl>
+    </section>
 
+    <section class="contexto-consulta" aria-labelledby="titulo-atendimento">
+        <h2 id="titulo-atendimento" class="secao-pagina">Atendimento</h2>
+        {% if pode_alterar_status %}
         <form method="post" action="{% url 'core:alterar_status_consulta' consulta.pk %}" class="form-cartao">
             {% csrf_token %}
             <div class="campo">
-                <label for="{{ status_form.status.id_for_label }}">status</label>
+                <label for="{{ status_form.status.id_for_label }}">atualizar situação da consulta</label>
                 {{ status_form.status }}
             </div>
             <button type="submit" class="botao">Atualizar status</button>
         </form>
+        {% endif %}
+    </section>
 
-        <h2 class="secao-pagina">Evolucao por voz</h2>
+        {% if pode_clinico %}
+    <section class="contexto-consulta" aria-labelledby="titulo-prontuario-documentos">
+        <h2 id="titulo-prontuario-documentos" class="secao-pagina">Prontuário e documentos</h2>
+        <div class="acoes"><a class="botao secundario" href="{% url 'core:listar_prescricoes' consulta.paciente_id %}">Prescrições do paciente</a></div>
+        <div class="acoes"><a class="botao secundario" href="{% url 'core:exames:lista' consulta.paciente_id %}">Imagens e exames do paciente</a></div>
+        <h3 class="subsecao-consulta">Evolução por voz</h3>
         <div class="form-cartao">
             <div class="acoes">
                 <button type="button" id="btn-gravar" class="botao"
@@ -40,7 +52,7 @@
             <p id="gravador-status"></p>
             <div id="gravador-resultado" hidden>
                 <div class="campo">
-                    <label for="gravador-texto">transcricao</label>
+                    <label for="gravador-texto">transcrição</label>
                     <textarea id="gravador-texto" name="gravador-texto" rows="8"></textarea>
                 </div>
                 <form method="post" action="{% url 'ia_seguranca:salvar_evolucao' consulta.pk %}" id="form-salvar-evolucao">
@@ -48,17 +60,26 @@
                   <input type="hidden" name="texto" id="campo-texto-final">
                   <input type="hidden" name="registro_id" id="campo-registro-id">
                   <p>
-                    <label for="campo-procedimento">Procedimento / etapa (obrigatorio):</label>
+                    <label for="campo-procedimento">Procedimento / etapa (obrigatório):</label>
                     <input type="text" name="procedimento_etapa" id="campo-procedimento" required>
                   </p>
-                  <button type="submit" class="botao">Salvar como evolucao clinica</button>
+                  <p>
+                    <label for="campo-nome-profissional">Profissional responsável:</label>
+                    <input type="text" name="nome_profissional" id="campo-nome-profissional" required>
+                  </p>
+                  <p>
+                    <label for="campo-cro">CRO:</label>
+                    <input type="text" name="cro" id="campo-cro" required>
+                  </p>
+                  {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_base64" rotulo="Assinatura do cirurgião-dentista" dica="Assine para gravar a evolução clínica." %}
+                  <button type="submit" class="botao">Salvar como evolução clínica assinada</button>
                 </form>
             </div>
         </div>
 
-        <h2 class="secao-pagina">Autorização de itens com custo</h2>
+        <h3 class="subsecao-consulta">Autorizações de itens com custo</h3>
         <div class="acoes">
-            {% if pode_financeiro %}
+            {% if pode_clinico %}
             <form method="post" action="{% url 'core:nova_ficha_autorizacao_consulta' consulta.pk %}" class="form-inline">
                 {% csrf_token %}
                 <button type="submit" class="botao">Nova autorização</button>
@@ -78,9 +99,9 @@
             <tr>
                 <td>{{ ficha.criado_em|date:"d/m/Y H:i" }}</td>
                 <td>{{ ficha.get_status_display }}</td>
-                <td>{% if pode_financeiro %}R$ {{ ficha.valor_total }}{% else %}—{% endif %}</td>
+                <td>{% if pode_visualizar_valores %}R$ {{ ficha.valor_total }}{% else %}—{% endif %}</td>
                 <td>
-                    {% if ficha.status == 'rascunho' and pode_financeiro %}
+                    {% if ficha.status == 'rascunho' and pode_clinico %}
                     <a href="{% url 'core:editar_ficha_autorizacao' consulta.paciente_id ficha.pk %}" class="botao">Preencher</a>
                     {% else %}
                     <a href="{% url 'core:ver_ficha_autorizacao' consulta.paciente_id ficha.pk %}" class="botao">Ver</a>
@@ -94,10 +115,14 @@
             {% endfor %}
         </table>
         </div>
+    </section>
+        {% endif %}
 
 
         {% if pode_complementar and complementar_form %}
-        <h2 class="secao-pagina">Completar dentista</h2>
+    <section class="contexto-consulta" aria-labelledby="titulo-administracao-consulta">
+        <h2 id="titulo-administracao-consulta" class="secao-pagina">Administração da consulta</h2>
+        <h3 class="subsecao-consulta">Completar dentista</h3>
         <form method="post" action="{% url 'core:complementar_dentista' consulta.pk %}" class="form-cartao">
             {% csrf_token %}
             <p class="resumo">Não altera o valor histórico congelado.</p>
@@ -110,9 +135,12 @@
             </div>
             <button type="submit" class="botao">Salvar dentista</button>
         </form>
+    </section>
         {% endif %}
 
-        {% if pode_financeiro %}
+        {% if pode_visualizar_valores %}
+    <section class="contexto-consulta" aria-labelledby="titulo-operacao-financeira">
+        <h2 id="titulo-operacao-financeira" class="secao-pagina">{% if pode_financeiro %}Financeiro da consulta{% else %}Operação da própria consulta{% endif %}</h2>
             {% if consulta.eh_legado %}
             <div class="bloco-historico">
                 <strong>Valor histórico congelado:</strong> R$ {{ consulta.valor_historico|default:"0,00" }}
@@ -120,7 +148,7 @@
             </div>
             {% endif %}
 
-            <h2 class="secao-pagina">Lançamentos</h2>
+            <h3 class="subsecao-consulta">Lançamentos</h3>
             <div class="tabela-wrap">
             <table>
                 <tr>
@@ -226,7 +254,7 @@
             {% endif %}
 
             {% if auditorias %}
-            <h2 class="secao-pagina">Auditoria</h2>
+            <h3 class="subsecao-consulta">Auditoria</h3>
             <div class="tabela-wrap">
             <table>
                 <tr>
@@ -244,11 +272,15 @@
             </table>
             </div>
             {% endif %}
+    </section>
         {% endif %}
 {% endblock %}
 
 {% block extra_js %}
+{% if pode_clinico %}
 <script src="{% static 'core/js/gravador_voz.js' %}"></script>
+<script src="{% static 'core/js/assinatura.js' %}"></script>
+{% endif %}
 {% if pode_lancar and lancamento_form %}
 <script>
 (function () {

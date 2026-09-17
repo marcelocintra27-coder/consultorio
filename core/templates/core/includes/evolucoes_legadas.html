@@ -1,0 +1,9 @@
+{% if legados %}
+<section class="form-cartao" aria-label="Histórico legado">
+    <h2>Registros legados preservados</h2>
+    <p class="resumo">Conteúdo histórico original. Estes registros não são apresentados como assinados.</p>
+    {% for legado in legados %}
+    <article><p><strong>{{ legado.data|date:"d/m/Y" }}</strong></p><p>{{ legado.descricao|linebreaksbr }}</p></article>
+    {% endfor %}
+</section>
+{% endif %}

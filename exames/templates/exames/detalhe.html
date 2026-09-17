@@ -1,0 +1,35 @@
+{% extends 'core/base.html' %}
+{% block title %}Imagem ou exame{% endblock %}
+{% block titulo %}{{ exame.titulo }}{% endblock %}
+{% block container_class %}estreito{% endblock %}
+{% block content %}
+<p>{{ paciente.nome_completo }} · {{ exame.get_categoria_display }}</p>
+<div class="acoes"><a class="botao secundario" href="{% url 'core:exames:lista' paciente.pk %}">Voltar aos exames</a></div>
+<section class="form-cartao">
+<h2>{{ exame.estado }}</h2>
+<p>Data do exame: {{ exame.data_exame|date:'d/m/Y'|default:'Não informada' }}</p>
+<p>Incluído por {{ exame.criado_por.get_username }} em {{ exame.criado_em|date:'d/m/Y H:i' }}.</p>
+<p>{{ exame.tamanho|filesizeformat }} · {{ exame.tipo }}</p>
+{% if exame.consulta %}<p>Consulta: {{ exame.consulta.data|date:'d/m/Y' }}</p>{% endif %}
+<p style="overflow-wrap:anywhere">{{ exame.observacao|linebreaksbr }}</p>
+{% if exame.anterior_id %}<p>Correção de <a href="{% url 'core:exames:detalhe' paciente.pk exame.anterior_id %}">registro anterior</a>: {{ exame.justificativa }}</p>{% endif %}
+{% if exame.substituto %}<p><a href="{% url 'core:exames:detalhe' paciente.pk exame.substituto.pk %}">Consultar registro substituto</a></p>{% endif %}
+{% if exame.seguranca == 'liberado' %}<a class="botao" href="{% url 'core:exames:download' paciente.pk exame.pk %}">Baixar original{% if exame.invalidado %} invalidado{% endif %}</a>{% else %}<p role="status">Download bloqueado até a confirmação de segurança e integridade.</p>{% endif %}
+<p>A integridade dos bytes é conferida antes de cada download. A inclusão não equivale a uma assinatura clínica.</p>
+</section>
+{% if pode_corrigir %}
+{% if exame.seguranca == 'quarentena' %}
+<form method="post" action="{% url 'core:exames:inspecionar' paciente.pk exame.pk %}" class="form-cartao">{% csrf_token %}
+<p>A inspeção será repetida; não há liberação manual.</p><button class="botao" type="submit">Repetir inspeção</button></form>
+{% endif %}
+{% if not exame.invalidado %}
+<div class="acoes"><a class="botao secundario" href="{% url 'core:exames:corrigir' paciente.pk exame.pk %}">Registrar correção com novo arquivo</a></div>
+<form method="post" action="{% url 'core:exames:invalidar' paciente.pk exame.pk %}" class="form-cartao">{% csrf_token %}
+<h2>Invalidar registro</h2><p>O arquivo e o histórico serão preservados. Informe o motivo e confirme.</p>
+<div class="campo"><label for="{{ form.justificativa.id_for_label }}">Justificativa (obrigatória)</label>{{ form.justificativa }}</div>
+<button class="botao secundario" type="submit">Confirmar invalidação</button></form>
+{% endif %}{% endif %}
+<section class="form-cartao"><h2>Histórico</h2>
+{% for evento in exame.eventos.all %}<p style="overflow-wrap:anywhere">{{ evento.criado_em|date:'d/m/Y H:i' }} · {{ evento.usuario.get_username }} · {{ evento.descricao }}{% if evento.justificativa %}<br>{{ evento.justificativa }}{% endif %}</p>{% endfor %}
+</section>
+{% endblock %}

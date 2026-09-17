@@ -1,0 +1,17 @@
+{% extends "core/base.html" %}
+{% block title %}Prescrições — {{ paciente.nome_completo }}{% endblock %}
+{% block titulo %}Prescrições{% endblock %}
+{% block content %}
+<div class="acoes">
+    <a class="botao secundario" href="{% url 'core:editar_paciente' paciente.pk %}">Voltar ao paciente</a>
+    {% if pode_emitir %}<a class="botao" href="{% url 'core:nova_prescricao' paciente.pk %}">Nova prescrição</a>{% endif %}
+</div>
+<p class="resumo">{{ paciente.nome_completo }} — histórico de prescrições e rascunhos.</p>
+<div class="tabela-wrap"><table>
+<thead><tr><th>Data</th><th>Profissional</th><th>Situação</th><th>Ação</th></tr></thead>
+<tbody>{% for ficha in prescricoes %}
+<tr><td>{{ ficha.criado_em|date:"d/m/Y H:i" }}</td><td>{{ ficha.nome_profissional }}</td><td>{{ ficha.get_status_display }}</td>
+<td><a class="botao secundario" href="{% url 'core:ver_prescricao' paciente.pk ficha.pk %}">Ver prescrição</a></td></tr>
+{% empty %}<tr><td colspan="4">Nenhuma prescrição registrada.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

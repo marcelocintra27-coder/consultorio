@@ -1,8 +1,10 @@
 ﻿from datetime import date
+from decimal import Decimal
 from itertools import groupby
 
 from django import forms
 from django.utils import timezone
+from django.forms.formsets import formset_factory
 from django.forms.models import ModelChoiceField, ModelChoiceIterator, inlineformset_factory
 
 from .anamnese import (
@@ -22,6 +24,18 @@ from .models import (
     ProcedimentoUniodonto,
     LancamentoAtendimento,
     RepasseUniodonto,
+    ContaReceber,
+    RecebimentoPaciente,
+    Fornecedor,
+    CategoriaContaPagar,
+    ContaPagar,
+    CaixaDiario,
+    MovimentoCaixa,
+    FormaPagamentoConfiguravel,
+    BaixaContaPagar,
+    ImportacaoExtrato,
+    LancamentoExtrato,
+    AjusteConciliacao,
     AssinaturaEletronica,
     FichaCadastroAnamnese,
     DigitalizacaoFicha,
@@ -146,7 +160,347 @@ class ConsultaForm(forms.ModelForm):
         }
 
 
+class ContaReceberForm(forms.ModelForm):
+    class Meta:
+        model = ContaReceber
+        fields = ['paciente', 'consulta', 'descricao', 'data_emissao']
+        widgets = {
+            'data_emissao': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['paciente'].queryset = Paciente.objects.filter(ativo=True).order_by(
+            'nome_completo'
+        )
+        self.fields['consulta'].queryset = Consulta.objects.select_related(
+            'paciente'
+        ).order_by('-data', '-hora_inicio')
+
+    def clean(self):
+        dados = super().clean()
+        paciente = dados.get('paciente')
+        consulta = dados.get('consulta')
+        if paciente and consulta and consulta.paciente_id != paciente.pk:
+            self.add_error('consulta', 'A consulta deve pertencer ao paciente informado.')
+        return dados
+
+
+class FornecedorForm(forms.ModelForm):
+    class Meta:
+        model = Fornecedor
+        fields = ['nome', 'documento', 'contato', 'ativo']
+
+
+class CategoriaContaPagarForm(forms.ModelForm):
+    class Meta:
+        model = CategoriaContaPagar
+        fields = ['nome', 'ativa']
+
+
+class ContaPagarForm(forms.ModelForm):
+    competencia = forms.DateField(
+        label='competência',
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    vencimento = forms.DateField(
+        label='vencimento',
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+
+    class Meta:
+        model = ContaPagar
+        fields = [
+            'fornecedor',
+            'categoria',
+            'descricao',
+            'competencia',
+            'vencimento',
+            'valor_original',
+            'recorrencia',
+            'observacoes',
+        ]
+        widgets = {
+            'valor_original': forms.NumberInput(attrs={'step': '0.01'}),
+            'observacoes': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['fornecedor'].queryset = Fornecedor.objects.filter(
+            ativo=True
+        ).order_by('nome')
+        self.fields['categoria'].queryset = CategoriaContaPagar.objects.filter(
+            ativa=True
+        ).order_by('nome')
+
+
+class BaixaContaPagarForm(forms.Form):
+    valor = forms.DecimalField(
+        label='valor da baixa',
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+        widget=forms.NumberInput(attrs={'step': '0.01'}),
+    )
+    chave_operacao = forms.UUIDField(widget=forms.HiddenInput)
+    observacoes = forms.CharField(
+        label='observações',
+        required=False,
+        max_length=1000,
+        widget=forms.Textarea(attrs={'rows': 3}),
+    )
+
+
+class AbrirCaixaForm(forms.ModelForm):
+    class Meta:
+        model = CaixaDiario
+        fields = ['data', 'saldo_inicial']
+        widgets = {'data': forms.DateInput(attrs={'type': 'date'}), 'saldo_inicial': forms.NumberInput(attrs={'step': '0.01'})}
+
+
+class MovimentoManualCaixaForm(forms.Form):
+    tipo = forms.ChoiceField(choices=[
+        (MovimentoCaixa.Tipo.AJUSTE_ENTRADA, 'ajuste de entrada'),
+        (MovimentoCaixa.Tipo.AJUSTE_SAIDA, 'ajuste de saída'),
+        (MovimentoCaixa.Tipo.COMPENSACAO_ENTRADA, 'compensação de entrada'),
+        (MovimentoCaixa.Tipo.COMPENSACAO_SAIDA, 'compensação de saída'),
+    ])
+    valor = forms.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0.01'))
+    motivo = forms.CharField(min_length=3, max_length=1000, widget=forms.Textarea(attrs={'rows': 3}))
+
+
+class FecharCaixaForm(forms.Form):
+    saldo_contado = forms.DecimalField(max_digits=12, decimal_places=2)
+    justificativa_diferenca = forms.CharField(required=False, max_length=1000, widget=forms.Textarea(attrs={'rows': 3}))
+
+
+class ImportacaoExtratoManualForm(forms.ModelForm):
+    class Meta:
+        model = ImportacaoExtrato
+        fields = ['instituicao', 'conta_referencia', 'periodo_inicial', 'periodo_final']
+        widgets = {
+            'periodo_inicial': forms.DateInput(attrs={'type': 'date'}),
+            'periodo_final': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+
+class LancamentoExtratoManualForm(forms.ModelForm):
+    class Meta:
+        model = LancamentoExtrato
+        fields = ['referencia_externa', 'data', 'descricao', 'natureza', 'valor', 'saldo_informado']
+        widgets = {
+            'data': forms.DateInput(attrs={'type': 'date'}),
+            'valor': forms.NumberInput(attrs={'step': '0.01', 'min': '0.01'}),
+            'saldo_informado': forms.NumberInput(attrs={'step': '0.01'}),
+        }
+
+
+class ItemConciliacaoForm(forms.Form):
+    recebimento = forms.ModelChoiceField(
+        label='recebimento de paciente', queryset=RecebimentoPaciente.objects.none(), required=False
+    )
+    baixa = forms.ModelChoiceField(
+        label='baixa de conta a pagar', queryset=BaixaContaPagar.objects.none(), required=False
+    )
+    movimento_caixa = forms.ModelChoiceField(
+        label='movimento manual de caixa', queryset=MovimentoCaixa.objects.none(), required=False
+    )
+    repasse_uniodonto = forms.ModelChoiceField(
+        label='repasse Uniodonto', queryset=RepasseUniodonto.objects.none(), required=False
+    )
+    valor_conciliado = forms.DecimalField(
+        label='valor a conciliar', max_digits=12, decimal_places=2,
+        min_value=Decimal('0.01'),
+    )
+
+    def __init__(self, *args, natureza=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if natureza == LancamentoExtrato.Natureza.ENTRADA:
+            self.fields['recebimento'].queryset = RecebimentoPaciente.objects.filter(
+                tipo=RecebimentoPaciente.Tipo.RECEBIMENTO
+            ).order_by('-recebido_em')
+            self.fields['repasse_uniodonto'].queryset = RepasseUniodonto.objects.all()
+        else:
+            self.fields['recebimento'].queryset = RecebimentoPaciente.objects.filter(
+                tipo=RecebimentoPaciente.Tipo.ESTORNO
+            ).order_by('-recebido_em')
+            self.fields['baixa'].queryset = BaixaContaPagar.objects.all().order_by('-baixado_em')
+            self.fields['movimento_caixa'].queryset = MovimentoCaixa.objects.filter(
+                recebido__isnull=True, baixa__isnull=True
+            ).order_by('-criado_em')
+
+    def clean(self):
+        dados = super().clean()
+        origens = [
+            dados.get('recebimento'), dados.get('baixa'),
+            dados.get('movimento_caixa'), dados.get('repasse_uniodonto'),
+        ]
+        selecionadas = [origem for origem in origens if origem is not None]
+        if len(selecionadas) != 1:
+            raise forms.ValidationError('Selecione exatamente uma origem financeira.')
+        origem = selecionadas[0]
+        valor_origem = (
+            origem.liquido_recebido if isinstance(origem, RepasseUniodonto)
+            else origem.valor
+        )
+        if dados.get('valor_conciliado') and dados['valor_conciliado'] > valor_origem:
+            self.add_error('valor_conciliado', 'Não pode exceder o valor da origem.')
+        dados['origem'] = origem
+        dados['valor_origem'] = valor_origem
+        return dados
+
+
+class AjusteConciliacaoForm(forms.ModelForm):
+    class Meta:
+        model = AjusteConciliacao
+        fields = ['tipo', 'valor', 'motivo']
+        widgets = {
+            'valor': forms.NumberInput(attrs={'step': '0.01', 'min': '0.01'}),
+            'motivo': forms.Textarea(attrs={'rows': 3}),
+        }
+
+
+class MotivoCancelamentoForm(forms.Form):
+    motivo = forms.CharField(label='motivo do cancelamento', widget=forms.Textarea)
+
+
+class ParcelaContaReceberForm(forms.Form):
+    vencimento = forms.DateField(
+        label='vencimento',
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    valor_original = forms.DecimalField(
+        label='valor da parcela',
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+        widget=forms.NumberInput(attrs={'step': '0.01', 'min': '0.01'}),
+    )
+
+
+ContaReceberParcelaFormSet = formset_factory(
+    ParcelaContaReceberForm,
+    extra=1,
+    min_num=1,
+    validate_min=True,
+)
+
+
+class RecebimentoPacienteForm(forms.Form):
+    valor = forms.DecimalField(
+        label='valor recebido',
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+        widget=forms.NumberInput(attrs={'step': '0.01', 'min': '0.01'}),
+    )
+    desconto = forms.DecimalField(
+        label='desconto aplicado',
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal('0.00'),
+        initial=Decimal('0.00'),
+        required=False,
+        widget=forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+    )
+    forma_pagamento = forms.ChoiceField(
+        label='forma de pagamento legada',
+        choices=Consulta.FormaPagamento.choices,
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+    forma_pagamento_configurada = forms.ModelChoiceField(
+        label='forma de pagamento',
+        queryset=FormaPagamentoConfiguravel.objects.none(),
+        required=False,
+    )
+    observacoes = forms.CharField(
+        label='observações',
+        widget=forms.Textarea(attrs={'rows': 3}),
+        required=False,
+        max_length=1000,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['forma_pagamento_configurada'].queryset = (
+            FormaPagamentoConfiguravel.objects.filter(ativo=True).order_by('nome')
+        )
+
+    def clean(self):
+        dados = super().clean()
+        if not dados.get('forma_pagamento_configurada') and not dados.get('forma_pagamento'):
+            self.add_error('forma_pagamento_configurada', 'Informe a forma de pagamento.')
+        return dados
+
+
+class FormaPagamentoConfiguravelForm(forms.ModelForm):
+    class Meta:
+        model = FormaPagamentoConfiguravel
+        fields = [
+            'nome', 'codigo', 'ativo', 'tipo_taxa', 'valor_taxa',
+            'prazo_recebimento_dias', 'conta_destino',
+        ]
+        widgets = {
+            'valor_taxa': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'prazo_recebimento_dias': forms.NumberInput(attrs={'min': '0'}),
+        }
+
+
+class RelatorioFinanceiroFiltroForm(forms.Form):
+    """Filtro de período para consultas financeiras somente de leitura."""
+
+    data_inicial = forms.DateField(
+        label='data inicial',
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    data_final = forms.DateField(
+        label='data final',
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+
+    def clean(self):
+        dados = super().clean()
+        data_inicial = dados.get('data_inicial')
+        data_final = dados.get('data_final')
+        if data_inicial and data_final and data_final < data_inicial:
+            self.add_error(
+                'data_final',
+                'A data final não pode ser anterior à data inicial.',
+            )
+        return dados
+
+
+class EstornoRecebimentoForm(forms.Form):
+    valor = forms.DecimalField(
+        label='valor do estorno',
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+        widget=forms.NumberInput(attrs={'step': '0.01', 'min': '0.01'}),
+    )
+    observacoes = forms.CharField(
+        label='motivo do estorno',
+        widget=forms.Textarea(attrs={'rows': 3}),
+        required=True,
+        max_length=1000,
+    )
+
+
 class StatusConsultaForm(forms.ModelForm):
+    def __init__(self, *args, status_permitidos=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if status_permitidos is not None:
+            choices = [
+                choice
+                for choice in Consulta.Status.choices
+                if choice[0] in status_permitidos
+            ]
+            self.fields['status'].choices = [
+                ('', 'Selecione uma atualização')
+            ] + choices
+
     class Meta:
         model = Consulta
         fields = ['status']

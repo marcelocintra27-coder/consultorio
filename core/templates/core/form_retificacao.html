@@ -1,0 +1,23 @@
+{% extends "core/base.html" %}
+{% load static %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block content %}
+<div class="acoes"><a class="botao secundario" href="{{ url_original }}">Voltar ao original</a></div>
+<p>{{ paciente.nome_completo }}</p>
+<p class="resumo">Anotação profissional complementar. O original, seus consentimentos, procedimentos e valores permanecem preservados. Após assinar, esta retificação não poderá ser alterada ou excluída.</p>
+{% if not integridade.integra %}
+<div class="form-cartao" role="alert"><strong>Integridade do original não confirmada</strong>
+<ul>{% for ocorrencia in integridade.ocorrencias %}<li>{{ ocorrencia }}</li>{% endfor %}</ul>
+<p>Não é possível assinar uma retificação deste documento enquanto a integridade não for confirmada.</p></div>
+{% else %}
+<form method="post" class="form-cartao">
+{% csrf_token %}
+{{ form.non_field_errors }}
+{% for field in form.visible_fields %}{% include "core/includes/campo_form.html" with field=field %}{% endfor %}
+{% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_base64" rotulo="Assinatura do profissional" erro=form.assinatura_base64.errors valor=form.assinatura_base64.value %}
+<button class="botao" type="submit">Assinar e registrar retificação</button>
+</form>
+{% endif %}
+{% endblock %}
+{% block extra_js %}<script src="{% static 'core/js/assinatura.js' %}"></script>{% endblock %}

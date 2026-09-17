@@ -84,11 +84,13 @@ from .views import (
 )
 
 app_name = 'core'
+from django.urls import include
 
 from .retificacoes import retificar_documento
 from .prescricoes import listar_prescricoes, editar_prescricao, ver_prescricao, imprimir_prescricao
 
 urlpatterns = [
+    path('pacientes/<int:paciente_pk>/exames/', include('exames.urls')),
     path('pacientes/<int:pk>/prescricoes/', listar_prescricoes, name='listar_prescricoes'),
     path('pacientes/<int:pk>/prescricoes/nova/', editar_prescricao, name='nova_prescricao'),
     path('pacientes/<int:pk>/prescricoes/<int:ficha_pk>/', ver_prescricao, name='ver_prescricao'),

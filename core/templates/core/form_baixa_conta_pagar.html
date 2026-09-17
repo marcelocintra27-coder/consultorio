@@ -1,0 +1,5 @@
+{% extends "core/base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}Financeiro administrativo{% endblock %}
+{% block container_class %}estreito{% endblock %}
+{% block content %}<section class="secao" aria-labelledby="titulo-baixa"><h2 id="titulo-baixa">{{ titulo }}</h2><p class="subtitulo">{{ conta.fornecedor.nome }} · saldo atual: R$ {{ conta.saldo }}.</p><form method="post" class="form-cartao">{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}{% if field.is_hidden %}{{ field }}{% else %}<div class="campo"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="erro">{{ field.errors }}</div>{% endif %}</div>{% endif %}{% endfor %}<div class="acoes"><a href="{% url 'core:detalhe_conta_pagar' conta.pk %}" class="botao secundario">Cancelar</a><button type="submit" class="botao">Registrar baixa</button></div></form></section>{% endblock %}

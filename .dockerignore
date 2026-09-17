@@ -1,0 +1,24 @@
+# Segredos e configurações locais nunca fazem parte do contexto de build.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Dados e artefatos locais não devem ser distribuídos na imagem.
+.git/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+db.sqlite3
+media/
+private_exames/
+tmp/exames-auditoria/
+staticfiles/
+*.mp3
+*.wav
+.vscode/
+.idea/

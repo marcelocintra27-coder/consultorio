@@ -1,0 +1,5 @@
+{% extends "core/base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}Financeiro administrativo{% endblock %}
+{% block container_class %}estreito{% endblock %}
+{% block content %}<section class="secao" aria-labelledby="titulo-form-conta-pagar"><h2 id="titulo-form-conta-pagar">{{ titulo }}</h2><p class="subtitulo">A recorrência é informativa neste estágio e não cria lançamentos futuros automaticamente.</p><form method="post" class="form-cartao">{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}<div class="campo"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="erro">{{ field.errors }}</div>{% endif %}</div>{% endfor %}<div class="acoes"><a href="{% url 'core:listar_contas_pagar' %}" class="botao secundario">Cancelar</a><button type="submit" class="botao">Criar para aprovação</button></div></form></section>{% endblock %}

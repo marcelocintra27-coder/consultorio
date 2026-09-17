@@ -48,6 +48,14 @@ class RegistroAuditoriaIA(models.Model):
     data_hora = models.DateTimeField("Data e hora", auto_now_add=True)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="registros_auditoria_ia", verbose_name="Usuário")
     paciente = models.ForeignKey("core.Paciente", on_delete=models.PROTECT, null=True, blank=True, related_name="registros_auditoria_ia", verbose_name="Paciente")
+    consulta = models.ForeignKey(
+        "core.Consulta",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="registros_auditoria_ia",
+        verbose_name="Consulta de origem",
+    )
     recurso = models.CharField("Recurso", max_length=30, choices=RECURSO_CHOICES)
     modelo_utilizado = models.CharField("Modelo utilizado", max_length=100, blank=True)
     entrada_resumo = models.TextField("Resumo da entrada", blank=True)

@@ -159,6 +159,11 @@ class Despesa(models.Model):
         on_delete=models.PROTECT,
         related_name='despesas_pagas',
     )
+    conta_pagar = models.OneToOneField(
+        'core.ContaPagar', verbose_name='conta a pagar vinculada',
+        on_delete=models.PROTECT, null=True, blank=True,
+        related_name='despesa_rateio',
+    )
     observacoes = models.TextField('observações', blank=True)
     cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
 
@@ -173,6 +178,10 @@ class Despesa(models.Model):
     def clean(self):
         if self.competencia:
             self.competencia = primeiro_dia_mes(self.competencia)
+        if self.conta_pagar_id and self.valor != self.conta_pagar.valor_original:
+            raise ValidationError(
+                {'conta_pagar': 'O valor da conta a pagar deve ser igual ao valor da despesa.'}
+            )
 
     def save(self, *args, **kwargs):
         if self.competencia:
@@ -190,6 +199,23 @@ class Despesa(models.Model):
         return arredondar_dinheiro(self.valor / ativas)
 
     valor_cota.short_description = 'cota'
+
+    @property
+    def data_efetiva_pagamento(self):
+        if not self.conta_pagar_id:
+            return None
+        baixa = self.conta_pagar.baixas.order_by('-baixado_em').first()
+        return baixa.baixado_em if baixa else None
+
+
+class AuditoriaDespesa(models.Model):
+    despesa = models.ForeignKey(Despesa, on_delete=models.PROTECT, related_name='auditorias')
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    descricao = models.CharField(max_length=300)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em']
 
 
 class DividaAvulsa(models.Model):

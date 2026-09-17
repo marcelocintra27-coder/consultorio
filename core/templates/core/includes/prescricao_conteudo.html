@@ -1,0 +1,27 @@
+<article class="prescricao-documento">
+<h2>Prescrição {{ ficha.pk }}</h2>
+<p><strong>Paciente:</strong> {{ ficha.nome_paciente }}</p>
+<p>{% if ficha.cpf_paciente %}<strong>CPF:</strong> {{ ficha.cpf_paciente }}{% endif %}
+{% if ficha.data_nascimento_paciente %} · <strong>Nascimento:</strong> {{ ficha.data_nascimento_paciente|date:"d/m/Y" }}{% endif %}</p>
+<p><strong>Profissional:</strong> {{ ficha.nome_profissional }} · <strong>CRO/UF:</strong> {{ ficha.cro|default:"não informado" }}</p>
+{% if ficha.emitida_em %}<p><strong>Emissão:</strong> {{ ficha.emitida_em|date:"d/m/Y H:i" }}</p>{% endif %}
+{% for item in itens %}
+<section class="prescricao-medicamento">
+    <h3>{{ forloop.counter }}. {{ item.medicamento }}</h3>
+    {% if item.concentracao_apresentacao %}<p><strong>Concentração / apresentação:</strong> {{ item.concentracao_apresentacao }}</p>{% endif %}
+    {% if item.quantidade %}<p><strong>Quantidade:</strong> {{ item.quantidade }}</p>{% endif %}
+    <p><strong>Posologia:</strong> {{ item.posologia|linebreaksbr }}</p>
+    {% if item.via %}<p><strong>Via:</strong> {{ item.via }}</p>{% endif %}
+    {% if item.duracao %}<p><strong>Duração:</strong> {{ item.duracao }}</p>{% endif %}
+    {% if item.orientacoes %}<p><strong>Orientações:</strong> {{ item.orientacoes|linebreaksbr }}</p>{% endif %}
+</section>
+{% endfor %}
+{% if ficha.texto_livre %}<h3>Texto da prescrição</h3><p>{{ ficha.texto_livre|linebreaksbr }}</p>{% endif %}
+{% if ficha.orientacoes %}<h3>Orientações gerais</h3><p>{{ ficha.orientacoes|linebreaksbr }}</p>{% endif %}
+{% if assinatura and integridade.integra %}
+<div class="prescricao-assinatura">
+    <img class="assinatura-miniatura" src="{% url 'core:ver_imagem_assinatura' assinatura.pk %}" alt="Assinatura de {{ ficha.nome_profissional }}">
+    <p>Assinatura manuscrita registrada em {{ assinatura.assinado_em|date:"d/m/Y H:i" }}.</p>
+</div>
+{% endif %}
+</article>

@@ -1,0 +1,8 @@
+{% extends "core/base.html" %}
+{% block titulo %}Integridade não confirmada{% endblock %}
+{% block content %}
+<div class="form-cartao" role="alert">
+<p>A assinatura não pode ser apresentada como íntegra. O registro original foi preservado.</p>
+<ul>{% for ocorrencia in ocorrencias %}<li>{{ ocorrencia }}</li>{% endfor %}</ul>
+</div>
+{% endblock %}

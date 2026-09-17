@@ -1,0 +1,26 @@
+{% extends "core/base.html" %}
+
+{% block title %}Recibo {{ recebimento.numero_recibo }}{% endblock %}
+{% block titulo %}Recibo de recebimento{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+<section class="secao" aria-labelledby="titulo-recibo">
+    <h2 id="titulo-recibo">Recibo {{ recebimento.numero_recibo }}</h2>
+    <p class="subtitulo">Recebimento registrado e auditado no sistema.</p>
+    <dl class="consulta-detalhes">
+        <div><dt>Paciente</dt><dd>{{ conta.paciente.nome_completo }}</dd></div>
+        <div><dt>Conta</dt><dd>{{ conta.descricao }}</dd></div>
+        <div><dt>Parcela</dt><dd>{{ recebimento.parcela.numero }}</dd></div>
+        <div><dt>Valor recebido</dt><dd>R$ {{ recebimento.valor }}</dd></div>
+        <div><dt>Desconto</dt><dd>R$ {{ recebimento.desconto }}</dd></div>
+        <div><dt>Forma</dt><dd>{% if recebimento.forma_pagamento_configurada %}{{ recebimento.forma_pagamento_configurada.nome }}{% else %}{{ recebimento.get_forma_pagamento_display }}{% endif %}</dd></div>
+        <div><dt>Data e hora</dt><dd>{{ recebimento.recebido_em|date:"d/m/Y H:i" }}</dd></div>
+        <div><dt>Operador</dt><dd>{{ recebimento.operador.get_full_name|default:recebimento.operador.username }}</dd></div>
+    </dl>
+    <div class="acoes">
+        <a href="{% url 'core:detalhe_conta_receber' conta.pk %}" class="botao secundario">Voltar para conta</a>
+        <button type="button" class="botao" onclick="window.print()">Imprimir recibo</button>
+    </div>
+</section>
+{% endblock %}

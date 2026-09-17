@@ -53,15 +53,70 @@ if not SECRET_KEY:
         'arquivo .env na raiz do projeto, fora do Git).'
     )
 
-# SECURITY WARNING: don't run with debug turned on in production!
-# Local: DEBUG ligado para o runserver servir static dos finders.
-# Render define RENDER=true e o padrão fica desligado (produção).
-DEBUG = os.environ.get(
-    'DEBUG',
-    'False' if os.environ.get('RENDER') else 'True',
-).lower() in ('true', '1', 'yes')
+# O Render sempre roda em produção; uma variável DEBUG acidental não pode
+# reativar páginas de erro detalhadas nesse ambiente.
+EM_PRODUCAO = bool(os.environ.get('RENDER')) or os.environ.get(
+    'DJANGO_ENV', ''
+).lower() == 'production'
+if EM_PRODUCAO and (
+    len(SECRET_KEY) < 50 or SECRET_KEY.startswith('django-insecure-')
+):
+    raise ImproperlyConfigured(
+        'SECRET_KEY de produção deve ser aleatória, exclusiva e ter ao menos '
+        '50 caracteres. Configure-a somente no ambiente seguro do Render.'
+    )
+DEBUG = not EM_PRODUCAO and os.environ.get('DEBUG', 'True').lower() in (
+    'true', '1', 'yes'
+)
 
-ALLOWED_HOSTS = ['consultorio-a7um.onrender.com', '127.0.0.1', 'localhost']
+def _lista_de_ambiente(nome):
+    return [item.strip() for item in os.environ.get(nome, '').split(',') if item.strip()]
+
+
+def _inteiro_positivo_de_ambiente(nome, padrao):
+    try:
+        valor = int(os.environ.get(nome, str(padrao)))
+    except ValueError as exc:
+        raise ImproperlyConfigured(f'{nome} precisa ser um inteiro positivo.') from exc
+    if valor < 1:
+        raise ImproperlyConfigured(f'{nome} precisa ser maior que zero.')
+    return valor
+
+
+_hosts_configurados = _lista_de_ambiente('DJANGO_ALLOWED_HOSTS')
+_host_render = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '').strip()
+ALLOWED_HOSTS = list(dict.fromkeys([
+    'consultorio-a7um.onrender.com',
+    '127.0.0.1',
+    'localhost',
+    '192.168.1.103',
+    *_hosts_configurados,
+    *([_host_render] if _host_render else []),
+]))
+if EM_PRODUCAO and not _host_render and not _hosts_configurados:
+    raise ImproperlyConfigured(
+        'Defina RENDER_EXTERNAL_HOSTNAME ou DJANGO_ALLOWED_HOSTS em produção.'
+    )
+
+# Render termina TLS no proxy e encaminha X-Forwarded-Proto para a aplicação.
+# Estas opções só são forçadas em produção para manter o runserver local simples.
+_origens_configuradas = _lista_de_ambiente('CSRF_TRUSTED_ORIGINS')
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([
+    'https://consultorio-a7um.onrender.com',
+    *[f'https://{host}' for host in _hosts_configurados if host not in {'localhost', '127.0.0.1'}],
+    *([f'https://{_host_render}'] if _host_render else []),
+    *_origens_configuradas,
+]))
+if EM_PRODUCAO:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31_536_000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get(
+        'SECURE_HSTS_INCLUDE_SUBDOMAINS', 'false'
+    ).lower() in ('true', '1', 'yes')
+    SECURE_HSTS_PRELOAD = False
 
 
 # Application definition
@@ -74,6 +129,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core.apps.CoreConfig',
+    'exames.apps.ExamesConfig',
     'locacao.apps.LocacaoConfig',
     'ia_seguranca',
 ]
@@ -104,6 +160,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.admin_local_date',
                 'core.context_processors.permissoes_usuario',
+                'core.context_processors.navegacao_usuario',
             ],
         },
     },
@@ -115,12 +172,33 @@ WSGI_APPLICATION = 'consultorio.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if EM_PRODUCAO:
+    banco_url = os.environ.get('DATABASE_URL', '').strip()
+    if not banco_url:
+        raise ImproperlyConfigured(
+            'DATABASE_URL é obrigatória em produção. Use o PostgreSQL do Render.'
+        )
+    try:
+        import dj_database_url
+    except ImportError as exc:
+        raise ImproperlyConfigured(
+            'dj-database-url não está instalado para configurar PostgreSQL.'
+        ) from exc
+    DATABASES = {
+        'default': dj_database_url.parse(
+            banco_url,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -157,6 +235,32 @@ LOGIN_URL = 'entrar'
 LOGIN_REDIRECT_URL = 'core:inicio'
 LOGOUT_REDIRECT_URL = 'entrar'
 
+# Limites de disponibilidade para o processamento síncrono de áudio. Podem ser
+# reduzidos via Environment sem aceitar valores inválidos em produção.
+IA_AUDIO_MAX_BYTES = _inteiro_positivo_de_ambiente(
+    'IA_AUDIO_MAX_BYTES', 10 * 1024 * 1024
+)
+IA_AUDIO_MAX_DURATION_SECONDS = _inteiro_positivo_de_ambiente(
+    'IA_AUDIO_MAX_DURATION_SECONDS', 15 * 60
+)
+IA_FFMPEG_TIMEOUT_SECONDS = _inteiro_positivo_de_ambiente(
+    'IA_FFMPEG_TIMEOUT_SECONDS', 120
+)
+IA_AUDIO_CONTENT_TYPES = (
+    'audio/webm',
+    'audio/ogg',
+    'audio/wav',
+    'audio/x-wav',
+    'audio/mpeg',
+    'audio/mp4',
+    'audio/x-m4a',
+)
+FILE_UPLOAD_HANDLERS = [
+    'ia_seguranca.uploads.LimiteAudioTranscricaoUploadHandler',
+    'django.core.files.uploadhandler.MemoryFileUploadHandler',
+    'django.core.files.uploadhandler.TemporaryFileUploadHandler',
+]
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
@@ -165,7 +269,15 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+if EM_PRODUCAO:
+    _raiz_midia = os.environ.get('RENDER_DISK_PATH', '').strip()
+    if not _raiz_midia:
+        raise ImproperlyConfigured(
+            'RENDER_DISK_PATH é obrigatório para armazenar mídia em disco persistente.'
+        )
+    MEDIA_ROOT = Path(_raiz_midia) / 'media'
+else:
+    MEDIA_ROOT = BASE_DIR / 'media'
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
@@ -179,8 +291,35 @@ STORAGES = {
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}
+if EM_PRODUCAO:
+    _smtp_obrigatorio = ('SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'DEFAULT_FROM_EMAIL')
+    _smtp_ausente = [nome for nome in _smtp_obrigatorio if not os.environ.get(nome)]
+    if _smtp_ausente:
+        raise ImproperlyConfigured(
+            'Configuração SMTP ausente em produção: ' + ', '.join(_smtp_ausente)
+        )
+    _smtp_ssl = os.environ.get('SMTP_USE_SSL', 'false').lower() in ('true', '1', 'yes')
+    _smtp_tls = os.environ.get('SMTP_USE_TLS', 'true').lower() in ('true', '1', 'yes')
+    if _smtp_ssl and _smtp_tls:
+        raise ImproperlyConfigured('SMTP_USE_SSL e SMTP_USE_TLS não podem ser usados juntos.')
+    MAILERS = {
+        'default': {
+            'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+            'OPTIONS': {
+                'host': os.environ['SMTP_HOST'],
+                'port': int(os.environ.get('SMTP_PORT', '465' if _smtp_ssl else '587')),
+                'username': os.environ['SMTP_USERNAME'],
+                'password': os.environ['SMTP_PASSWORD'],
+                'use_tls': _smtp_tls,
+                'use_ssl': _smtp_ssl,
+                'timeout': 10,
+            },
+        },
+    }
+    DEFAULT_FROM_EMAIL = os.environ['DEFAULT_FROM_EMAIL']
+else:
+    MAILERS = {
+        'default': {
+            'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        },
+    }

@@ -1,0 +1,28 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}Financeiro administrativo{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+<section class="secao" aria-labelledby="titulo-operacao-financeira">
+    <h2 id="titulo-operacao-financeira">{{ titulo }}</h2>
+    <p class="subtitulo">Parcela {{ parcela.numero }} · saldo atual: R$ {{ parcela.saldo }}.</p>
+    {% if recebimento %}<p class="resumo">Recebimento original: R$ {{ recebimento.valor }} · recibo {{ recebimento.numero_recibo }}.</p>{% endif %}
+    <form method="post" class="form-cartao">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {% for field in form %}
+        <div class="campo">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<div class="erro">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        <div class="acoes">
+            <a href="{% url 'core:detalhe_conta_receber' parcela.conta_id %}" class="botao secundario">Cancelar</a>
+            <button type="submit" class="botao{% if recebimento %} perigo{% endif %}">{{ acao }}</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

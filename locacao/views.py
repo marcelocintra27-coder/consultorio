@@ -9,7 +9,7 @@ from django.views.decorators.http import require_POST
 from core.permissoes import exige_financeiro
 
 from .forms import DentistaForm, DespesaForm, DividaAvulsaForm
-from .models import Dentista, Despesa, DividaAvulsa, PagamentoPar
+from .models import AuditoriaDespesa, Dentista, Despesa, DividaAvulsa, PagamentoPar
 from .services import calcular_acerto_mensal, mes_anterior, mes_seguinte
 
 
@@ -63,7 +63,7 @@ def listar_despesas(request):
     mes = _parse_mes(request.GET.get('mes', '').strip())
     despesas = (
         Despesa.objects.filter(competencia=mes)
-        .select_related('pago_por')
+        .select_related('pago_por', 'conta_pagar')
         .order_by('descricao')
     )
     if termo:
@@ -81,6 +81,12 @@ def cadastrar_despesa(request):
         form = DespesaForm(request.POST)
         if form.is_valid():
             despesa = form.save()
+            AuditoriaDespesa.objects.create(
+                despesa=despesa, usuario=request.user,
+                descricao='Despesa criada.' + (
+                    ' Conta a pagar vinculada.' if despesa.conta_pagar_id else ''
+                ),
+            )
             return redirect(
                 f"{reverse('locacao:listar_despesas')}"
                 f"?mes={despesa.competencia.strftime('%Y-%m')}"
@@ -100,6 +106,12 @@ def editar_despesa(request, pk):
         form = DespesaForm(request.POST, instance=despesa)
         if form.is_valid():
             despesa = form.save()
+            AuditoriaDespesa.objects.create(
+                despesa=despesa, usuario=request.user,
+                descricao='Despesa atualizada.' + (
+                    ' Conta a pagar vinculada.' if despesa.conta_pagar_id else ''
+                ),
+            )
             return redirect(
                 f"{reverse('locacao:listar_despesas')}"
                 f"?mes={despesa.competencia.strftime('%Y-%m')}"

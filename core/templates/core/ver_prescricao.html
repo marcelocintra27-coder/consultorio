@@ -1,0 +1,19 @@
+{% extends "core/base.html" %}
+{% block title %}Prescrição {{ ficha.pk }}{% endblock %}
+{% block titulo %}Prescrição{% endblock %}
+{% block content %}
+<div class="acoes">
+    <a class="botao secundario" href="{% url 'core:listar_prescricoes' paciente.pk %}">Voltar às prescrições</a>
+    {% if pode_editar %}<a class="botao" href="{% url 'core:editar_prescricao' paciente.pk ficha.pk %}">Editar rascunho</a>{% endif %}
+    {% if pode_exportar %}
+    <a class="botao secundario" href="{% url 'core:imprimir_prescricao' paciente.pk ficha.pk %}">Visualizar para impressão</a>
+    <a class="botao" href="{% url 'core:pdf_prescricao' paciente.pk ficha.pk %}">Baixar PDF</a>
+    {% endif %}
+</div>
+{% if ficha.status == 'rascunho' %}<p class="resumo">Rascunho — ainda não emitido nem assinado.</p>{% endif %}
+<div class="form-cartao">{% include "core/includes/prescricao_conteudo.html" %}</div>
+{% if ficha.status == 'assinada' %}{% include "core/includes/integridade_documento.html" %}{% endif %}
+<details class="form-cartao"><summary>Histórico de registro</summary>
+{% for evento in auditoria %}<p>{{ evento.action_time|date:"d/m/Y H:i:s" }} · {{ evento.user }} · {{ evento.change_message }}</p>{% empty %}<p>Nenhum evento registrado.</p>{% endfor %}
+</details>
+{% endblock %}

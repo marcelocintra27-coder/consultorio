@@ -12,6 +12,9 @@ core/untitled/
 .vscode/
 .idea/
 media/
+private_exames/
+/tmp/exames-auditoria/
+/tmp/prescricoes-auditoria/
 
 # Audios de teste local (nao versionar)
 *.mp3

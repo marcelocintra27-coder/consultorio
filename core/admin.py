@@ -1,5 +1,8 @@
 from django.contrib import admin
 
+from .admin_clinico import AdminClinicoProtegido, InlineClinicoProtegido
+from .models import RetificacaoDocumento
+from .models import Prescricao
 from .models import (
     Convenio,
     Paciente,
@@ -10,6 +13,15 @@ from .models import (
     PrecoProcedimento,
     LancamentoAtendimento,
     AuditoriaConsulta,
+    ContaReceber,
+    ParcelaContaReceber,
+    RecebimentoPaciente,
+    AuditoriaFinanceira,
+    Fornecedor,
+    CategoriaContaPagar,
+    ContaPagar,
+    BaixaContaPagar,
+    AuditoriaContaPagar,
     ProcedimentoUniodonto,
     RepasseUniodonto,
     AssinaturaEletronica,
@@ -62,7 +74,7 @@ class PacienteAdmin(admin.ModelAdmin):
 
 
 @admin.register(Evolucao)
-class EvolucaoAdmin(admin.ModelAdmin):
+class EvolucaoAdmin(AdminClinicoProtegido, admin.ModelAdmin):
     list_display = ('paciente', 'data', 'descricao')
 
 
@@ -154,6 +166,133 @@ class AuditoriaConsultaAdmin(admin.ModelAdmin):
     readonly_fields = ('consulta', 'usuario', 'descricao', 'cadastrado_em')
 
 
+class ParcelaContaReceberInline(admin.TabularInline):
+    model = ParcelaContaReceber
+    extra = 0
+    readonly_fields = ('numero', 'vencimento', 'valor_original', 'criado_em')
+    can_delete = False
+    max_num = 0
+
+
+@admin.register(ContaReceber)
+class ContaReceberAdmin(admin.ModelAdmin):
+    list_display = ('paciente', 'descricao', 'data_emissao', 'valor_original', 'criado_por')
+    search_fields = ('paciente__nome_completo', 'descricao')
+    autocomplete_fields = ('paciente', 'consulta', 'criado_por')
+    readonly_fields = ('paciente', 'consulta', 'descricao', 'data_emissao', 'valor_original', 'criado_em', 'criado_por')
+    inlines = (ParcelaContaReceberInline,)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(RecebimentoPaciente)
+class RecebimentoPacienteAdmin(admin.ModelAdmin):
+    list_display = ('parcela', 'tipo', 'valor', 'desconto', 'recebido_em', 'operador', 'numero_recibo')
+    list_filter = ('tipo', 'forma_pagamento')
+    readonly_fields = (
+        'parcela', 'tipo', 'valor', 'desconto', 'forma_pagamento', 'observacoes',
+        'recebido_em', 'operador', 'recebimento_original', 'numero_recibo', 'criado_em',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(AuditoriaFinanceira)
+class AuditoriaFinanceiraAdmin(admin.ModelAdmin):
+    list_display = ('conta', 'parcela', 'recebimento', 'usuario', 'acao', 'criado_em')
+    list_filter = ('acao',)
+    search_fields = ('conta__paciente__nome_completo', 'descricao')
+    readonly_fields = ('conta', 'parcela', 'recebimento', 'usuario', 'acao', 'descricao', 'dados', 'criado_em')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Fornecedor)
+class FornecedorAdmin(admin.ModelAdmin):
+    list_display = ('nome', 'documento', 'contato', 'ativo')
+    list_filter = ('ativo',)
+    search_fields = ('nome', 'documento')
+
+
+@admin.register(CategoriaContaPagar)
+class CategoriaContaPagarAdmin(admin.ModelAdmin):
+    list_display = ('nome', 'ativa')
+    list_filter = ('ativa',)
+    search_fields = ('nome',)
+
+
+@admin.register(ContaPagar)
+class ContaPagarAdmin(admin.ModelAdmin):
+    list_display = ('fornecedor', 'descricao', 'vencimento', 'valor_original', 'situacao')
+    list_filter = ('situacao', 'recorrencia', 'categoria')
+    search_fields = ('fornecedor__nome', 'descricao')
+    readonly_fields = (
+        'fornecedor', 'categoria', 'descricao', 'competencia', 'vencimento',
+        'valor_original', 'recorrencia', 'situacao', 'responsavel',
+        'aprovado_por', 'aprovado_em', 'observacoes', 'criado_em',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(BaixaContaPagar)
+class BaixaContaPagarAdmin(admin.ModelAdmin):
+    list_display = ('conta', 'valor', 'baixado_em', 'operador')
+    readonly_fields = ('conta', 'valor', 'baixado_em', 'operador', 'chave_operacao', 'observacoes', 'criado_em')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(AuditoriaContaPagar)
+class AuditoriaContaPagarAdmin(admin.ModelAdmin):
+    list_display = ('conta', 'baixa', 'usuario', 'acao', 'criado_em')
+    readonly_fields = ('conta', 'baixa', 'usuario', 'acao', 'descricao', 'dados', 'criado_em')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(ProcedimentoUniodonto)
 class ProcedimentoUniodontoAdmin(admin.ModelAdmin):
     list_display = (
@@ -185,7 +324,7 @@ class RepasseUniodontoAdmin(admin.ModelAdmin):
 
 
 @admin.register(AssinaturaEletronica)
-class AssinaturaEletronicaAdmin(admin.ModelAdmin):
+class AssinaturaEletronicaAdmin(AdminClinicoProtegido, admin.ModelAdmin):
     list_display = (
         'assinado_em',
         'papel',
@@ -206,7 +345,7 @@ class AssinaturaEletronicaAdmin(admin.ModelAdmin):
 
 
 @admin.register(FichaCadastroAnamnese)
-class FichaCadastroAnamneseAdmin(admin.ModelAdmin):
+class FichaCadastroAnamneseAdmin(AdminClinicoProtegido, admin.ModelAdmin):
     list_display = (
         'paciente',
         'status',
@@ -219,7 +358,7 @@ class FichaCadastroAnamneseAdmin(admin.ModelAdmin):
 
 
 @admin.register(RegistroEvolucaoClinica)
-class RegistroEvolucaoClinicaAdmin(admin.ModelAdmin):
+class RegistroEvolucaoClinicaAdmin(AdminClinicoProtegido, admin.ModelAdmin):
     list_display = (
         'paciente',
         'data',
@@ -251,18 +390,18 @@ class DigitalizacaoFichaAdmin(admin.ModelAdmin):
     readonly_fields = ('criado_em',)
 
 
-class ItemConsentimentoInline(admin.TabularInline):
+class ItemConsentimentoInline(InlineClinicoProtegido, admin.TabularInline):
     model = ItemConsentimentoProcedimento
     extra = 0
 
 
-class ResponsavelPlanoInline(admin.TabularInline):
+class ResponsavelPlanoInline(InlineClinicoProtegido, admin.TabularInline):
     model = ResponsavelPlanoTratamento
     extra = 0
 
 
 @admin.register(FichaPlanoTratamento)
-class FichaPlanoTratamentoAdmin(admin.ModelAdmin):
+class FichaPlanoTratamentoAdmin(AdminClinicoProtegido, admin.ModelAdmin):
     list_display = ('paciente', 'status', 'criado_em')
     list_filter = ('status',)
     search_fields = ('paciente__nome_completo', 'cpf', 'nome_completo')
@@ -271,19 +410,41 @@ class FichaPlanoTratamentoAdmin(admin.ModelAdmin):
     inlines = (ItemConsentimentoInline, ResponsavelPlanoInline)
 
 
-class ItemAutorizacaoCustoInline(admin.TabularInline):
+class ItemAutorizacaoCustoInline(InlineClinicoProtegido, admin.TabularInline):
     model = ItemAutorizacaoCusto
     extra = 0
 
 
 @admin.register(FichaAutorizacaoCusto)
-class FichaAutorizacaoCustoAdmin(admin.ModelAdmin):
+class FichaAutorizacaoCustoAdmin(AdminClinicoProtegido, admin.ModelAdmin):
     list_display = ('paciente', 'status', 'consulta', 'criado_em')
     list_filter = ('status',)
     search_fields = ('paciente__nome_completo', 'cpf', 'nome_completo')
     autocomplete_fields = ('paciente', 'consulta')
     readonly_fields = ('criado_em', 'atualizado_em')
     inlines = (ItemAutorizacaoCustoInline,)
+
+
+@admin.register(RetificacaoDocumento)
+class RetificacaoDocumentoAdmin(AdminClinicoProtegido, admin.ModelAdmin):
+    list_display = ('criado_em', 'nome_profissional', 'cro', 'autor')
+    readonly_fields = ('criado_em',)
+
+
+@admin.register(Prescricao)
+class PrescricaoAdmin(AdminClinicoProtegido, admin.ModelAdmin):
+    list_display = ('criado_em', 'nome_paciente', 'nome_profissional', 'cro', 'status')
+    search_fields = ('nome_paciente', 'nome_profissional', 'cro')
+    list_filter = ('status',)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 

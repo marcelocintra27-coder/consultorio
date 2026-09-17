@@ -4,6 +4,8 @@
 {% block titulo %}{{ titulo }}{% endblock %}
 
 {% block content %}
+        {% load documentos_clinicos %}
+        {% integridade_documento ficha %}
         <div class="acoes">
             {% if ficha.consulta_id %}
             <a href="{% url 'core:ficha_consulta' ficha.consulta_id %}" class="botao secundario">Voltar à consulta</a>
@@ -27,7 +29,7 @@
                 não vinculada
                 {% endif %}
             </p>
-            <p><strong>Solicitado por:</strong> {{ ficha.solicitado_por.get_full_name|default:ficha.solicitado_por.username|default:"—" }}</p>
+            <p><strong>Solicitado por:</strong> {% if ficha.solicitado_por %}{{ ficha.solicitado_por.get_full_name|default:ficha.solicitado_por.username }}{% else %}—{% endif %}</p>
 
             <h2 class="secao-pagina">Itens</h2>
             {% for item in itens %}

@@ -1,0 +1,15 @@
+<fieldset class="form-cartao medicamento-form">
+    <legend>Medicamento</legend>
+    {% for hidden in item.hidden_fields %}{{ hidden }}{% endfor %}
+    {{ item.non_field_errors }}
+    <div class="grade-dois">
+    {% include "core/includes/campo_form.html" with field=item.medicamento %}
+    {% include "core/includes/campo_form.html" with field=item.concentracao_apresentacao %}
+    {% include "core/includes/campo_form.html" with field=item.quantidade %}
+    {% include "core/includes/campo_form.html" with field=item.via %}
+    </div>
+    {% include "core/includes/campo_form.html" with field=item.posologia %}
+    {% include "core/includes/campo_form.html" with field=item.duracao %}
+    {% include "core/includes/campo_form.html" with field=item.orientacoes %}
+    {% include "core/includes/campo_form.html" with field=item.DELETE %}
+</fieldset>

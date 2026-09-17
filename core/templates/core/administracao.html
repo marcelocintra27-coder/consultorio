@@ -1,0 +1,49 @@
+{% extends "core/base.html" %}
+
+{% block title %}Administração{% endblock %}
+{% block titulo %}Acesso, estrutura e auditoria{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+<section class="secao" aria-labelledby="titulo-administracao">
+    <h2 id="titulo-administracao">Administração da clínica</h2>
+    <p class="subtitulo">Acesse a configuração técnica já registrada no sistema. Estas telas são exclusivas do administrador.</p>
+
+    <div class="cards">
+        <article class="card">
+            <h3>Usuários e permissões</h3>
+            <p>Gerencie usuários, grupos e os perfis vinculados a cada papel.</p>
+            <div class="acoes">
+                <a href="{% url 'admin:auth_user_changelist' %}" class="botao">Usuários</a>
+                <a href="{% url 'admin:auth_group_changelist' %}" class="botao secundario">Grupos</a>
+                <a href="{% url 'admin:locacao_perfilusuario_changelist' %}" class="botao secundario">Perfis</a>
+            </div>
+        </article>
+
+        <article class="card">
+            <h3>Profissionais e salas</h3>
+            <p>Configure dentistas, salas e a disponibilidade registrada.</p>
+            <div class="acoes">
+                <a href="{% url 'admin:locacao_dentista_changelist' %}" class="botao">Dentistas</a>
+                <a href="{% url 'admin:locacao_sala_changelist' %}" class="botao secundario">Salas</a>
+                <a href="{% url 'admin:locacao_disponibilidade_changelist' %}" class="botao secundario">Disponibilidade</a>
+            </div>
+        </article>
+
+        <article class="card">
+            <h3>Auditoria</h3>
+            <p>Consulte os registros de mudanças de agenda e os eventos de IA/voz.</p>
+            <div class="acoes">
+                <a href="{% url 'admin:core_auditoriaconsulta_changelist' %}" class="botao">Agenda</a>
+                <a href="{% url 'admin:ia_seguranca_registroauditoriaia_changelist' %}" class="botao secundario">IA e voz</a>
+            </div>
+        </article>
+
+        <article class="card">
+            <h3>Configuração técnica</h3>
+            <p>Abra os demais cadastros técnicos já autorizados no Django Admin.</p>
+            <a href="{% url 'admin:index' %}" class="botao secundario">Abrir administração técnica</a>
+        </article>
+    </div>
+</section>
+{% endblock %}

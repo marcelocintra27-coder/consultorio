@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: consultorio
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /entrar/
+    disk:
+      name: consultorio-media
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DJANGO_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: consultorio-db
+          property: connectionString
+      - key: RENDER_DISK_PATH
+        value: /var/data
+      - key: SECRET_KEY
+        sync: false
+      - key: DJANGO_ALLOWED_HOSTS
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+
+databases:
+  - name: consultorio-db
+    databaseName: consultorio
+    user: consultorio
+    plan: 0.5c-1g
+    diskSizeGB: 1

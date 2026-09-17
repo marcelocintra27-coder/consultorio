@@ -1,0 +1,54 @@
+{% extends "core/base.html" %}
+
+{% block title %}Contas a receber{% endblock %}
+{% block titulo %}Financeiro administrativo{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+<section class="secao" aria-labelledby="titulo-contas-receber">
+    <h2 id="titulo-contas-receber">Contas a receber</h2>
+    <p class="subtitulo">Títulos e parcelas de pacientes. Pagamentos legados por consulta permanecem em sua tela própria.</p>
+
+    <div class="acoes">
+        <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+        <a href="{% url 'core:criar_conta_receber' %}" class="botao">Nova conta a receber</a>
+    </div>
+
+    <form method="get" class="busca-form">
+        <label class="sr-only" for="id-q">Buscar conta</label>
+        <input id="id-q" type="text" name="q" placeholder="Buscar por paciente ou descrição" value="{{ termo }}">
+        <button type="submit" class="botao">Buscar</button>
+    </form>
+
+    <div class="tabela-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Paciente</th>
+                    <th scope="col">Descrição</th>
+                    <th scope="col">Emissão</th>
+                    <th scope="col">Valor original</th>
+                    <th scope="col">Saldo</th>
+                    <th scope="col">Situação</th>
+                    <th scope="col"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for conta in contas %}
+                <tr>
+                    <td>{{ conta.paciente.nome_completo }}</td>
+                    <td>{{ conta.descricao }}</td>
+                    <td>{{ conta.data_emissao|date:"d/m/Y" }}</td>
+                    <td>R$ {{ conta.valor_original }}</td>
+                    <td>R$ {{ conta.saldo }}</td>
+                    <td>{{ conta.situacao|capfirst }}</td>
+                    <td><a href="{% url 'core:detalhe_conta_receber' conta.pk %}" class="botao secundario">Detalhes</a></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="vazio">Nenhuma conta a receber encontrada.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

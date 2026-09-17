@@ -1,0 +1,33 @@
+{% extends "core/base.html" %}
+{% load static %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block content %}
+<div class="acoes"><a class="botao secundario" href="{% url 'core:listar_prescricoes' paciente.pk %}">Voltar às prescrições</a></div>
+<p><strong>Paciente:</strong> {{ ficha.nome_paciente }} · <strong>Profissional:</strong> {{ ficha.nome_profissional }}</p>
+<form method="post" id="form-prescricao">
+{% csrf_token %}{{ form.versao }}{{ form.versao.errors }}
+<div class="form-cartao">
+    {{ form.non_field_errors }}
+    {% include "core/includes/campo_form.html" with field=form.cro %}
+    <p class="resumo">Para assinar, informe o CRO/UF e os medicamentos com posologia, ou utilize o texto livre. Depois da assinatura, correções serão registradas por retificação.</p>
+</div>
+{{ itens.management_form }}{{ itens.non_form_errors }}
+<div id="medicamentos">{% for item in itens %}{% include "core/includes/item_prescricao_form.html" %}{% endfor %}</div>
+<div class="acoes"><button type="button" class="botao secundario" id="adicionar-medicamento">Adicionar medicamento</button></div>
+<template id="medicamento-vazio">{% include "core/includes/item_prescricao_form.html" with item=itens.empty_form %}</template>
+<div class="form-cartao">
+    {% include "core/includes/campo_form.html" with field=form.texto_livre %}
+    {% include "core/includes/campo_form.html" with field=form.orientacoes %}
+    {% include "core/includes/campo_assinatura.html" with nome_campo="assinatura_base64" rotulo="Assinatura do profissional" erro=form.assinatura_base64.errors valor=form.assinatura_base64.value %}
+    <div class="acoes">
+        <button type="submit" name="acao" value="rascunho" data-assinatura-opcional="true" class="botao secundario">Salvar rascunho</button>
+        <button type="submit" name="acao" value="assinar" class="botao">Assinar e emitir prescrição</button>
+    </div>
+</div>
+</form>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'core/js/assinatura.js' %}?v=prescricoes-2"></script>
+<script src="{% static 'core/js/prescricao.js' %}"></script>
+{% endblock %}

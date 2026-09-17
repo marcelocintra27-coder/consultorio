@@ -3,11 +3,13 @@ from decimal import Decimal, ROUND_HALF_UP
 from uuid import uuid4
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q, Sum
 from django.utils import timezone
 
 from locacao.models import primeiro_dia_mes
+from .protecao_clinica import ModeloClinicoProtegido
 
 
 class ConvenioQuerySet(models.QuerySet):
@@ -89,7 +91,7 @@ class Paciente(models.Model):
     def __str__(self):
         return self.nome_completo
 
-class Evolucao(models.Model):
+class Evolucao(ModeloClinicoProtegido):
     paciente = models.ForeignKey(Paciente, verbose_name='paciente', on_delete=models.CASCADE, related_name='evolucoes')
     data = models.DateField('data do atendimento')
     descricao = models.TextField('descricao do procedimento')
@@ -106,6 +108,8 @@ class Evolucao(models.Model):
 class Consulta(models.Model):
     class Status(models.TextChoices):
         AGENDADA = 'agendada', 'agendada'
+        CONFIRMADA = 'confirmada', 'confirmada'
+        PRESENTE = 'presente', 'Paciente chegou'
         REALIZADA = 'realizada', 'realizada'
         FALTOU = 'faltou', 'faltou'
         CANCELADA = 'cancelada', 'cancelada'
@@ -666,9 +670,1066 @@ class RepasseUniodonto(models.Model):
         super().save(*args, **kwargs)
 
 
-class AssinaturaEletronica(models.Model):
+class ContaReceber(models.Model):
+    """Título financeiro administrativo de um paciente.
+
+    Esta entidade não substitui o indicador legado ``Consulta.pago``. O valor
+    de origem é a soma imutável das parcelas criadas junto ao título.
+    """
+
+    paciente = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente',
+        on_delete=models.PROTECT,
+        related_name='contas_a_receber',
+    )
+    consulta = models.ForeignKey(
+        Consulta,
+        verbose_name='consulta de origem',
+        on_delete=models.PROTECT,
+        related_name='contas_a_receber',
+        null=True,
+        blank=True,
+    )
+    descricao = models.CharField('descrição', max_length=200)
+    data_emissao = models.DateField('data de emissão', default=timezone.localdate)
+    valor_original = models.DecimalField(
+        'valor original', max_digits=12, decimal_places=2
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='criado por',
+        on_delete=models.PROTECT,
+        related_name='contas_a_receber_criadas',
+    )
+
+    class Meta:
+        verbose_name = 'conta a receber'
+        verbose_name_plural = 'contas a receber'
+        ordering = ['data_emissao', 'pk']
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(valor_original__gt=0),
+                name='conta_receber_valor_original_positivo',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.paciente.nome_completo} — {self.descricao}'
+
+    def clean(self):
+        if (
+            self.consulta_id
+            and self.paciente_id
+            and self.consulta.paciente_id != self.paciente_id
+        ):
+            raise ValidationError(
+                {'consulta': 'A consulta deve pertencer ao paciente informado.'}
+            )
+        if self.valor_original is not None and self.valor_original <= 0:
+            raise ValidationError(
+                {'valor_original': 'Informe um valor original maior que zero.'}
+            )
+
+    @property
+    def saldo(self):
+        total = sum((parcela.saldo for parcela in self.parcelas.all()), Decimal('0.00'))
+        return Decimal(total).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def situacao(self):
+        parcelas = list(self.parcelas.all())
+        if not parcelas:
+            return 'aberta'
+        if all(parcela.saldo == Decimal('0.00') for parcela in parcelas):
+            return 'liquidada'
+        if any(parcela.saldo < parcela.valor_original for parcela in parcelas):
+            return 'parcial'
+        return 'aberta'
+
+
+class ParcelaContaReceber(models.Model):
+    conta = models.ForeignKey(
+        ContaReceber,
+        verbose_name='conta a receber',
+        on_delete=models.PROTECT,
+        related_name='parcelas',
+    )
+    numero = models.PositiveIntegerField('número da parcela')
+    vencimento = models.DateField('vencimento')
+    valor_original = models.DecimalField(
+        'valor original', max_digits=12, decimal_places=2
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'parcela de conta a receber'
+        verbose_name_plural = 'parcelas de contas a receber'
+        ordering = ['vencimento', 'numero']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['conta', 'numero'],
+                name='parcela_conta_receber_numero_unico',
+            ),
+            models.CheckConstraint(
+                condition=Q(numero__gt=0),
+                name='parcela_conta_receber_numero_positivo',
+            ),
+            models.CheckConstraint(
+                condition=Q(valor_original__gt=0),
+                name='parcela_conta_receber_valor_positivo',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.conta} — parcela {self.numero}'
+
+    def clean(self):
+        if self.valor_original is not None and self.valor_original <= 0:
+            raise ValidationError(
+                {'valor_original': 'Informe um valor de parcela maior que zero.'}
+            )
+
+    @property
+    def total_recebido(self):
+        total = self.recebimentos.filter(
+            tipo=RecebimentoPaciente.Tipo.RECEBIMENTO
+        ).aggregate(soma=Sum('valor'))['soma']
+        return Decimal(total or '0.00').quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP
+        )
+
+    @property
+    def total_descontos(self):
+        total = self.recebimentos.filter(
+            tipo=RecebimentoPaciente.Tipo.RECEBIMENTO
+        ).aggregate(soma=Sum('desconto'))['soma']
+        return Decimal(total or '0.00').quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP
+        )
+
+    @property
+    def total_estornado(self):
+        total = self.recebimentos.filter(
+            tipo=RecebimentoPaciente.Tipo.ESTORNO
+        ).aggregate(soma=Sum('valor'))['soma']
+        return Decimal(total or '0.00').quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP
+        )
+
+    @property
+    def saldo(self):
+        return (
+            Decimal(self.valor_original)
+            - self.total_recebido
+            - self.total_descontos
+            + self.total_estornado
+        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def situacao(self):
+        if self.saldo == Decimal('0.00'):
+            return 'liquidada'
+        if self.saldo < self.valor_original:
+            return 'parcial'
+        return 'aberta'
+
+
+def gerar_numero_recibo():
+    return f'RCB-{uuid4().hex.upper()}'
+
+
+class FormaPagamentoConfiguravel(models.Model):
+    """Cadastro administrativo para novos recebimentos.
+
+    Não substitui nem converte o campo legado de texto em Consulta ou
+    RecebimentoPaciente. A forma configurada é um vínculo adicional e
+    auditável para operações novas.
+    """
+
+    class TipoTaxa(models.TextChoices):
+        NENHUMA = 'nenhuma', 'sem taxa'
+        PERCENTUAL = 'percentual', 'percentual'
+        VALOR_FIXO = 'valor_fixo', 'valor fixo'
+
+    nome = models.CharField('nome', max_length=100, unique=True)
+    codigo = models.SlugField('código', max_length=30, unique=True)
+    ativo = models.BooleanField('ativo', default=True)
+    tipo_taxa = models.CharField(
+        'tipo de taxa', max_length=15, choices=TipoTaxa.choices,
+        default=TipoTaxa.NENHUMA,
+    )
+    valor_taxa = models.DecimalField(
+        'valor da taxa', max_digits=8, decimal_places=2, default=0
+    )
+    prazo_recebimento_dias = models.PositiveIntegerField(
+        'prazo de recebimento (dias)', null=True, blank=True
+    )
+    conta_destino = models.CharField('conta/destino', max_length=160, blank=True)
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+    atualizado_em = models.DateTimeField('atualizado em', auto_now=True)
+
+    class Meta:
+        verbose_name = 'forma de pagamento configurável'
+        verbose_name_plural = 'formas de pagamento configuráveis'
+        ordering = ['nome']
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(valor_taxa__gte=0),
+                name='forma_pagamento_taxa_nao_negativa',
+            ),
+        ]
+
+    def clean(self):
+        erros = {}
+        if self.tipo_taxa == self.TipoTaxa.NENHUMA and self.valor_taxa:
+            erros['valor_taxa'] = 'Forma sem taxa deve ter valor de taxa igual a zero.'
+        if self.tipo_taxa == self.TipoTaxa.PERCENTUAL and self.valor_taxa > 100:
+            erros['valor_taxa'] = 'Taxa percentual não pode exceder 100%.'
+        if erros:
+            raise ValidationError(erros)
+
+    @property
+    def codigo_legado(self):
+        codigos_legados = {item[0] for item in Consulta.FormaPagamento.choices}
+        if self.codigo in codigos_legados:
+            return self.codigo
+        return Consulta.FormaPagamento.OUTROS
+
+    def __str__(self):
+        return self.nome
+
+
+class AuditoriaFormaPagamento(models.Model):
+    forma_pagamento = models.ForeignKey(
+        FormaPagamentoConfiguravel, on_delete=models.PROTECT,
+        related_name='auditorias',
+    )
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    acao = models.CharField('ação', max_length=40)
+    descricao = models.CharField('descrição', max_length=300)
+    dados = models.JSONField('dados da operação', default=dict, blank=True)
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'auditoria de forma de pagamento'
+        verbose_name_plural = 'auditorias de formas de pagamento'
+        ordering = ['-criado_em']
+
+
+class RecebimentoPaciente(models.Model):
+    class Tipo(models.TextChoices):
+        RECEBIMENTO = 'recebimento', 'recebimento'
+        ESTORNO = 'estorno', 'estorno'
+
+    parcela = models.ForeignKey(
+        ParcelaContaReceber,
+        verbose_name='parcela',
+        on_delete=models.PROTECT,
+        related_name='recebimentos',
+    )
+    tipo = models.CharField('tipo', max_length=20, choices=Tipo.choices)
+    valor = models.DecimalField('valor', max_digits=12, decimal_places=2)
+    desconto = models.DecimalField(
+        'desconto aplicado', max_digits=12, decimal_places=2, default=0
+    )
+    forma_pagamento = models.CharField(
+        'forma de pagamento',
+        max_length=20,
+        choices=Consulta.FormaPagamento.choices,
+        blank=True,
+        default='',
+    )
+    forma_pagamento_configurada = models.ForeignKey(
+        FormaPagamentoConfiguravel,
+        verbose_name='forma de pagamento configurada',
+        on_delete=models.PROTECT,
+        related_name='recebimentos',
+        null=True,
+        blank=True,
+    )
+    observacoes = models.TextField('observações', blank=True)
+    recebido_em = models.DateTimeField('recebido em', default=timezone.now)
+    operador = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='operador',
+        on_delete=models.PROTECT,
+        related_name='recebimentos_paciente_registrados',
+    )
+    recebimento_original = models.ForeignKey(
+        'self',
+        verbose_name='recebimento original',
+        on_delete=models.PROTECT,
+        related_name='estornos',
+        null=True,
+        blank=True,
+    )
+    numero_recibo = models.CharField(
+        'número do recibo', max_length=40, unique=True, null=True, blank=True
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'recebimento de paciente'
+        verbose_name_plural = 'recebimentos de pacientes'
+        ordering = ['recebido_em', 'pk']
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(valor__gt=0),
+                name='recebimento_paciente_valor_positivo',
+            ),
+            models.CheckConstraint(
+                condition=Q(desconto__gte=0),
+                name='recebimento_paciente_desconto_nao_negativo',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} — {self.parcela}'
+
+    def clean(self):
+        erros = {}
+        if self.valor is not None and self.valor <= 0:
+            erros['valor'] = 'Informe um valor maior que zero.'
+        if self.desconto is not None and self.desconto < 0:
+            erros['desconto'] = 'O desconto não pode ser negativo.'
+        if self.tipo == self.Tipo.RECEBIMENTO:
+            if self.recebimento_original_id:
+                erros['recebimento_original'] = (
+                    'Um recebimento não pode apontar para outro recebimento.'
+                )
+            if not self.forma_pagamento:
+                erros['forma_pagamento'] = 'Informe a forma de pagamento.'
+            if (
+                self.forma_pagamento_configurada_id
+                and not self.forma_pagamento_configurada.ativo
+                and not self.pk
+            ):
+                erros['forma_pagamento_configurada'] = (
+                    'Forma de pagamento inativa não pode ser usada em novo recebimento.'
+                )
+        elif self.tipo == self.Tipo.ESTORNO:
+            original = self.recebimento_original
+            if original is None:
+                erros['recebimento_original'] = (
+                    'Todo estorno deve apontar para o recebimento original.'
+                )
+            else:
+                if original.tipo != self.Tipo.RECEBIMENTO:
+                    erros['recebimento_original'] = (
+                        'O estorno deve apontar para um recebimento válido.'
+                    )
+                elif original.parcela_id != self.parcela_id:
+                    erros['recebimento_original'] = (
+                        'O recebimento original deve pertencer à mesma parcela.'
+                    )
+            if self.desconto:
+                erros['desconto'] = 'Estorno não pode alterar desconto aplicado.'
+            if self.forma_pagamento:
+                erros['forma_pagamento'] = (
+                    'Estorno não deve registrar nova forma de pagamento.'
+                )
+        else:
+            erros['tipo'] = 'Tipo de operação inválido.'
+        if erros:
+            raise ValidationError(erros)
+
+    def save(self, *args, **kwargs):
+        if self.tipo == self.Tipo.RECEBIMENTO and not self.numero_recibo:
+            self.numero_recibo = gerar_numero_recibo()
+        if self.valor is not None:
+            self.valor = Decimal(self.valor).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP
+            )
+        if self.desconto is not None:
+            self.desconto = Decimal(self.desconto).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP
+            )
+        super().save(*args, **kwargs)
+
+
+class AuditoriaFinanceira(models.Model):
+    class Acao(models.TextChoices):
+        CONTA_CRIADA = 'conta_criada', 'conta criada'
+        RECEBIMENTO_REGISTRADO = 'recebimento_registrado', 'recebimento registrado'
+        ESTORNO_REGISTRADO = 'estorno_registrado', 'estorno registrado'
+
+    conta = models.ForeignKey(
+        ContaReceber,
+        verbose_name='conta a receber',
+        on_delete=models.PROTECT,
+        related_name='auditorias_financeiras',
+    )
+    parcela = models.ForeignKey(
+        ParcelaContaReceber,
+        verbose_name='parcela',
+        on_delete=models.PROTECT,
+        related_name='auditorias_financeiras',
+        null=True,
+        blank=True,
+    )
+    recebimento = models.ForeignKey(
+        RecebimentoPaciente,
+        verbose_name='recebimento',
+        on_delete=models.PROTECT,
+        related_name='auditorias_financeiras',
+        null=True,
+        blank=True,
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='usuário',
+        on_delete=models.PROTECT,
+        related_name='auditorias_financeiras',
+    )
+    acao = models.CharField('ação', max_length=40, choices=Acao.choices)
+    descricao = models.CharField('descrição', max_length=300)
+    dados = models.JSONField('dados da operação', default=dict, blank=True)
+    criado_em = models.DateTimeField('data e hora', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'auditoria financeira'
+        verbose_name_plural = 'auditorias financeiras'
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'{self.get_acao_display()} — {self.conta_id}'
+
+
+class Fornecedor(models.Model):
+    nome = models.CharField('nome', max_length=160, unique=True)
+    documento = models.CharField('CPF/CNPJ', max_length=20, blank=True)
+    contato = models.CharField('contato', max_length=200, blank=True)
+    ativo = models.BooleanField('ativo', default=True)
+    cadastrado_em = models.DateTimeField('cadastrado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'fornecedor'
+        verbose_name_plural = 'fornecedores'
+        ordering = ['nome']
+
+    def __str__(self):
+        return self.nome
+
+
+class CategoriaContaPagar(models.Model):
+    nome = models.CharField('nome', max_length=100, unique=True)
+    ativa = models.BooleanField('ativa', default=True)
+    cadastrada_em = models.DateTimeField('cadastrada em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'categoria de conta a pagar'
+        verbose_name_plural = 'categorias de contas a pagar'
+        ordering = ['nome']
+
+    def __str__(self):
+        return self.nome
+
+
+class ContaPagar(models.Model):
+    class Recorrencia(models.TextChoices):
+        UNICA = 'unica', 'única'
+        MENSAL = 'mensal', 'mensal'
+        ANUAL = 'anual', 'anual'
+
+    class Situacao(models.TextChoices):
+        PENDENTE_APROVACAO = 'pendente_aprovacao', 'pendente de aprovação'
+        APROVADA = 'aprovada', 'aprovada'
+        PAGA = 'paga', 'paga'
+
+    fornecedor = models.ForeignKey(
+        Fornecedor,
+        verbose_name='fornecedor',
+        on_delete=models.PROTECT,
+        related_name='contas_a_pagar',
+    )
+    categoria = models.ForeignKey(
+        CategoriaContaPagar,
+        verbose_name='categoria',
+        on_delete=models.PROTECT,
+        related_name='contas_a_pagar',
+    )
+    descricao = models.CharField('descrição', max_length=200)
+    competencia = models.DateField('competência')
+    vencimento = models.DateField('vencimento')
+    valor_original = models.DecimalField('valor original', max_digits=12, decimal_places=2)
+    recorrencia = models.CharField(
+        'recorrência', max_length=20, choices=Recorrencia.choices,
+        default=Recorrencia.UNICA,
+    )
+    situacao = models.CharField(
+        'situação', max_length=30, choices=Situacao.choices,
+        default=Situacao.PENDENTE_APROVACAO,
+    )
+    responsavel = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='responsável pelo lançamento',
+        on_delete=models.PROTECT,
+        related_name='contas_a_pagar_criadas',
+    )
+    aprovado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='aprovado por',
+        on_delete=models.PROTECT,
+        related_name='contas_a_pagar_aprovadas',
+        null=True,
+        blank=True,
+    )
+    aprovado_em = models.DateTimeField('aprovado em', null=True, blank=True)
+    observacoes = models.TextField('observações', blank=True)
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'conta a pagar'
+        verbose_name_plural = 'contas a pagar'
+        ordering = ['vencimento', 'pk']
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(valor_original__gt=0),
+                name='conta_pagar_valor_original_positivo',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.fornecedor} — {self.descricao}'
+
+    def clean(self):
+        erros = {}
+        if self.valor_original is not None and self.valor_original <= 0:
+            erros['valor_original'] = 'Informe um valor original maior que zero.'
+        if self.situacao in (self.Situacao.APROVADA, self.Situacao.PAGA):
+            if not self.aprovado_por_id or not self.aprovado_em:
+                erros['situacao'] = 'Conta aprovada deve registrar aprovador e data.'
+        if erros:
+            raise ValidationError(erros)
+
+    @property
+    def total_baixado(self):
+        total = self.baixas.aggregate(soma=Sum('valor'))['soma']
+        return Decimal(total or '0.00').quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def saldo(self):
+        return (Decimal(self.valor_original) - self.total_baixado).quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP
+        )
+
+
+class BaixaContaPagar(models.Model):
+    conta = models.ForeignKey(
+        ContaPagar,
+        verbose_name='conta a pagar',
+        on_delete=models.PROTECT,
+        related_name='baixas',
+    )
+    valor = models.DecimalField('valor baixado', max_digits=12, decimal_places=2)
+    baixado_em = models.DateTimeField('baixado em', default=timezone.now)
+    operador = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='operador',
+        on_delete=models.PROTECT,
+        related_name='baixas_contas_pagar_registradas',
+    )
+    chave_operacao = models.UUIDField('chave da operação', unique=True, default=uuid4)
+    observacoes = models.TextField('observações', blank=True)
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'baixa de conta a pagar'
+        verbose_name_plural = 'baixas de contas a pagar'
+        ordering = ['baixado_em', 'pk']
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(valor__gt=0), name='baixa_conta_pagar_valor_positivo'
+            ),
+        ]
+
+    def __str__(self):
+        return f'Baixa de {self.conta_id}: R$ {self.valor}'
+
+    def clean(self):
+        if self.valor is not None and self.valor <= 0:
+            raise ValidationError({'valor': 'Informe um valor maior que zero.'})
+
+
+class AuditoriaContaPagar(models.Model):
+    class Acao(models.TextChoices):
+        CONTA_CRIADA = 'conta_criada', 'conta criada'
+        CONTA_APROVADA = 'conta_aprovada', 'conta aprovada'
+        BAIXA_REGISTRADA = 'baixa_registrada', 'baixa registrada'
+
+    conta = models.ForeignKey(
+        ContaPagar,
+        verbose_name='conta a pagar',
+        on_delete=models.PROTECT,
+        related_name='auditorias',
+    )
+    baixa = models.ForeignKey(
+        BaixaContaPagar,
+        verbose_name='baixa',
+        on_delete=models.PROTECT,
+        related_name='auditorias',
+        null=True,
+        blank=True,
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='usuário',
+        on_delete=models.PROTECT,
+        related_name='auditorias_contas_pagar',
+    )
+    acao = models.CharField('ação', max_length=40, choices=Acao.choices)
+    descricao = models.CharField('descrição', max_length=300)
+    dados = models.JSONField('dados da operação', default=dict, blank=True)
+    criado_em = models.DateTimeField('data e hora', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'auditoria de conta a pagar'
+        verbose_name_plural = 'auditorias de contas a pagar'
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'{self.get_acao_display()} — {self.conta_id}'
+
+
+class CaixaDiario(models.Model):
+    class Situacao(models.TextChoices):
+        ABERTO = 'aberto', 'aberto'
+        FECHADO = 'fechado', 'fechado'
+
+    data = models.DateField(unique=True)
+    situacao = models.CharField(max_length=10, choices=Situacao.choices, default=Situacao.ABERTO)
+    saldo_inicial = models.DecimalField(max_digits=12, decimal_places=2)
+    saldo_contado = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    justificativa_diferenca = models.TextField(blank=True)
+    aberto_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='caixas_abertos')
+    aberto_em = models.DateTimeField(auto_now_add=True)
+    fechado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='caixas_fechados', null=True, blank=True)
+    fechado_em = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def saldo_esperado(self):
+        entradas = self.movimentos.filter(tipo__in=['entrada_automatica', 'ajuste_entrada', 'compensacao_entrada']).aggregate(s=Sum('valor'))['s'] or Decimal('0')
+        saidas = self.movimentos.filter(tipo__in=['saida_automatica', 'ajuste_saida', 'compensacao_saida']).aggregate(s=Sum('valor'))['s'] or Decimal('0')
+        return (self.saldo_inicial + entradas - saidas).quantize(Decimal('0.01'))
+
+    @property
+    def diferenca(self):
+        return None if self.saldo_contado is None else (self.saldo_contado - self.saldo_esperado).quantize(Decimal('0.01'))
+
+
+class MovimentoCaixa(models.Model):
+    class Tipo(models.TextChoices):
+        ENTRADA_AUTOMATICA = 'entrada_automatica', 'entrada automática'
+        SAIDA_AUTOMATICA = 'saida_automatica', 'saída automática'
+        AJUSTE_ENTRADA = 'ajuste_entrada', 'ajuste de entrada'
+        AJUSTE_SAIDA = 'ajuste_saida', 'ajuste de saída'
+        COMPENSACAO_ENTRADA = 'compensacao_entrada', 'compensação de entrada'
+        COMPENSACAO_SAIDA = 'compensacao_saida', 'compensação de saída'
+    caixa = models.ForeignKey(CaixaDiario, on_delete=models.PROTECT, related_name='movimentos')
+    tipo = models.CharField(max_length=25, choices=Tipo.choices)
+    valor = models.DecimalField(max_digits=12, decimal_places=2)
+    motivo = models.TextField(blank=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    recebido = models.OneToOneField(RecebimentoPaciente, on_delete=models.PROTECT, null=True, blank=True, related_name='movimento_caixa')
+    baixa = models.OneToOneField(BaixaContaPagar, on_delete=models.PROTECT, null=True, blank=True, related_name='movimento_caixa')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints=[models.CheckConstraint(condition=Q(valor__gt=0), name='movimento_caixa_valor_positivo')]
+
+
+class AuditoriaCaixa(models.Model):
+    caixa=models.ForeignKey(CaixaDiario,on_delete=models.PROTECT,related_name='auditorias')
+    movimento=models.ForeignKey(MovimentoCaixa,on_delete=models.PROTECT,null=True,blank=True)
+    usuario=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    descricao=models.CharField(max_length=300)
+    criado_em=models.DateTimeField(auto_now_add=True)
+
+
+class ImportacaoExtrato(models.Model):
+    """Metadados imutáveis da origem manual ou de um futuro arquivo de extrato.
+
+    O conteúdo bruto não é persistido: CSV/OFX será normalizado antes de criar
+    os lançamentos, evitando armazenar um segundo arquivo financeiro sensível.
+    """
+
+    class Formato(models.TextChoices):
+        MANUAL = 'manual', 'manual'
+        CSV = 'csv', 'CSV'
+        OFX = 'ofx', 'OFX'
+
+    class Situacao(models.TextChoices):
+        IMPORTADA = 'importada', 'importada'
+        CANCELADA = 'cancelada', 'cancelada logicamente'
+
+    instituicao = models.CharField('instituição financeira', max_length=120)
+    conta_referencia = models.CharField('conta de referência', max_length=80)
+    formato = models.CharField(
+        'formato de origem', max_length=10, choices=Formato.choices,
+        default=Formato.MANUAL,
+    )
+    hash_arquivo = models.CharField(
+        'hash do arquivo importado', max_length=64, unique=True,
+        null=True, blank=True,
+    )
+    periodo_inicial = models.DateField('período inicial', null=True, blank=True)
+    periodo_final = models.DateField('período final', null=True, blank=True)
+    situacao = models.CharField(
+        'situação', max_length=20, choices=Situacao.choices,
+        default=Situacao.IMPORTADA,
+    )
+    motivo_cancelamento = models.TextField('motivo do cancelamento', blank=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='importacoes_extrato_criadas',
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+    cancelado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='importacoes_extrato_canceladas', null=True, blank=True,
+    )
+    cancelado_em = models.DateTimeField('cancelado em', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'importação de extrato'
+        verbose_name_plural = 'importações de extrato'
+        ordering = ['-criado_em']
+
+    def clean(self):
+        erros = {}
+        if self.formato != self.Formato.MANUAL and not self.hash_arquivo:
+            erros['hash_arquivo'] = 'CSV e OFX exigem hash do arquivo.'
+        if self.periodo_inicial and self.periodo_final and self.periodo_final < self.periodo_inicial:
+            erros['periodo_final'] = 'O período final não pode ser anterior ao inicial.'
+        if self.situacao == self.Situacao.CANCELADA and not self.motivo_cancelamento.strip():
+            erros['motivo_cancelamento'] = 'Informe o motivo do cancelamento.'
+        if erros:
+            raise ValidationError(erros)
+
+    def __str__(self):
+        return f'{self.instituicao} — {self.conta_referencia} ({self.get_formato_display()})'
+
+
+class LancamentoExtrato(models.Model):
+    class Natureza(models.TextChoices):
+        ENTRADA = 'entrada', 'entrada'
+        SAIDA = 'saida', 'saída'
+
+    importacao = models.ForeignKey(
+        ImportacaoExtrato, on_delete=models.PROTECT, related_name='lancamentos'
+    )
+    indice_origem = models.PositiveIntegerField('índice na origem')
+    referencia_externa = models.CharField('referência externa', max_length=160, blank=True)
+    data = models.DateField('data do lançamento')
+    descricao = models.CharField('descrição', max_length=300)
+    natureza = models.CharField('natureza', max_length=10, choices=Natureza.choices)
+    valor = models.DecimalField('valor', max_digits=12, decimal_places=2)
+    saldo_informado = models.DecimalField(
+        'saldo informado', max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'lançamento de extrato'
+        verbose_name_plural = 'lançamentos de extrato'
+        ordering = ['-data', '-pk']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['importacao', 'indice_origem'],
+                name='lancamento_extrato_indice_unico_por_importacao',
+            ),
+            models.CheckConstraint(
+                condition=Q(valor__gt=0), name='lancamento_extrato_valor_positivo'
+            ),
+        ]
+
+    def clean(self):
+        if self.valor is not None and self.valor <= 0:
+            raise ValidationError({'valor': 'Informe um valor maior que zero.'})
+
+    def __str__(self):
+        return f'{self.data:%d/%m/%Y} — {self.descricao} — R$ {self.valor}'
+
+
+class Conciliacao(models.Model):
+    class Situacao(models.TextChoices):
+        PENDENTE = 'pendente', 'pendente'
+        CONCILIADA = 'conciliada', 'conciliada'
+        PARCIAL = 'parcial', 'parcial'
+        DIVERGENTE = 'divergente', 'divergente'
+        CANCELADA = 'cancelada', 'cancelada logicamente'
+
+    lancamento_extrato = models.OneToOneField(
+        LancamentoExtrato, on_delete=models.PROTECT, related_name='conciliacao'
+    )
+    situacao = models.CharField(
+        'situação', max_length=20, choices=Situacao.choices,
+        default=Situacao.PENDENTE,
+    )
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='conciliacoes_criadas',
+    )
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+    confirmado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='conciliacoes_confirmadas', null=True, blank=True,
+    )
+    confirmado_em = models.DateTimeField('confirmado em', null=True, blank=True)
+    motivo_cancelamento = models.TextField('motivo do cancelamento', blank=True)
+    cancelado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='conciliacoes_canceladas', null=True, blank=True,
+    )
+    cancelado_em = models.DateTimeField('cancelado em', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'conciliação'
+        verbose_name_plural = 'conciliações'
+        ordering = ['-criado_em']
+
+    @property
+    def valor_conciliado(self):
+        total = self.itens.filter(ativo=True).aggregate(soma=Sum('valor_conciliado'))['soma']
+        return Decimal(total or '0.00').quantize(Decimal('0.01'))
+
+    def __str__(self):
+        return f'Conciliação #{self.pk} — {self.get_situacao_display()}'
+
+
+class ItemConciliacao(models.Model):
+    conciliacao = models.ForeignKey(
+        Conciliacao, on_delete=models.PROTECT, related_name='itens'
+    )
+    recebimento = models.ForeignKey(
+        RecebimentoPaciente, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='itens_conciliacao',
+    )
+    baixa = models.ForeignKey(
+        BaixaContaPagar, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='itens_conciliacao',
+    )
+    movimento_caixa = models.ForeignKey(
+        MovimentoCaixa, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='itens_conciliacao',
+    )
+    repasse_uniodonto = models.ForeignKey(
+        RepasseUniodonto, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='itens_conciliacao',
+    )
+    valor_origem = models.DecimalField('valor da origem', max_digits=12, decimal_places=2)
+    valor_conciliado = models.DecimalField('valor conciliado', max_digits=12, decimal_places=2)
+    ativo = models.BooleanField('ativo', default=True)
+    criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'item de conciliação'
+        verbose_name_plural = 'itens de conciliação'
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(valor_origem__gt=0),
+                name='item_conciliacao_valor_origem_positivo',
+            ),
+            models.CheckConstraint(
+                condition=Q(valor_conciliado__gt=0),
+                name='item_conciliacao_valor_conciliado_positivo',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    (Q(recebimento__isnull=False) & Q(baixa__isnull=True) & Q(movimento_caixa__isnull=True) & Q(repasse_uniodonto__isnull=True))
+                    | (Q(recebimento__isnull=True) & Q(baixa__isnull=False) & Q(movimento_caixa__isnull=True) & Q(repasse_uniodonto__isnull=True))
+                    | (Q(recebimento__isnull=True) & Q(baixa__isnull=True) & Q(movimento_caixa__isnull=False) & Q(repasse_uniodonto__isnull=True))
+                    | (Q(recebimento__isnull=True) & Q(baixa__isnull=True) & Q(movimento_caixa__isnull=True) & Q(repasse_uniodonto__isnull=False))
+                ),
+                name='item_conciliacao_uma_origem',
+            ),
+        ]
+
+    def clean(self):
+        origens = [
+            self.recebimento_id, self.baixa_id, self.movimento_caixa_id,
+            self.repasse_uniodonto_id,
+        ]
+        if sum(origem is not None for origem in origens) != 1:
+            raise ValidationError('Cada item deve ter exatamente uma origem financeira.')
+        if self.valor_conciliado is not None and self.valor_origem is not None:
+            if self.valor_conciliado > self.valor_origem:
+                raise ValidationError({'valor_conciliado': 'Não pode exceder o valor da origem.'})
+
+
+class AjusteConciliacao(models.Model):
+    class Tipo(models.TextChoices):
+        TAXA_CARTAO = 'taxa_cartao', 'taxa de cartão'
+        TAXA_PIX = 'taxa_pix', 'taxa de Pix'
+        OUTRA_TAXA = 'outra_taxa', 'outra taxa'
+        DIVERGENCIA = 'divergencia', 'divergência'
+
+    conciliacao = models.ForeignKey(
+        Conciliacao, on_delete=models.PROTECT, related_name='ajustes'
+    )
+    tipo = models.CharField('tipo', max_length=20, choices=Tipo.choices)
+    valor = models.DecimalField('valor', max_digits=12, decimal_places=2)
+    motivo = models.TextField('motivo')
+    ativo = models.BooleanField('ativo', default=True)
+    criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'ajuste de conciliação'
+        verbose_name_plural = 'ajustes de conciliação'
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(valor__gt=0), name='ajuste_conciliacao_valor_positivo'
+            ),
+        ]
+
+    def clean(self):
+        if not self.motivo or not self.motivo.strip():
+            raise ValidationError({'motivo': 'Informe o motivo do ajuste.'})
+
+
+class AuditoriaConciliacao(models.Model):
+    conciliacao = models.ForeignKey(
+        Conciliacao, on_delete=models.PROTECT, related_name='auditorias',
+        null=True, blank=True,
+    )
+    importacao = models.ForeignKey(
+        ImportacaoExtrato, on_delete=models.PROTECT, related_name='auditorias',
+        null=True, blank=True,
+    )
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    acao = models.CharField('ação', max_length=40)
+    descricao = models.CharField('descrição', max_length=300)
+    dados = models.JSONField('dados da operação', default=dict, blank=True)
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'auditoria de conciliação'
+        verbose_name_plural = 'auditorias de conciliação'
+        ordering = ['-criado_em']
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (Q(conciliacao__isnull=False) & Q(importacao__isnull=True))
+                    | (Q(conciliacao__isnull=True) & Q(importacao__isnull=False))
+                ),
+                name='auditoria_conciliacao_um_alvo',
+            ),
+        ]
+
+    def clean(self):
+        if bool(self.conciliacao_id) == bool(self.importacao_id):
+            raise ValidationError('A auditoria deve referenciar uma conciliação ou uma importação.')
+
+
+class Prescricao(ModeloClinicoProtegido):
+    class Status(models.TextChoices):
+        RASCUNHO = 'rascunho', 'rascunho'
+        ASSINADA = 'assinada', 'assinada'
+
+    paciente = models.ForeignKey(Paciente, on_delete=models.PROTECT, related_name='prescricoes')
+    dentista = models.ForeignKey('locacao.Dentista', on_delete=models.PROTECT, related_name='prescricoes')
+    criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='prescricoes_criadas')
+    nome_paciente = models.CharField('nome do paciente', max_length=200)
+    cpf_paciente = models.CharField('CPF do paciente', max_length=18, blank=True)
+    data_nascimento_paciente = models.DateField('nascimento do paciente', null=True, blank=True)
+    nome_profissional = models.CharField('profissional responsável', max_length=200)
+    cro = models.CharField('CRO / UF', max_length=30, blank=True)
+    texto_livre = models.TextField('texto livre da prescrição', blank=True)
+    orientacoes = models.TextField('orientações gerais', blank=True)
+    status = models.CharField('situação', max_length=20, choices=Status, default=Status.RASCUNHO)
+    versao = models.PositiveIntegerField('versão do rascunho', default=1)
+    criado_em = models.DateTimeField('criada em', auto_now_add=True)
+    atualizado_em = models.DateTimeField('atualizada em', auto_now=True)
+    emitida_em = models.DateTimeField('emitida em', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'prescrição'
+        verbose_name_plural = 'prescrições'
+        ordering = ['-criado_em', '-pk']
+
+    def __str__(self):
+        return f'Prescrição {self.pk} — {self.nome_paciente}'
+
+
+class ItemPrescricao(ModeloClinicoProtegido):
+    ficha = models.ForeignKey(Prescricao, on_delete=models.CASCADE, related_name='itens', verbose_name='prescrição')
+    ordem = models.PositiveIntegerField('ordem', default=0)
+    medicamento = models.CharField('medicamento', max_length=200, blank=True)
+    concentracao_apresentacao = models.CharField('concentração / apresentação', max_length=200, blank=True)
+    quantidade = models.CharField('quantidade', max_length=100, blank=True)
+    posologia = models.TextField('posologia', blank=True)
+    via = models.CharField('via', max_length=100, blank=True)
+    duracao = models.CharField('duração', max_length=100, blank=True)
+    orientacoes = models.TextField('orientações do medicamento', blank=True)
+
+    class Meta:
+        verbose_name = 'medicamento da prescrição'
+        verbose_name_plural = 'medicamentos da prescrição'
+        ordering = ['ordem', 'pk']
+
+
+class RetificacaoDocumento(ModeloClinicoProtegido):
+    evolucao = models.ForeignKey('RegistroEvolucaoClinica', on_delete=models.PROTECT, null=True, blank=True, related_name='retificacoes')
+    anamnese = models.ForeignKey('FichaCadastroAnamnese', on_delete=models.PROTECT, null=True, blank=True, related_name='retificacoes')
+    plano = models.ForeignKey('FichaPlanoTratamento', on_delete=models.PROTECT, null=True, blank=True, related_name='retificacoes')
+    autorizacao = models.ForeignKey('FichaAutorizacaoCusto', on_delete=models.PROTECT, null=True, blank=True, related_name='retificacoes')
+    prescricao = models.ForeignKey('Prescricao', on_delete=models.PROTECT, null=True, blank=True, related_name='retificacoes')
+    autor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='retificacoes_documentos')
+    nome_profissional = models.CharField('profissional', max_length=200)
+    cro = models.CharField('CRO', max_length=30)
+    criado_em = models.DateTimeField('registrada em', auto_now_add=True)
+    justificativa = models.TextField('justificativa')
+    conteudo = models.TextField('conteúdo da retificação')
+
+    class Meta:
+        verbose_name = 'retificação de documento'
+        verbose_name_plural = 'retificações de documentos'
+        ordering = ['criado_em', 'pk']
+        constraints = [models.CheckConstraint(
+            condition=(
+                (Q(evolucao__isnull=False, anamnese__isnull=True, plano__isnull=True, autorizacao__isnull=True)
+                | Q(evolucao__isnull=True, anamnese__isnull=False, plano__isnull=True, autorizacao__isnull=True)
+                | Q(evolucao__isnull=True, anamnese__isnull=True, plano__isnull=False, autorizacao__isnull=True)
+                | Q(evolucao__isnull=True, anamnese__isnull=True, plano__isnull=True, autorizacao__isnull=False)) & Q(prescricao__isnull=True)
+                | Q(prescricao__isnull=False, evolucao__isnull=True, anamnese__isnull=True, plano__isnull=True, autorizacao__isnull=True)
+            ), name='retificacao_exatamente_um_original',
+        )]
+
+    @property
+    def original(self):
+        return next(getattr(self, campo) for campo in ('evolucao', 'anamnese', 'plano', 'autorizacao', 'prescricao') if getattr(self, campo + '_id'))
+
+    @property
+    def original_tipo(self):
+        from .integridade_documentos import tipo_documento
+        return tipo_documento(self.original)
+
+    @property
+    def paciente(self):
+        return self.original.paciente
+
+    @property
+    def paciente_id(self):
+        return self.original.paciente_id
+
+    def clean(self):
+        if sum(bool(getattr(self, campo + '_id')) for campo in ('evolucao', 'anamnese', 'plano', 'autorizacao', 'prescricao')) != 1:
+            raise ValidationError('Informe exatamente um documento original.')
+        if not self.justificativa.strip() or not self.conteudo.strip():
+            raise ValidationError('Justificativa e conteúdo são obrigatórios.')
+
+    def __str__(self):
+        return f'Retificação {self.pk} — {self.nome_profissional}'
+
+
+class AssinaturaEletronica(ModeloClinicoProtegido):
     class TipoDocumento(models.TextChoices):
         COMPONENTE_TESTE = 'componente_teste', 'componente de teste'
+        RETIFICACAO = 'retificacao', 'retificação de documento'
+        PRESCRICAO = 'prescricao', 'prescrição'
         EVOLUCAO = 'evolucao', 'evolução'
         PLANO_TRATAMENTO = 'plano_tratamento', 'plano de tratamento / consentimento'
         PLANO_PROCEDIMENTO = 'plano_procedimento', 'consentimento por procedimento'
@@ -773,7 +1834,7 @@ class AssinaturaEletronica(models.Model):
         return f'{self.get_papel_display()} — {self.nome_assinante}'
 
 
-class FichaCadastroAnamnese(models.Model):
+class FichaCadastroAnamnese(ModeloClinicoProtegido):
     class Status(models.TextChoices):
         RASCUNHO = 'rascunho', 'rascunho'
         AGUARDANDO_DENTISTA = 'aguardando_dentista', 'aguardando dentista'
@@ -1047,7 +2108,7 @@ class DigitalizacaoFicha(models.Model):
         return f'{paciente} — {self.get_tipo_display()}'
 
 
-class RegistroEvolucaoClinica(models.Model):
+class RegistroEvolucaoClinica(ModeloClinicoProtegido):
     class Origem(models.TextChoices):
         NATIVO = 'nativo', 'Nativo'
         LEGADO_FICHA_FISICA = 'legado_ficha_fisica', 'Legado - ficha física'
@@ -1111,7 +2172,7 @@ class RegistroEvolucaoClinica(models.Model):
         return f'{self.paciente.nome_completo} — {self.data}'
 
 
-class FichaPlanoTratamento(models.Model):
+class FichaPlanoTratamento(ModeloClinicoProtegido):
     class Status(models.TextChoices):
         RASCUNHO = 'rascunho', 'rascunho'
         CONCLUIDA = 'concluida', 'concluída'
@@ -1191,7 +2252,7 @@ class FichaPlanoTratamento(models.Model):
         return f'{self.paciente.nome_completo} — {self.get_status_display()}'
 
 
-class ItemConsentimentoProcedimento(models.Model):
+class ItemConsentimentoProcedimento(ModeloClinicoProtegido):
     ficha = models.ForeignKey(
         FichaPlanoTratamento,
         verbose_name='ficha',
@@ -1218,7 +2279,7 @@ class ItemConsentimentoProcedimento(models.Model):
         return self.procedimento
 
 
-class ResponsavelPlanoTratamento(models.Model):
+class ResponsavelPlanoTratamento(ModeloClinicoProtegido):
     ficha = models.ForeignKey(
         FichaPlanoTratamento,
         verbose_name='ficha',
@@ -1246,7 +2307,7 @@ class ResponsavelPlanoTratamento(models.Model):
         return self.nome
 
 
-class FichaAutorizacaoCusto(models.Model):
+class FichaAutorizacaoCusto(ModeloClinicoProtegido):
     class Status(models.TextChoices):
         RASCUNHO = 'rascunho', 'rascunho'
         CONCLUIDA = 'concluida', 'concluída'
@@ -1323,7 +2384,7 @@ class FichaAutorizacaoCusto(models.Model):
         return Decimal(total).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
-class ItemAutorizacaoCusto(models.Model):
+class ItemAutorizacaoCusto(ModeloClinicoProtegido):
     class Tipo(models.TextChoices):
         RECEITUARIO_IMPRESSO = 'receituario_impresso', 'receituário impresso'
         RECEITUARIO_DIGITAL = 'receituario_digital', 'receituário digital/online'

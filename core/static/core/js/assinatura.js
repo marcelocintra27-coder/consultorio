@@ -91,6 +91,7 @@
         var form = canvas.closest('form');
         if (form) {
             form.addEventListener('submit', function (evento) {
+                if (evento.submitter?.dataset.assinaturaOpcional === 'true') return;
                 var bloco = canvas.closest('.plano-item');
                 if (bloco) {
                     var procedimento = bloco.querySelector('[name$="-procedimento"]');

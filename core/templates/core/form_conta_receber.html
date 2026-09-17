@@ -1,0 +1,76 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}Financeiro administrativo{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+<section class="secao" aria-labelledby="titulo-form-conta">
+    <h2 id="titulo-form-conta">{{ titulo }}</h2>
+    <p class="subtitulo">Defina manualmente cada vencimento e valor. O total do título será a soma das parcelas.</p>
+
+    <form method="post" class="form-cartao">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {% for field in form %}
+        <div class="campo">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<div class="erro">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+
+        <h3 class="subsecao-consulta">Parcelas</h3>
+        {{ formset.management_form }}
+        <div id="parcelas-formset">
+            {% for parcela_form in formset %}
+            <fieldset class="form-cartao parcela-form" style="margin-top: 12px;">
+                <legend>Parcela {{ forloop.counter }}</legend>
+                {{ parcela_form.non_field_errors }}
+                {% for field in parcela_form %}
+                <div class="campo">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="erro">{{ field.errors }}</div>{% endif %}
+                </div>
+                {% endfor %}
+            </fieldset>
+            {% endfor %}
+        </div>
+        <template id="parcela-vazia">
+            <fieldset class="form-cartao parcela-form" style="margin-top: 12px;">
+                <legend>Parcela __numero__</legend>
+                {% for field in formset.empty_form %}
+                <div class="campo">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                </div>
+                {% endfor %}
+            </fieldset>
+        </template>
+        <div class="acoes">
+            <button id="adicionar-parcela" type="button" class="botao secundario">Adicionar parcela</button>
+            <a href="{% url 'core:listar_contas_receber' %}" class="botao secundario">Cancelar</a>
+            <button type="submit" class="botao">Criar conta</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var total = document.getElementById('id_parcelas-TOTAL_FORMS');
+    var botao = document.getElementById('adicionar-parcela');
+    var alvo = document.getElementById('parcelas-formset');
+    var modelo = document.getElementById('parcela-vazia');
+    if (!total || !botao || !alvo || !modelo) return;
+    botao.addEventListener('click', function () {
+        var indice = Number(total.value);
+        var html = modelo.innerHTML.replaceAll('__prefix__', indice).replaceAll('__numero__', indice + 1);
+        alvo.insertAdjacentHTML('beforeend', html);
+        total.value = indice + 1;
+    });
+}());
+</script>
+{% endblock %}

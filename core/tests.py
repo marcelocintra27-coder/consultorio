@@ -999,6 +999,13 @@ class RegistroEvolucaoClinicaTests(TestCase):
             dentista=self.dentista,
             papel=PerfilUsuario.Papel.DENTISTA,
         )
+        Consulta.objects.create(
+            paciente=self.paciente,
+            dentista=self.dentista,
+            data=date(2026, 9, 1),
+            hora_inicio=time(9, 0),
+            hora_fim=time(10, 0),
+        )
         self.user_secretaria = User.objects.create_user(
             'secretaria_evolucao', password='x', first_name='Amanda'
         )
@@ -1046,7 +1053,7 @@ class RegistroEvolucaoClinicaTests(TestCase):
         self.assertIn('CRO-GO 12345', html)
         self.assertIn('Nova evolução', html)
 
-    def test_secretaria_ve_e_nao_lanca(self):
+    def test_secretaria_nao_acessa_nem_lanca(self):
         from .models import RegistroEvolucaoClinica
 
         self.client.force_login(self.user_dentista)
@@ -1056,12 +1063,11 @@ class RegistroEvolucaoClinicaTests(TestCase):
             HTTP_HOST='localhost',
         )
         self.client.force_login(self.user_secretaria)
-        html = self.client.get(
+        resposta = self.client.get(
             f'/pacientes/{self.paciente.pk}/evolucao/',
             HTTP_HOST='localhost',
-        ).content.decode()
-        self.assertIn('Profilaxia', html)
-        self.assertNotIn('Nova evolução', html)
+        )
+        self.assertEqual(resposta.status_code, 403)
         resposta = self.client.post(
             f'/pacientes/{self.paciente.pk}/evolucao/',
             self._payload(procedimento_etapa='Outro'),
@@ -1070,7 +1076,7 @@ class RegistroEvolucaoClinicaTests(TestCase):
         self.assertEqual(resposta.status_code, 403)
         self.assertEqual(RegistroEvolucaoClinica.objects.count(), 1)
 
-    def test_ordem_cronologica_e_legado_nao_aparece(self):
+    def test_ordem_cronologica_e_legado_identificado_separadamente(self):
         from .models import Evolucao, RegistroEvolucaoClinica
 
         Evolucao.objects.create(
@@ -1102,7 +1108,9 @@ class RegistroEvolucaoClinicaTests(TestCase):
         ).content.decode()
         self.assertIn('Primeira', html)
         self.assertIn('Segunda', html)
-        self.assertNotIn('Importado da planilha', html)
+        self.assertIn('Importado da planilha', html)
+        self.assertIn('Registros legados preservados', html)
+        self.assertIn('não são apresentados como assinados', html)
         self.assertLess(html.find('Primeira'), html.find('Segunda'))
 
     def test_recusa_sem_assinatura(self):
@@ -1176,6 +1184,13 @@ class FichaPlanoTratamentoTests(TestCase):
             usuario=self.user_dentista,
             dentista=self.dentista,
             papel=PerfilUsuario.Papel.DENTISTA,
+        )
+        Consulta.objects.create(
+            paciente=self.paciente,
+            dentista=self.dentista,
+            data=date(2026, 9, 8),
+            hora_inicio=time(9, 0),
+            hora_fim=time(10, 0),
         )
         self.user_secretaria = User.objects.create_user(
             'secretaria_plano', password='x', first_name='Amanda'
@@ -1281,11 +1296,11 @@ class FichaPlanoTratamentoTests(TestCase):
     def test_secretaria_nao_lanca(self):
         ficha = self._abrir()
         self.client.force_login(self.user_secretaria)
-        html = self.client.get(
+        resposta = self.client.get(
             f'/pacientes/{self.paciente.pk}/plano/',
             HTTP_HOST='localhost',
-        ).content.decode()
-        self.assertNotIn('Nova ficha', html)
+        )
+        self.assertEqual(resposta.status_code, 403)
         resposta = self.client.post(
             f'/pacientes/{self.paciente.pk}/plano/novo/',
             HTTP_HOST='localhost',
@@ -1295,7 +1310,7 @@ class FichaPlanoTratamentoTests(TestCase):
             f'/pacientes/{self.paciente.pk}/plano/{ficha.pk}/editar/',
             HTTP_HOST='localhost',
         )
-        self.assertEqual(editar.status_code, 302)
+        self.assertEqual(editar.status_code, 403)
 
     def test_rascunho_nao_exige_assinatura(self):
         from .models import AssinaturaEletronica, FichaPlanoTratamento
@@ -1473,11 +1488,11 @@ class FichaAutorizacaoCustoTests(TestCase):
     def test_secretaria_nao_lanca(self):
         ficha = self._abrir()
         self.client.force_login(self.user_secretaria)
-        html = self.client.get(
+        resposta = self.client.get(
             f'/pacientes/{self.paciente.pk}/autorizacao/',
             HTTP_HOST='localhost',
-        ).content.decode()
-        self.assertNotIn('Nova autorização', html)
+        )
+        self.assertEqual(resposta.status_code, 403)
         resposta = self.client.post(
             f'/pacientes/{self.paciente.pk}/autorizacao/novo/',
             HTTP_HOST='localhost',
@@ -1487,5 +1502,5 @@ class FichaAutorizacaoCustoTests(TestCase):
             f'/pacientes/{self.paciente.pk}/autorizacao/{ficha.pk}/editar/',
             HTTP_HOST='localhost',
         )
-        self.assertEqual(editar.status_code, 302)
+        self.assertEqual(editar.status_code, 403)
 

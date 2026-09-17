@@ -1,22 +1,34 @@
-import time
-from faster_whisper import WhisperModel
+"""Utilitário manual de diagnóstico do Whisper.
 
-ARQUIVO = "teste2.wav"
+O guard abaixo evita execução por descoberta/importação da suíte Django.
+Use explicitamente: ``python testar_whisper.py``.
+"""
 
-print("Carregando modelo...")
-modelo = WhisperModel("small", device="cpu", compute_type="int8")
 
-print("Transcrevendo...")
-inicio = time.time()
-segmentos, info = modelo.transcribe(ARQUIVO, language="pt")
+def main():
+    import time
 
-texto = ""
-for s in segmentos:
-    print(f"[{s.start:.1f}s -> {s.end:.1f}s] {s.text}")
-    texto += s.text
+    from faster_whisper import WhisperModel
 
-print("=" * 40)
-print("TEXTO COMPLETO:")
-print(texto.strip())
-print("=" * 40)
-print(f"Tempo: {round(time.time() - inicio, 1)}s")
+    arquivo = 'teste2.wav'
+    print('Carregando modelo...')
+    modelo = WhisperModel('small', device='cpu', compute_type='int8')
+
+    print('Transcrevendo...')
+    inicio = time.time()
+    segmentos, _info = modelo.transcribe(arquivo, language='pt')
+
+    texto = ''
+    for segmento in segmentos:
+        print(f'[{segmento.start:.1f}s -> {segmento.end:.1f}s] {segmento.text}')
+        texto += segmento.text
+
+    print('=' * 40)
+    print('TEXTO COMPLETO:')
+    print(texto.strip())
+    print('=' * 40)
+    print(f'Tempo: {round(time.time() - inicio, 1)}s')
+
+
+if __name__ == '__main__':
+    main()

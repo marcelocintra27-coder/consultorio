@@ -4,6 +4,8 @@
 {% block titulo %}{{ titulo }}{% endblock %}
 
 {% block content %}
+        {% load documentos_clinicos %}
+        {% integridade_documento ficha %}
         <div class="acoes">
             <a href="{% url 'core:listar_fichas_plano' paciente.pk %}" class="botao secundario">Voltar</a>
         </div>

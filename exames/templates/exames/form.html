@@ -1,0 +1,20 @@
+{% extends 'core/base.html' %}
+{% block title %}Adicionar imagem ou exame{% endblock %}
+{% block titulo %}{% if anterior %}Corrigir registro{% else %}Adicionar imagem ou exame{% endif %}{% endblock %}
+{% block container_class %}estreito{% endblock %}
+{% block content %}
+<p>{{ paciente.nome_completo }}</p>
+<div class="acoes"><a class="botao secundario" href="{% url 'core:exames:lista' paciente.pk %}">Voltar aos exames</a></div>
+{% if anterior %}<p>O original “{{ anterior.titulo }}” será preservado e identificado como substituído. O novo arquivo passará por inspeção antes de permitir download.</p>{% endif %}
+<p>Um JPEG, PNG ou PDF por envio, até 20 MiB. Imagens até 40 megapixels e PDFs até 100 páginas. PDFs protegidos por senha ou com conteúdo ativo não são aceitos.</p>
+<p>O arquivo permanecerá bloqueado enquanto a inspeção de segurança não for concluída.</p>
+<form method="post" enctype="multipart/form-data" class="form-cartao">
+{% csrf_token %}
+<div role="alert">{{ form.non_field_errors }}</div>
+{% for field in form %}<div class="campo">
+  <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} (obrigatório){% endif %}</label>
+  {{ field }}<div role="alert">{{ field.errors }}</div>
+</div>{% endfor %}
+<button class="botao" type="submit">{% if anterior %}Confirmar correção e preservar original{% else %}Enviar para inspeção{% endif %}</button>
+</form>
+{% endblock %}

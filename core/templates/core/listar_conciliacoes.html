@@ -1,0 +1,13 @@
+{% extends "core/base.html" %}
+{% block title %}Conciliação{% endblock %}
+{% block titulo %}Financeiro administrativo{% endblock %}
+{% block container_class %}largo{% endblock %}
+{% block content %}
+<section class="secao" aria-labelledby="titulo-conciliacao"><h2 id="titulo-conciliacao">Conciliação</h2>
+<p class="subtitulo">Vincula extrato e registros financeiros sem alterar recebimentos, baixas ou caixa.</p>
+<div class="acoes"><a class="botao" href="{% url 'core:criar_importacao_extrato_manual' %}">Nova origem manual</a></div>
+<form method="get" class="busca-form"><label class="sr-only" for="id-situacao">Situação</label><select id="id-situacao" name="situacao"><option value="">Todas as situações</option>{% for valor, rotulo in situacoes %}<option value="{{ valor }}"{% if situacao == valor %} selected{% endif %}>{{ rotulo|capfirst }}</option>{% endfor %}</select><button class="botao" type="submit">Filtrar</button></form>
+<div class="tabela-wrap"><table><thead><tr><th>Data</th><th>Origem</th><th>Descrição</th><th>Natureza</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>
+{% for lancamento in lancamentos %}<tr><td>{{ lancamento.data|date:"d/m/Y" }}</td><td>{{ lancamento.importacao.instituicao }}</td><td>{{ lancamento.descricao }}</td><td>{{ lancamento.get_natureza_display|capfirst }}</td><td>R$ {{ lancamento.valor }}</td><td>{% if lancamento.conciliacao %}{{ lancamento.conciliacao.get_situacao_display|capfirst }}{% else %}Pendente{% endif %}</td><td><a class="botao secundario" href="{% url 'core:conciliar_lancamento_extrato' lancamento.pk %}">Conferir</a></td></tr>{% empty %}<tr><td colspan="7" class="vazio">Nenhum lançamento de extrato registrado.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

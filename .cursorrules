@@ -1,37 +1,56 @@
-# Regras do projeto — Sistema de Gestão para Consultório Odontológico
+# Regras permanentes — Sistema de Gestão para Consultório Odontológico
 
-## Stack
-- Python + Django + SQLite (dev). Deploy alvo: Render.
-- Repositório GitHub: marcelocintra27-coder/consultorio.
+## Fonte oficial do projeto
+Antes de analisar, propor ou implementar qualquer alteração:
+1. Ler PLANO_MESTRE.md.
+2. Ler CHECKLIST_PROJETO.md.
+3. Tratar esses dois documentos como fonte oficial do estado, decisões, prioridades e ordem de execução do projeto.
+4. Em caso de conflito entre uma solicitação e esses documentos, informar o conflito antes de alterar código.
+5. Não marcar etapa como concluída sem cumprir os critérios e validações previstos.
 
-## Apps e modelos existentes
-- core: Convenio, Paciente, Evolucao.
-- locacao: Sala, Disponibilidade.
+## Forma de trabalho
+- Trabalhar em etapas curtas.
+- Não avançar para a próxima etapa sem confirmação explícita do usuário.
+- Não implementar itens futuros do roadmap por iniciativa própria.
+- Preservar código, dados, models, views, migrations e funcionalidades já existentes sempre que possível.
+- Antes de alterar algo, verificar o estado real do repositório.
+- Não presumir que documentação antiga representa o código atual quando isso puder ser verificado.
+- Após alterações, executar as validações previstas no plano/checklist e orientar o teste no navegador/admin quando aplicável.
 
-## Como se comportar neste projeto
-- Trabalhe em etapas curtas. Não pule para a próxima etapa sem confirmação do usuário.
-- Nunca execute `git add` ou `git commit` sem autorização explícita.
-- Nunca sobrescreva models ou views já funcionando sem necessidade clara.
-- Sempre use UTF-8 corretamente em textos com acentos (já houve bug de
-  acentuação corrompida no projeto — não repetir).
-- Depois de qualquer mudança, oriente o teste no navegador/admin antes de
-  seguir em frente.
-- Telas do app: seguir `.cursor/rules/frontend-design.mdc` (design system em
-  `base.html` + `app.css`). Não mudar regra de negócio nem permissão fora
-  da etapa pedida.
-- Nomes de campos e models em português, seguindo o padrão já existente
-  (nome_completo, data_nascimento, cadastrado_em).
-- Migrations devem ser geradas e aplicadas a cada mudança de model.
+## Git e deploy
+- Nunca executar git add, git commit, git push, merge ou deploy sem autorização explícita do usuário.
+- Não alterar branch ou histórico Git sem autorização.
+- Não incluir banco de dados, segredos, credenciais ou arquivos sensíveis no repositório.
+- Não executar deploy no Render sem autorização explícita.
 
-## Prioridade atual do roadmap
-1. Cadastro de pacientes (listar, buscar, cadastrar) — em andamento.
-2. Edição de pacientes.
-3. Agenda / Consultas.
-4. Financeiro básico.
-5. Módulo de Locação de Consultórios — só depois do item 4.
-6. Automações (WhatsApp, IA) — só depois da Agenda pronta.
+## Segurança e permissões
+- Não enfraquecer autenticação, autorização, auditoria ou proteções de segurança para facilitar implementação.
+- Respeitar rigorosamente a separação de perfis definida no PLANO_MESTRE.md.
+- Secretária não deve receber acesso a prontuário clínico ou financeiro administrativo.
+- Dentista não deve receber financeiro administrativo fora do desenho aprovado.
+- Não usar is_staff como sinônimo de administrador de negócio.
+- Não alterar matriz de permissões sem aprovação explícita.
+- Preservar auditoria, integridade de documentos assinados, consentimentos e registros clínicos.
 
-## Não fazer
-- Não avançar fases do roadmap fora de ordem sem o usuário pedir.
-- Não commitar o banco de dados (já está no .gitignore).
-- Não remover o domínio do Render do ALLOWED_HOSTS.
+## Interface
+- Para telas do aplicativo, seguir .cursor/rules/frontend-design.mdc, base.html e app.css.
+- Não alterar regra de negócio ou permissão apenas por necessidade visual.
+- Manter interfaces coerentes com o perfil do usuário e com o desenho aprovado no plano mestre.
+
+## Código e dados
+- Usar UTF-8 corretamente em todos os arquivos.
+- Evitar corrupção de acentuação.
+- Seguir os nomes e padrões já existentes no projeto.
+- Alterações de models devem ter migrations correspondentes quando realmente necessárias.
+- Não criar migrations desnecessárias.
+- Não apagar ou sobrescrever dados existentes sem autorização explícita.
+- Mudanças financeiras devem preservar rastreabilidade e auditoria.
+
+## Ordem de execução
+- Seguir a seção "Ordem oficial das próximas etapas" do PLANO_MESTRE.md.
+- Usar o CHECKLIST_PROJETO.md para determinar critérios de conclusão.
+- Não pular etapas apenas porque outra implementação parece mais fácil ou conveniente.
+- Quando uma decisão depender do usuário, parar, explicar objetivamente a decisão necessária e aguardar aprovação.
+
+## Regra final
+O objetivo não é simplesmente produzir código. O objetivo é evoluir o sistema de forma controlada, verificável e coerente com o PLANO_MESTRE.md e o CHECKLIST_PROJETO.md, preservando segurança, dados clínicos, regras de negócio e decisões já aprovadas.

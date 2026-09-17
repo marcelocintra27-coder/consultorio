@@ -6,7 +6,7 @@
 {% block content %}
         <div class="acoes">
             <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
-            <a href="{% url 'core:cadastrar_paciente' %}" class="botao">Cadastrar</a>
+            {% if pode_cadastrar_paciente %}<a href="{% url 'core:cadastrar_paciente' %}" class="botao">Cadastrar</a>{% endif %}
         </div>
 
         <form method="get" class="busca-form">
@@ -28,11 +28,15 @@
                 <td>{{ paciente.telefone }}</td>
                 <td>{{ paciente.convenio }}</td>
                 <td>
-                    <a href="{% url 'core:editar_paciente' paciente.pk %}" class="botao">Editar</a>
-                    <a href="{% url 'core:listar_fichas_anamnese' paciente.pk %}" class="botao secundario">Anamnese</a>
-                    <a href="{% url 'core:ficha_evolucao_clinica' paciente.pk %}" class="botao secundario">Evolução</a>
-                    <a href="{% url 'core:listar_fichas_plano' paciente.pk %}" class="botao secundario">Plano</a>
-                    <a href="{% url 'core:listar_fichas_autorizacao' paciente.pk %}" class="botao secundario">Autorização</a>
+                    {% if user.perfil.papel != 'auxiliar' %}<a href="{% url 'core:editar_paciente' paciente.pk %}" class="botao">Editar</a>{% endif %}
+                    {% if pode_clinico %}
+                        <a href="{% url 'core:listar_fichas_anamnese' paciente.pk %}" class="botao secundario">Anamnese</a>
+                        <a href="{% url 'core:ficha_evolucao_clinica' paciente.pk %}" class="botao secundario">Evolução</a>
+                        <a href="{% url 'core:listar_fichas_plano' paciente.pk %}" class="botao secundario">Plano</a>
+                        <a href="{% url 'core:listar_fichas_autorizacao' paciente.pk %}" class="botao secundario">Autorização</a>
+                        <a href="{% url 'core:exames:lista' paciente.pk %}" class="botao secundario">Imagens e exames</a>
+                        <a href="{% url 'core:listar_prescricoes' paciente.pk %}" class="botao secundario">Prescrições</a>
+                    {% endif %}
                 </td>
             </tr>
             {% empty %}

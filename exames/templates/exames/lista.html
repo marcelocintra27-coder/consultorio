@@ -1,0 +1,19 @@
+{% extends 'core/base.html' %}
+{% block title %}Imagens e exames{% endblock %}
+{% block titulo %}Imagens e exames{% endblock %}
+{% block content %}
+<p>{{ paciente.nome_completo }}</p>
+<div class="acoes">
+  <a class="botao secundario" href="{% url 'core:editar_paciente' paciente.pk %}">Voltar ao paciente</a>
+  <a class="botao" href="{% url 'core:exames:novo' paciente.pk %}">Adicionar arquivo</a>
+</div>
+<p>Arquivos recebidos e histórico preservado. A inclusão não atesta o conteúdo clínico do documento.</p>
+{% for exame in exames %}
+<article class="form-cartao">
+  <h2><a href="{% url 'core:exames:detalhe' paciente.pk exame.pk %}">{{ exame.titulo }}</a></h2>
+  <p>{{ exame.get_categoria_display }} · {{ exame.data_exame|date:'d/m/Y'|default:'Data não informada' }}</p>
+  <p><strong>{{ exame.estado }}</strong></p>
+  <p>Incluído em {{ exame.criado_em|date:'d/m/Y H:i' }}</p>
+</article>
+{% empty %}<p>Nenhuma imagem ou exame registrado.</p>{% endfor %}
+{% endblock %}

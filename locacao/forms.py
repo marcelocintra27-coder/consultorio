@@ -4,6 +4,7 @@ from django import forms
 from django.utils import timezone
 
 from .models import Dentista, Despesa, DividaAvulsa, Sala
+from core.models import ContaPagar
 
 
 def _queryset_dentistas(*ids_extras):
@@ -52,6 +53,7 @@ class DespesaForm(forms.ModelForm):
             'competencia',
             'tipo',
             'pago_por',
+            'conta_pagar',
             'observacoes',
         ]
         widgets = {
@@ -65,6 +67,12 @@ class DespesaForm(forms.ModelForm):
         if self.instance.pk and self.instance.pago_por_id:
             extras.append(self.instance.pago_por_id)
         self.fields['pago_por'].queryset = _queryset_dentistas(*extras)
+        contas = ContaPagar.objects.filter(
+            situacao__in=[ContaPagar.Situacao.APROVADA, ContaPagar.Situacao.PAGA]
+        ).order_by('vencimento')
+        if self.instance.pk and self.instance.conta_pagar_id:
+            contas = contas | ContaPagar.objects.filter(pk=self.instance.conta_pagar_id)
+        self.fields['conta_pagar'].queryset = contas.distinct()
         if self.instance.pk and self.instance.competencia:
             self.initial['competencia'] = self.instance.competencia.strftime('%Y-%m')
         elif not self.instance.pk:
@@ -78,6 +86,14 @@ class DespesaForm(forms.ModelForm):
             return date(int(ano), int(mes), 1)
         except (TypeError, ValueError):
             raise forms.ValidationError('Informe um mês válido.')
+
+    def clean(self):
+        dados = super().clean()
+        conta = dados.get('conta_pagar')
+        valor = dados.get('valor')
+        if conta and valor is not None and valor != conta.valor_original:
+            self.add_error('conta_pagar', 'O valor deve coincidir com a conta a pagar vinculada.')
+        return dados
 
 
 class DividaAvulsaForm(forms.ModelForm):

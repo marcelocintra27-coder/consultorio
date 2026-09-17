@@ -1,5 +1,6 @@
 {% extends "core/base.html" %}
 {% load static %}
+{% load documentos_clinicos %}
 
 {% block title %}{{ titulo }} — {{ paciente.nome_completo }}{% endblock %}
 {% block titulo %}{{ titulo }}{% endblock %}
@@ -13,6 +14,7 @@
 
         {% for item in registros %}
         <article class="evolucao-linha">
+            {% integridade_documento item %}
             <p class="evolucao-data">{{ item.data|date:"d/m/Y" }}</p>
             <p><strong>Procedimento / etapa:</strong> {{ item.procedimento_etapa }}</p>
             <p><strong>Descrição clínica / conduta:</strong></p>
@@ -32,6 +34,7 @@
         <p class="vazio">Nenhuma evolução assinada ainda.</p>
         {% endfor %}
 
+        {% evolucoes_legadas paciente %}
         {% if pode_registrar and form %}
         <h2 class="secao-pagina">Nova evolução</h2>
         <form method="post" class="form-cartao" id="form-evolucao-clinica">

@@ -4,6 +4,8 @@ import re
 from uuid import uuid4
 
 from django.core.files.base import ContentFile
+from django.core.exceptions import ValidationError
+from django.db import transaction
 
 from .models import AssinaturaEletronica
 
@@ -33,6 +35,7 @@ def png_de_data_url(data_url: str) -> bytes:
     return png
 
 
+@transaction.atomic
 def gravar_assinatura_manuscrita(
     *,
     tipo_documento,
@@ -48,6 +51,21 @@ def gravar_assinatura_manuscrita(
     user_agent='',
 ):
     png = png_de_data_url(imagem_data_url)
+    if tipo_documento != 'componente_teste':
+        from .integridade_documentos import documento_da_assinatura, verificar_integridade, texto_documento
+        referencia = AssinaturaEletronica(tipo_documento=tipo_documento, documento_id=documento_id)
+        documento = documento_da_assinatura(referencia)
+        if documento is None or paciente is None or documento.paciente_id != paciente.pk:
+            raise ValidationError('Assinatura exige vínculo com o documento e paciente corretos.')
+        documento = type(documento).objects.select_for_update().get(pk=documento.pk)
+        if texto_documento(documento) != conteudo_para_hash:
+            raise ValidationError('O conteúdo mudou antes da assinatura. Reabra o documento.')
+        if not verificar_integridade(documento, exigir_completude=False).integra:
+            raise ValidationError('Integridade não confirmada; assinatura complementar bloqueada.')
+        if AssinaturaEletronica.objects.filter(
+            tipo_documento=tipo_documento, documento_id=documento_id, papel=papel,
+        ).exists():
+            raise ValidationError('Esta assinatura já foi registrada e não pode ser substituída.')
     assinatura = AssinaturaEletronica(
         tipo_documento=tipo_documento,
         documento_id=documento_id or 0,

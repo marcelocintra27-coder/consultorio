@@ -1,0 +1,29 @@
+{% load static %}
+<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prescrição {{ ficha.pk }}</title>
+<link rel="stylesheet" href="{% static 'core/css/app.css' %}">
+<style>
+body { background: white; color: #1f2933; }
+.folha-prescricao { max-width: 170mm; margin: 24px auto; padding: 16px; }
+.prescricao-medicamento { margin: 24px 0; }
+.prescricao-assinatura { break-inside: avoid; }
+.hash-prescricao { overflow-wrap: anywhere; font-size: 11px; }
+.retificacao-impressa { break-before: page; margin-top: 32px; }
+@page { size: A4; margin: 20mm; }
+@media print { .acoes { display: none !important; } .folha-prescricao { margin: 0; padding: 0; max-width: none; } h2, h3 { break-after: avoid; } }
+</style></head><body>
+<main class="folha-prescricao">
+<div class="acoes"><a class="botao secundario" href="{% url 'core:ver_prescricao' ficha.paciente_id ficha.pk %}">Voltar</a><button class="botao" type="button" onclick="window.print()">Imprimir</button></div>
+{% include "core/includes/prescricao_conteudo.html" %}
+<p class="hash-prescricao">Integridade conferida. Hash do conteúdo: {{ assinatura.hash_conteudo }}</p>
+{% for registro in retificacoes %}
+<section class="retificacao-impressa">
+<h2>Retificação {{ forloop.counter }} da prescrição {{ ficha.pk }}</h2>
+<p><strong>Paciente:</strong> {{ ficha.nome_paciente }}</p>
+<p>{{ registro.criado_em|date:"d/m/Y H:i" }} · {{ registro.nome_profissional }} · CRO {{ registro.cro }}</p>
+<p><strong>Justificativa:</strong> {{ registro.justificativa|linebreaksbr }}</p>
+<p><strong>Anotação complementar:</strong> {{ registro.conteudo|linebreaksbr }}</p>
+<img class="assinatura-miniatura" src="{% url 'core:ver_imagem_assinatura' registro.assinatura.pk %}" alt="Assinatura de {{ registro.nome_profissional }}">
+<p class="hash-prescricao">Integridade conferida. Hash: {{ registro.assinatura.hash_conteudo }}</p>
+</section>{% endfor %}
+</main></body></html>
