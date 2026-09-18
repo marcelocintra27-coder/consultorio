@@ -390,7 +390,7 @@ Estes itens **não** bloqueiam o registro documental da A-004 nem um eventual co
 *Risco:* R-002  
 *Prioridade:* ALTA — bloqueia uso real do consultório.
 
-Não existe fluxo de remarcação na aplicação. Qualquer alteração de data/horário de consulta hoje depende de cancelar e recriar, o que quebra o vínculo de histórico entre a consulta original e a nova.
+Não existe fluxo de remarcação na aplicação. Cancelar e recriar **não** preserva adequadamente o vínculo/histórico da consulta original. É necessária rastreabilidade administrativa. Prioridade ALTA / bloqueador de produção (R-002). Arquitetura não decidida; implementação não autorizada.
 
 #### 4.2 Agendamento sem auditoria de criação
 
@@ -461,9 +461,20 @@ Seguir o fluxo já definido:
 
 Não implementar, não criar branch, não criar migration e não integrar enquanto o estado for NÃO INICIADA e as decisões acima não forem aprovadas.
 
-### Conflito documental a informar (não resolvido nesta abertura)
+### Reconciliação documental — OPÇÃO 1 (17/09/2026)
 
-`PLANO_MESTRE.md` mantém a ordem oficial das próximas etapas com o item 11 como pendências externas de produção e validação de deploy. O `CHECKLIST_PROJETO.md` já lista fluxo próprio de reagendamento como pendente em Agenda. A A-005 trata bloqueadores de produção da Agenda **antes de deploy**, sem alterar aqueles dois arquivos nesta abertura. Qualquer alinhamento da ordem oficial no plano/checklist exige autorização explícita.
+**Aprovado por usuário + GPT (coordenação).** A OPÇÃO 2 foi rejeitada.
+
+Remarcação passou a constar do **roteiro ativo** de Agenda/Consulta no `PLANO_MESTRE.md` (A-005 / R-002), **antes** das pendências externas de infraestrutura, sem se misturar a PostgreSQL/SMTP. O `CHECKLIST_PROJETO.md` **não** foi alterado nesta reconciliação.
+
+Registros obrigatórios desta decisão:
+
+- Cancelar e recriar consulta **não** preserva adequadamente o vínculo/histórico da consulta original.
+- É necessária **rastreabilidade administrativa** da remarcação (autoria, data/hora de origem e destino, motivo opcional).
+- Esta decisão **NÃO autoriza implementar R-002**, abrir branch, criar migration, alterar código ou integrar.
+- A **arquitetura da remarcação continua NÃO DECIDIDA** (alternativa (a) ou (b) do escopo).
+- Prioridades mantidas: **R-002 = ALTA / bloqueador de produção**; **R-003 = ALTA**; **R-004 = MÉDIA**.
+- **A-005 = NÃO INICIADA** quanto à implementação.
 
 ---
 
@@ -487,11 +498,13 @@ Necessário determinar a regra de negócio protegida por essa constraint antes d
 *Classificação A-004:* NÃO CERTIFICADO / NÃO IMPLEMENTADO  
 *Prioridade:* ALTA — bloqueador de produção
 
-Não existe fluxo de remarcação na aplicação. Qualquer alteração de data/horário de consulta hoje depende de cancelar e recriar, o que quebra o vínculo de histórico entre a consulta original e a nova.
+Não existe fluxo de remarcação na aplicação. Cancelar e recriar **não** preserva adequadamente o vínculo/histórico da consulta original. É necessária rastreabilidade administrativa (quem remarcou, de qual data/hora para qual, motivo opcional).
 
 Não trata a ausência de choice `remarcada` automaticamente como defeito de model (A-003). O bloqueio é a inexistência do fluxo na aplicação para uso real do consultório.
 
-*Tratamento previsto:* A-005 (NÃO INICIADA).
+Roteiro: OPÇÃO 1 aprovada (usuário + GPT, 17/09/2026). Arquitetura ainda **não decidida**. Esta classificação **não autoriza** implementar R-002.
+
+*Tratamento previsto:* A-005 (**NÃO INICIADA** quanto à implementação).
 
 ---
 
@@ -547,6 +560,10 @@ Ao iniciar uma nova sessão, a IA deve usar este documento para descobrir o últ
 
 *Estado:* NÃO INICIADA
 
-Origem: R-002, R-003, R-004 (A-004). A-004 permanece encerrada no recorte já certificado e **não** significa pronto para produção.
+*Estado da implementação:* NÃO INICIADA
+
+Origem: R-002 (ALTA / bloqueador), R-003 (ALTA), R-004 (MÉDIA). A-004 permanece encerrada no recorte já certificado e **não** significa pronto para produção.
+
+OPÇÃO 1 aprovada (usuário + GPT, 17/09/2026): remarcação está no roteiro ativo do plano mestre. Isso **não** autoriza implementar R-002 nem abrir branch da A-005.
 
 Não iniciar certificação de estado real, revisão Claude, branch isolada, implementação, testes novos, commit, push, merge ou deploy sem autorização explícita da próxima ação do fluxo de trabalho da A-005.
