@@ -15,10 +15,11 @@ from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_http_methods
 
 from locacao.models import Dentista, Despesa, PerfilUsuario, Sala
 
+from .agenda import validar_horario_consulta
 from .assinatura import gravar_assinatura_manuscrita
 from .caixa import registrar_movimento_automatico
 from .conciliacao import sugerir_origens, valor_origem
@@ -90,6 +91,7 @@ from .forms import (
     PacienteForm,
     MaterialUsadoForm,
     ConsultaForm,
+    RemarcacaoConsultaForm,
     StatusConsultaForm,
     ProcedimentoForm,
     LancamentoForm,
@@ -1774,10 +1776,25 @@ def agendar_consulta(request):
         if form.is_valid():
             consulta = form.save(commit=False)
             consulta.eh_legado = False
-            consulta.save()
-            return redirect(
-                f"{reverse('core:listar_consultas')}?data={consulta.data.isoformat()}"
-            )
+            try:
+                with transaction.atomic():
+                    Dentista.objects.select_for_update().get(pk=consulta.dentista_id)
+                    validar_horario_consulta(
+                        consulta.dentista_id, consulta.data, consulta.hora_inicio, consulta.hora_fim,
+                    )
+                    consulta.save()
+                    _registrar_auditoria(
+                        consulta, request.user,
+                        f'Agendamento: criação via agendar_consulta; paciente={consulta.paciente_id}; '
+                        f'dentista={consulta.dentista_id}; data={consulta.data.isoformat()}; '
+                        f'horário={consulta.hora_inicio.isoformat()}–{consulta.hora_fim.isoformat()}',
+                    )
+            except ValidationError as erro:
+                form.add_error(None, erro)
+            else:
+                return redirect(
+                    f"{reverse('core:listar_consultas')}?data={consulta.data.isoformat()}"
+                )
     else:
         form = ConsultaForm(initial={'data': timezone.localdate()})
         if dentista_logado:
@@ -1786,6 +1803,44 @@ def agendar_consulta(request):
     return render(request, 'core/form_consulta.html', {
         'form': form,
         'titulo': 'Agendar consulta',
+    })
+
+
+@require_http_methods(['GET', 'POST'])
+@transaction.atomic
+def remarcar_consulta(request, pk):
+    consulta = get_object_or_404(Consulta.objects.select_for_update(), pk=pk)
+    if not usuario_pode_gerenciar_agenda(request.user, consulta):
+        raise PermissionDenied
+    if consulta.status not in (Consulta.Status.AGENDADA, Consulta.Status.CONFIRMADA):
+        raise PermissionDenied
+    anterior = (consulta.data, consulta.hora_inicio, consulta.hora_fim)
+    status_anterior = consulta.status
+    if request.method == 'POST':
+        if consulta.dentista_id:
+            Dentista.objects.select_for_update().get(pk=consulta.dentista_id)
+        form = RemarcacaoConsultaForm(request.POST, instance=consulta)
+        if form.is_valid():
+            novo = (consulta.data, consulta.hora_inicio, consulta.hora_fim)
+            if novo == anterior:
+                form.add_error(None, 'Informe uma nova data ou horário para remarcar.')
+            else:
+                consulta.status = Consulta.Status.AGENDADA
+                consulta.save(update_fields=['data', 'hora_inicio', 'hora_fim', 'status'])
+                descricao = (
+                    f'Remarcação: {anterior[0].isoformat()} '
+                    f'{anterior[1].isoformat()}–{anterior[2].isoformat()} -> '
+                    f'{novo[0].isoformat()} {novo[1].isoformat()}–{novo[2].isoformat()}; '
+                    f'status: {status_anterior} -> {consulta.status}'
+                )
+                if form.cleaned_data['motivo']:
+                    descricao += f"; motivo: {form.cleaned_data['motivo']}"
+                _registrar_auditoria(consulta, request.user, descricao)
+                return redirect('core:ficha_consulta', pk=consulta.pk)
+    else:
+        form = RemarcacaoConsultaForm(instance=consulta)
+    return render(request, 'core/form_consulta.html', {
+        'form': form, 'titulo': 'Remarcar consulta',
     })
 
 
@@ -1887,6 +1942,9 @@ def ficha_consulta(request, pk):
         'pode_complementar': pode_complementar,
         'pode_gerenciar_agenda': pode_gerenciar_agenda,
         'pode_alterar_status': bool(status_permitidos),
+        'pode_remarcar': pode_gerenciar_agenda and consulta.status in (
+            Consulta.Status.AGENDADA, Consulta.Status.CONFIRMADA,
+        ),
         'pode_clinico': pode_clinico,
         'usa_lancamento_uniodonto': usa_uniodonto,
         'fator_us_uniodonto': FATOR_US_UNIODONTO,
@@ -1903,8 +1961,9 @@ def ficha_consulta(request, pk):
 
 
 @require_POST
+@transaction.atomic
 def alterar_status_consulta(request, pk):
-    consulta = get_object_or_404(Consulta, pk=pk)
+    consulta = get_object_or_404(Consulta.objects.select_for_update(), pk=pk)
     if not usuario_pode_gerenciar_agenda(request.user, consulta):
         raise PermissionDenied
     status_permitidos = status_consulta_permitidos(request.user, consulta)
@@ -1919,7 +1978,7 @@ def alterar_status_consulta(request, pk):
         status_permitidos=status_permitidos,
     )
     if form.is_valid():
-        form.save()
+        consulta.save(update_fields=['status'])
         _registrar_auditoria(
             consulta,
             request.user,

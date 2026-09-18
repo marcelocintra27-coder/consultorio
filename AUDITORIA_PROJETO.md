@@ -192,11 +192,13 @@ Esta auditoria NÃO certifica ainda:
 
 A ausência de remarcada entre os choices NÃO deve ser classificada automaticamente como defeito.
 
-A remarcação pode estar implementada por alteração de data/hora e ainda precisa ser auditada.
+Na A-003, a remarcação ainda precisava ser auditada. A A-005 posteriormente certificou o UPDATE de data/hora na mesma `Consulta` / mesmo `pk`.
 
 ---
 
 ## A-004 — Fluxo funcional Agenda / Consulta
+
+Registro histórico da revisão inicial. As limitações R-002, R-003 e R-004 abaixo foram posteriormente resolvidas e certificadas na A-005; não representam pendências atuais. As demais limitações do recorte A-004 permanecem com seu alcance original.
 
 *Estado geral:*
 - controles de acesso: **CERTIFICADOS**;
@@ -253,38 +255,38 @@ Transições observadas em `status_consulta_permitidos`:
 - `presente` → `cancelada`, `faltou`; `realizada` somente se administrador ou dentista
 - `realizada` / `faltou` / `cancelada` → conjunto vazio neste fluxo (não reabre)
 
-#### Limitações mantidas (não corrigidas nesta etapa)
+#### Limitações identificadas na A-004 — resolvidas posteriormente na A-005
 
-- **Falta** existe no código, porém sem teste HTTP específico identificado.
-- **Agendamento** existe e está parcialmente testado, porém sem auditoria/rastreabilidade de criação identificada.
-- **Remarcação** não foi encontrada implementada na aplicação.
+- **Falta:** na A-004 não havia teste HTTP específico identificado; implementado e certificado na A-005 / R-004.
+- **Agendamento:** na A-004 não havia auditoria de criação identificada; implementada e certificada no fluxo web na A-005 / R-003.
+- **Remarcação:** ausente na revisão A-004; implementada e certificada na A-005 / R-002, na mesma `Consulta` / mesmo `pk`.
 
 #### Resumo dos sete fluxos
 
 | Fluxo | Classificação |
 |---|---|
-| Agendamento | PARCIALMENTE CERTIFICADO |
+| Agendamento | CERTIFICADO no fluxo web após A-005 / R-003 |
 | Confirmação | CERTIFICADO (fluxo de status na aplicação) |
 | Paciente presente / chegada | CERTIFICADO (fluxo de status na aplicação) |
 | Realização / conclusão | CERTIFICADO (fluxo de status na aplicação) |
-| Falta | PARCIALMENTE CERTIFICADO |
+| Falta | CERTIFICADO após A-005 / R-004 |
 | Cancelamento | CERTIFICADO (fluxo de status na aplicação) |
-| Remarcação | NÃO CERTIFICADO (fluxo próprio inexistente na aplicação) |
+| Remarcação | IMPLEMENTADA E CERTIFICADA na A-005 / R-002 |
 
-CERTIFICADO nestes itens refere-se ao fluxo da **aplicação web** examinado, não ao Django Admin nem à reabertura de status finais.
+CERTIFICADO nestes itens refere-se ao fluxo da **aplicação web** examinado, não à reabertura de status finais. A proteção seletiva do Django Admin foi certificada separadamente na A-005.
 
-### 2.1 Agendamento — PARCIALMENTE CERTIFICADO
+### 2.1 Agendamento — CERTIFICADO no fluxo web após A-005 / R-003
 
 - **AÇÃO:** criar consulta.
 - **TELA/TEMPLATE:** `core/templates/core/listar_consultas.html` (botão se `pode_agendar`); `core/templates/core/inicio.html` (atalho “Agendar consulta” no dashboard da secretária); `core/templates/core/form_consulta.html`.
 - **URL:** `consultas/agendar/` — nome `core:agendar_consulta`.
 - **VIEW:** `agendar_consulta`; formulário `ConsultaForm` (paciente, data, hora_inicio, hora_fim, dentista, observações; **sem** campo `status`).
 - **PERMISSÃO:** `usuario_pode_agendar_consulta` — administrador, dentista ou secretária; auxiliar não. Dentista: queryset de `dentista` restrito ao próprio perfil.
-- **ALTERAÇÃO:** `consulta.eh_legado = False`; `form.save()`; default do model `Consulta.status` = `agendada`; redirect para a agenda na data criada.
-- **AUDITORIA:** não chama `_registrar_auditoria`. Não foi identificada `AuditoriaConsulta` na criação. Há apenas `cadastrado_em` no model.
-- **TESTE:** `test_dentista_cadastra_paciente_e_agenda_apenas_para_si` (`core/test_permission_matrix.py`) — POST com outro dentista não cria; POST com o próprio cria (302). `test_agendar_exige_dentista` (`core/tests.py`) — secretária POST sem dentista → 200 e não cria. Auxiliar: lista sem “Agendar”; menu sem URL de agendar. Não foi identificado POST 403 de auxiliar nem POST bem-sucedido de secretária/administrador.
+- **ALTERAÇÃO:** `consulta.eh_legado = False`; validação compartilhada de conflito; gravação e auditoria na mesma transação; default do model `Consulta.status` = `agendada`; redirect para a agenda na data criada.
+- **AUDITORIA (A-005):** `AuditoriaConsulta` via `_registrar_auditoria`, com usuário, timestamp, paciente, dentista, data/horários e origem `agendar_consulta`.
+- **TESTE:** `test_dentista_cadastra_paciente_e_agenda_apenas_para_si` (`core/test_permission_matrix.py`) — POST com outro dentista não cria; POST com o próprio cria (302). `test_agendar_exige_dentista` (`core/tests.py`) — secretária POST sem dentista → 200 e não cria. Auxiliar: lista sem “Agendar”; menu sem URL de agendar. Na A-004 não foi identificado POST 403 de auxiliar nem POST bem-sucedido de secretária/administrador; a A-005 acrescentou cobertura de criação pela secretária.
 
-Limitação mantida: agendamento existe e está parcialmente testado, porém sem auditoria/rastreabilidade de criação identificada.
+Complemento A-005: criação auditada e rollback em falha da auditoria cobertos em `core/test_agenda_a005.py`. A ausência de rastreabilidade registrada na A-004 foi resolvida no fluxo web.
 
 ### 2.2 Confirmação — CERTIFICADO (fluxo de status na aplicação)
 
@@ -323,18 +325,18 @@ Não há módulo separado de confirmação; o fluxo certificado é essa transiç
 
 Não foi coberto por teste HTTP a tentativa de `realizada` a partir de `agendada`/`confirmada` pelo dentista (o código não inclui essas origens).
 
-### 2.5 Falta — PARCIALMENTE CERTIFICADO
+### 2.5 Falta — CERTIFICADO após A-005 / R-004
 
 - **AÇÃO:** `Consulta.status = faltou`.
 - **TELA/TEMPLATE:** `ficha_consulta.html` (infraestrutura compartilhada); o valor entra nas choices do form quando a origem permite.
 - **URL:** `consultas/<int:pk>/status/` — `core:alterar_status_consulta`.
 - **VIEW:** `alterar_status_consulta`.
 - **PERMISSÃO:** `status_consulta_permitidos` permite `faltou` a partir de `agendada`, `confirmada` e `presente`.
-- **ALTERAÇÃO:** `form.save()` em `Consulta.status` (mesmo caminho das demais transições).
+- **ALTERAÇÃO:** gravação de `Consulta.status` com `update_fields=['status']`, em transação com a auditoria.
 - **AUDITORIA:** mesmo `_registrar_auditoria`.
-- **TESTE:** não foi identificado `client.post(..., {'status': Consulta.Status.FALTOU})` nos testes rastreados. O choice existe em `Consulta.Status.FALTOU` (`core/models.py`) e na migration `core.0020_alter_consulta_status`.
+- **TESTE (A-005):** `test_faltou_http_respeita_matriz` em `core/test_agenda_a005.py`: POST para `faltou`, 403 para auxiliar/dentista alheio; 302 para secretária/dentista responsável/admin, com persistência e auditoria do usuário.
 
-Limitação mantida: falta existe no código, porém sem teste HTTP específico identificado.
+A lacuna de teste HTTP registrada na A-004 foi resolvida na A-005 / R-004.
 
 ### 2.6 Cancelamento — CERTIFICADO (fluxo de status na aplicação)
 
@@ -349,192 +351,142 @@ Limitação mantida: falta existe no código, porém sem teste HTTP específico 
 
 Este fluxo **não** é o cancelamento lógico de conciliação (`cancelar_conciliacao`).
 
-### 2.7 Remarcação — NÃO CERTIFICADO
+### 2.7 Remarcação — IMPLEMENTADA E CERTIFICADA na A-005 / R-002
 
-- **AÇÃO:** reagendar consulta (alterar data/hora em fluxo próprio da aplicação) — **não encontrada**.
-- **TELA/TEMPLATE:** não há template de remarcar; a ficha exibe data/horário em resumo (`<dl>`), sem formulário de reagendamento.
-- **URL:** não há rota `remarcar` em `core/urls.py`.
-- **VIEW:** `ConsultaForm` é usado apenas em `agendar_consulta`, não em edição de data/hora.
-- **PERMISSÃO:** não há função específica de remarcação.
-- **ALTERAÇÃO:** não há mutação de reagendamento na aplicação web auditada. Não existe choice `remarcada` em `Consulta.Status`.
-- **AUDITORIA:** não aplicável a fluxo inexistente.
-- **TESTE:** não há teste de remarcação identificado.
+- **AÇÃO:** UPDATE controlado de data/hora na mesma `Consulta` / mesmo `pk`, preservando paciente, dentista e relacionamentos.
+- **TELA/TEMPLATE:** botão autorizado na ficha; `RemarcacaoConsultaForm` próprio, renderizado em `core/form_consulta.html`, com data, horários e motivo opcional.
+- **URL/VIEW:** `consultas/<pk>/remarcar/`, `core:remarcar_consulta`, view `remarcar_consulta`.
+- **PERMISSÃO:** `usuario_pode_gerenciar_agenda` no servidor: secretária, administrador de negócio (`is_superuser`) e dentista responsável; auxiliar e dentista alheio recebem 403.
+- **ALTERAÇÃO:** somente `agendada` e `confirmada`; após remarcação, status `agendada`. Presente, realizada, faltou e cancelada bloqueadas. Sem nova Consulta nem model de vínculo original↔nova.
+- **AUDITORIA:** `AuditoriaConsulta` na mesma transação, com usuário, timestamp, intervalos anteriores/novos, status e motivo opcional (até 100 caracteres). POST sem mudança efetiva não grava auditoria nem desfaz confirmação.
+- **TESTE:** `core/test_agenda_a005.py`, incluindo HTTP, preservação de vínculos, permissões, conflito e rollback.
 
-Limitação mantida: remarcação não foi encontrada implementada na aplicação.
-
-A transição `confirmada` → `agendada` é desfazer confirmação, não remarcar.
-
-Observação (fora da certificação da aplicação web): `ConsultaAdmin` permite editar `data`, `hora_inicio`, `hora_fim` e `status` no Django Admin, sem passar por `alterar_status_consulta` nem por `_registrar_auditoria`. Isso **não** certifica remarcação na aplicação. A ausência de choice `remarcada` **não** foi classificada automaticamente como defeito (decisão já registrada em A-003).
+Proteção seletiva do `ConsultaAdmin` certificada na A-005: criação desabilitada; `data`, `hora_inicio`, `hora_fim`, `status` e `dentista` somente leitura; demais campos administrativos preservados. A ausência de choice `remarcada` não é defeito: a arquitetura usa a mesma Consulta.
 
 ### 3. Fora do recorte certificado de A-004
 
 Ainda não certificados por esta etapa:
 
 - LGPD além da visibilidade/autorização já examinada;
-- Django Admin como canal paralelo de alteração de consulta;
-- conflito de horário / `Disponibilidade` no agendamento (`ConsultaForm` sem `clean` de sobreposição identificado);
+- Django Admin: proteção seletiva posteriormente certificada na A-005, sem certificação geral dos demais campos administrativos;
+- conflito por dentista: posteriormente certificado na A-005; `Disponibilidade` e conflito de sala permanecem fora do escopo;
 - reabertura de status finais;
 - GET em `/status/` (405 esperado por `@require_POST`, sem teste explícito identificado);
 - formulário de status inválido: redirect sem mensagem ao usuário.
 
-Nenhuma pendência acima foi corrigida em código.
+A A-004 não alterou código; os complementos posteriores certificados na A-005 estão indicados acima.
 
-### 4. Bloqueadores para produção (A-004)
+### 4. Bloqueadores identificados na A-004 — resolvidos na A-005
 
-Os itens abaixo estão classificados como PARCIALMENTE CERTIFICADO ou NÃO CERTIFICADO e são tratados como **bloqueadores para uso em produção**, não apenas como pendências documentais.
+Os itens abaixo eram bloqueadores para uso em produção na A-004. Foram implementados e certificados no escopo aprovado da A-005; isso não certifica infraestrutura nem declara produção pronta.
 
-Estes itens **não** bloqueiam o registro documental da A-004 nem um eventual commit apenas dessa auditoria documental. **Bloqueiam** a leitura de “A-004 = pronto para produção”. Devem ser tratados em auditoria numerada específica antes de deploy. Nenhuma correção de código foi autorizada ou executada nesta atualização.
+A A-004 não significava “pronto para produção”; seu registro documental não autorizou correções de código. O tratamento posterior foi a A-005, cujo encerramento não autoriza integração ou deploy.
 
-#### 4.1 Remarcação — NÃO CERTIFICADO / NÃO IMPLEMENTADO
+#### 4.1 Remarcação — IMPLEMENTADA E CERTIFICADA na A-005
 
 *Risco:* R-002  
-*Prioridade:* ALTA — bloqueia uso real do consultório.
+*Prioridade original:* ALTA — bloqueador resolvido na A-005.
 
-Não existe fluxo de remarcação na aplicação. Cancelar e recriar **não** preserva adequadamente o vínculo/histórico da consulta original. É necessária rastreabilidade administrativa. Prioridade ALTA / bloqueador de produção (R-002). Arquitetura não decidida; implementação não autorizada.
+R-002 resolvida: mesma `Consulta` / mesmo `pk`, UPDATE controlado, vínculos preservados e auditoria antes/depois. A prioridade ALTA registra a classificação original do bloqueador.
 
-#### 4.2 Agendamento sem auditoria de criação
+#### 4.2 Auditoria de criação — IMPLEMENTADA E CERTIFICADA no fluxo web
 
 *Risco:* R-003  
 *Prioridade:* ALTA — risco de compliance em dados de saúde.
 
-O fluxo de criação de consulta não registra quem criou o agendamento (usuário, timestamp de criação de forma auditável). Risco de rastreabilidade em caso de disputa sobre autoria do agendamento.
+R-003 implementada e certificada no fluxo web `agendar_consulta`, com usuário, timestamp e dados do agendamento em `AuditoriaConsulta`, na mesma transação.
 
-#### 4.3 Falta (“faltou”) sem teste HTTP específico
+#### 4.3 Teste HTTP de “faltou” — IMPLEMENTADO E CERTIFICADO
 
 *Risco:* R-004  
 *Prioridade:* MÉDIA.
 
-O fluxo está certificado por leitura de código, mas não há teste via requisição HTTP real cobrindo esse status. Comportamento em produção não deve ser considerado garantido até esse teste existir.
+R-004 implementada e certificada: teste HTTP de `faltou` com permissões, persistência e auditoria.
 
-Tratamento previsto: auditoria **A-005** (ainda não iniciada).
+Tratamento concluído: auditoria **A-005**, certificada no escopo aprovado.
 
 ---
 
 ## A-005 — Remarcação, Auditoria de Criação e Cobertura de Testes
 
-*Estado:* NÃO INICIADA
+*Estado:* IMPLEMENTADA E CERTIFICADA no escopo aprovado — encerramento documental em 18/09/2026.
 
-*Origem:* bloqueadores identificados na A-004 (R-002, R-003, R-004)
+*Origem:* bloqueadores identificados na A-004 (R-002, R-003, R-004).
 
-Nenhuma certificação, implementação, branch, migration, teste novo ou integração foi executada nesta abertura de etapa.
+*Certificação:* revisão independente do Claude por leitura e testes HTTP; certificação do GPT coordenador comunicada pelo usuário. Este encerramento altera somente documentação, sem nova execução de testes.
 
-### Escopo
+### Escopo implementado e certificado
 
-1. **R-002 — Remarcação de consulta (ALTA)**
-   - Definir se remarcação será:
-     (a) novo campo/estado na própria `Consulta` (preserva histórico), ou
-     (b) novo model de vínculo entre consulta original e nova.
-   - Deve manter rastreabilidade: quem remarcou, de qual data/hora para qual, e por quê (campo opcional de motivo).
-   - Definir se remarcação dispara notificação (mesmo que só na Etapa 5+/WhatsApp futura, deixar o gancho pronto).
+1. **R-002 — Remarcação:** arquitetura (a), mesma `Consulta` / mesmo `pk`, UPDATE controlado de data/horários, sem nova Consulta nem model de vínculo. Paciente, dentista e relacionamentos preservados. Somente `agendada` e `confirmada` podem ser remarcadas; confirmada volta a agendada. Presente, realizada, faltou e cancelada bloqueadas. Secretária, administrador e dentista responsável autorizados no servidor; auxiliar e dentista alheio bloqueados.
+2. **Auditoria da remarcação:** `AuditoriaConsulta` existente, com usuário, timestamp, intervalos anteriores/novos, mudança de status e motivo opcional (até 100 caracteres, sem truncamento). Gravação e auditoria atômicas; falha da auditoria reverte a gravação. Sem alteração efetiva, não há auditoria nem perda de confirmação.
+3. **R-003 — Criação:** implementada e certificada no fluxo web `agendar_consulta`; `AuditoriaConsulta` registra usuário, timestamp, paciente, dentista, data/horários e origem, na mesma transação. Sem atribuição artificial de autoria a dados históricos.
+4. **R-004 — Falta:** `test_faltou_http_respeita_matriz` certifica POST autorizado para `faltou`, nega auxiliar/dentista alheio e verifica persistência e auditoria.
+5. **Conflito compartilhado:** `validar_horario_consulta`, em `core/agenda.py`, usada na criação e remarcação. Mesmo dentista/data; `novo_inicio < existente_fim` e `novo_fim > existente_inicio`; consecutivos permitidos; cancelada não ocupa horário; própria Consulta excluída; `hora_fim > hora_inicio`. Legados sem dentista preservados, sem filtro de conflito por profissional inexistente.
+6. **Django Admin — bloqueio seletivo aprovado:** criação de Consulta desabilitada; data, hora_inicio, hora_fim, status e dentista protegidos; demais campos administrativos preservados. Proteção coberta por testes HTTP.
 
-2. **R-003 — Auditoria de criação de agendamento (ALTA)**
-   - Registrar, na criação da consulta: usuário responsável, timestamp, e origem (painel admin, formulário, etc.).
-   - Decidir se isso é um campo direto no model `Consulta` ou um model de log separado (ex.: `LogAuditoria`) reutilizável para outras ações futuras.
+A exibição da trilha `AuditoriaConsulta` na ficha permanece condicionada a `pode_financeiro` (administrador); a certificação do registro não implica acesso da secretária/dentista à lista.
 
-3. **R-004 — Teste HTTP para status “faltou” (MÉDIA)**
-   - Escrever teste de integração cobrindo a view que marca falta, validando: permissão, mudança de status, e efeito colateral (se houver).
+### Evidências de validação já executadas
 
-### Fora de escopo nesta auditoria
+- `manage.py test core.test_agenda_a005 --noinput`: 18 testes aprovados; também aprovados na revisão independente.
+- Execução conjunta anterior: `manage.py test core.test_agenda_a005 core.tests core.test_permission_matrix core.test_security --noinput`: 78 aprovados (16 A-005 então existentes + 62 de regressão).
+- `manage.py check`: sem erros, mantendo somente o warning conhecido `models.W047` do SQLite, não silenciado.
+- `manage.py makemigrations --check --dry-run`: `No changes detected`.
+- Nenhuma migration criada ou necessária; nenhum model novo de histórico.
 
-- Conflito de horário/sala (dupla marcação) — não foi levantado até agora em nenhuma auditoria anterior; se for prioridade, precisa virar item explícito antes de entrar aqui.
-- Qualquer alteração em Locação de Consultórios (módulo pausado).
+Limite técnico registrado na implementação: SQLite não fornece bloqueio de linha por `select_for_update`; concorrência real não foi validada pela suíte. A certificação acima não amplia essa garantia.
 
-### Decisões ainda não tomadas (bloqueiam implementação)
+### Fora do escopo certificado
 
-A A-005 **não escolhe** as alternativas abaixo até aprovação explícita:
+- Conflito de sala e fluxo de `Disponibilidade`.
+- Notificações e-mail/WhatsApp e gancho de notificação: não implementados na A-005.
+- Alterações em financeiro, prontuário, evolução e Locação de Consultórios.
+- Infraestrutura, integração e deploy; a certificação não declara produção pronta.
 
-- Remarcação: opção (a) ou (b).
-- Auditoria de criação: campos em `Consulta` ou model de log separado reutilizável.
-- Notificação na remarcação: gancho apenas vs. disparo imediato (e-mail/WhatsApp permanecem fora até etapa própria).
+### Histórico de decisão — OPÇÃO 1 (17/09/2026)
 
-### Regra de trabalho
-
-Seguir o fluxo já definido:
-
-1. GPT certifica estado real;
-2. Claude revisa riscos/lacunas;
-3. aprovação;
-4. branch isolada;
-5. implementação pelo agente definido;
-6. testes;
-7. nova auditoria antes de integrar.
-
-Não implementar, não criar branch, não criar migration e não integrar enquanto o estado for NÃO INICIADA e as decisões acima não forem aprovadas.
-
-### Reconciliação documental — OPÇÃO 1 (17/09/2026)
-
-**Aprovado por usuário + GPT (coordenação).** A OPÇÃO 2 foi rejeitada.
-
-Remarcação passou a constar do **roteiro ativo** de Agenda/Consulta no `PLANO_MESTRE.md` (A-005 / R-002), **antes** das pendências externas de infraestrutura, sem se misturar a PostgreSQL/SMTP. O `CHECKLIST_PROJETO.md` **não** foi alterado nesta reconciliação.
-
-Registros obrigatórios desta decisão:
-
-- Cancelar e recriar consulta **não** preserva adequadamente o vínculo/histórico da consulta original.
-- É necessária **rastreabilidade administrativa** da remarcação (autoria, data/hora de origem e destino, motivo opcional).
-- Esta decisão **NÃO autoriza implementar R-002**, abrir branch, criar migration, alterar código ou integrar.
-- A **arquitetura da remarcação continua NÃO DECIDIDA** (alternativa (a) ou (b) do escopo).
-- Prioridades mantidas: **R-002 = ALTA / bloqueador de produção**; **R-003 = ALTA**; **R-004 = MÉDIA**.
-- **A-005 = NÃO INICIADA** quanto à implementação.
+Usuário + GPT aprovaram priorizar remarcação antes das pendências externas; a OPÇÃO 2 foi rejeitada. Naquela reconciliação apenas documental, o checklist não foi alterado e não houve autorização de implementação. A decisão arquitetural e a autorização vieram posteriormente: mesma Consulta / mesmo pk e reutilização de `AuditoriaConsulta`, conforme escopo certificado acima. Prioridades originais: R-002 ALTA/bloqueador, R-003 ALTA e R-004 MÉDIA. Os três itens estão agora resolvidos no escopo da A-005.
 
 ---
 
-# REGISTRO DE RISCOS ABERTOS
+# REGISTRO DE RISCOS
 
 ## R-001 — SQLite / UniqueConstraint.nulls_distinct
 
 *Origem:* A-001  
 *Estado:* ABERTO
 
-O Django informou que SQLite não suporta a constraint indicada.
-
-Necessário determinar a regra de negócio protegida por essa constraint antes de decidir qualquer correção.
+O Django mantém o warning `models.W047`: SQLite não suporta `UniqueConstraint.nulls_distinct`; a constraint correspondente não é criada. Não silenciar o warning. Permanece necessária a análise da regra de negócio e de suas consequências antes de qualquer correção.
 
 ---
 
-## R-002 — Remarcação inexistente na aplicação
+## R-002 — Remarcação
 
 *Origem:* A-004  
-*Estado:* ABERTO  
-*Classificação A-004:* NÃO CERTIFICADO / NÃO IMPLEMENTADO  
-*Prioridade:* ALTA — bloqueador de produção
+*Estado:* RESOLVIDO — IMPLEMENTADA E CERTIFICADA na A-005
+*Prioridade original:* ALTA — bloqueador de produção
 
-Não existe fluxo de remarcação na aplicação. Cancelar e recriar **não** preserva adequadamente o vínculo/histórico da consulta original. É necessária rastreabilidade administrativa (quem remarcou, de qual data/hora para qual, motivo opcional).
-
-Não trata a ausência de choice `remarcada` automaticamente como defeito de model (A-003). O bloqueio é a inexistência do fluxo na aplicação para uso real do consultório.
-
-Roteiro: OPÇÃO 1 aprovada (usuário + GPT, 17/09/2026). Arquitetura ainda **não decidida**. Esta classificação **não autoriza** implementar R-002.
-
-*Tratamento previsto:* A-005 (**NÃO INICIADA** quanto à implementação).
+Arquitetura adotada: mesma `Consulta` / mesmo `pk`, UPDATE controlado de data/hora, vínculos preservados, auditoria antes/depois e motivo opcional. Confirmada volta a agendada; status incompatíveis e perfis não autorizados bloqueados no servidor. Não há nova Consulta nem necessidade de choice `remarcada`.
 
 ---
 
-## R-003 — Agendamento sem auditoria de criação
+## R-003 — Auditoria da criação de agendamento
 
 *Origem:* A-004  
-*Estado:* ABERTO  
-*Classificação A-004:* PARCIALMENTE CERTIFICADO  
-*Prioridade:* ALTA — bloqueador de produção (compliance / dados de saúde)
+*Estado:* RESOLVIDO NO FLUXO WEB — IMPLEMENTADA E CERTIFICADA na A-005
+*Prioridade original:* ALTA — rastreabilidade / dados de saúde
 
-O fluxo de criação de consulta não registra quem criou o agendamento (usuário, timestamp de criação de forma auditável). Risco de rastreabilidade em caso de disputa sobre autoria do agendamento.
-
-Evidência já registrada em A-004: `agendar_consulta` não chama `_registrar_auditoria`; não foi identificada `AuditoriaConsulta` na criação; há apenas `cadastrado_em` no model.
-
-*Tratamento previsto:* A-005 (NÃO INICIADA).
+`agendar_consulta` registra `AuditoriaConsulta` atomicamente com a criação: usuário, timestamp, paciente, dentista, data/horários e origem. Inclusão de Consulta pelo Django Admin desabilitada. Sem preenchimento artificial de histórico antigo.
 
 ---
 
-## R-004 — Status “faltou” sem teste HTTP específico
+## R-004 — Teste HTTP de “faltou”
 
 *Origem:* A-004  
-*Estado:* ABERTO  
-*Classificação A-004:* PARCIALMENTE CERTIFICADO  
-*Prioridade:* MÉDIA — bloqueador de produção para considerar o fluxo garantido
+*Estado:* RESOLVIDO — IMPLEMENTADO E CERTIFICADO na A-005
+*Prioridade original:* MÉDIA
 
-O fluxo está certificado por leitura de código, mas não há teste via requisição HTTP real cobrindo esse status. Comportamento em produção não deve ser considerado garantido até esse teste existir.
-
-Evidência já registrada em A-004: não foi identificado `client.post(..., {'status': Consulta.Status.FALTOU})` nos testes rastreados.
-
-*Tratamento previsto:* A-005 (NÃO INICIADA).
+`test_faltou_http_respeita_matriz`, em `core/test_agenda_a005.py`, verifica POST permitido para secretária, dentista responsável e administrador, 403 para auxiliar/dentista alheio, persistência de `faltou` e auditoria com o usuário.
 
 ---
 
@@ -556,14 +508,6 @@ Ao iniciar uma nova sessão, a IA deve usar este documento para descobrir o últ
 
 ## Próxima etapa oficial
 
-*A-005 — Remarcação, Auditoria de Criação e Cobertura de Testes*
+A-005 encerrada documentalmente no escopo implementado e certificado. R-002, R-003 (fluxo web) e R-004 resolvidos; R-001 / W047 permanece aberto.
 
-*Estado:* NÃO INICIADA
-
-*Estado da implementação:* NÃO INICIADA
-
-Origem: R-002 (ALTA / bloqueador), R-003 (ALTA), R-004 (MÉDIA). A-004 permanece encerrada no recorte já certificado e **não** significa pronto para produção.
-
-OPÇÃO 1 aprovada (usuário + GPT, 17/09/2026): remarcação está no roteiro ativo do plano mestre. Isso **não** autoriza implementar R-002 nem abrir branch da A-005.
-
-Não iniciar certificação de estado real, revisão Claude, branch isolada, implementação, testes novos, commit, push, merge ou deploy sem autorização explícita da próxima ação do fluxo de trabalho da A-005.
+Devolver este encerramento ao GPT coordenador e aguardar definição explícita da próxima ação. Nenhuma nova auditoria numerada, implementação, branch, migration, commit, push, merge ou deploy está autorizada por este registro. As pendências externas do plano mestre permanecem; não há declaração de produção pronta.

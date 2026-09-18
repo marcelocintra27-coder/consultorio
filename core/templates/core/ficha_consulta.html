@@ -10,6 +10,7 @@
 
 {% block content %}
     <div class="acoes">
+        {% if pode_remarcar %}<a href="{% url 'core:remarcar_consulta' consulta.pk %}" class="botao">Remarcar consulta</a>{% endif %}
         <a href="{% url 'core:listar_consultas' %}?data={{ consulta.data|date:'Y-m-d' }}" class="botao secundario">Voltar para agenda</a>
     </div>
 

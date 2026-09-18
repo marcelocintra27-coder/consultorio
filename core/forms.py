@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.forms.formsets import formset_factory
 from django.forms.models import ModelChoiceField, ModelChoiceIterator, inlineformset_factory
 
+from .agenda import validar_horario_consulta
 from .anamnese import (
     SAUDE_BUCAL,
     SAUDE_CONDICOES,
@@ -120,7 +121,18 @@ class MaterialUsadoForm(forms.ModelForm):
         }
 
 
-class ConsultaForm(forms.ModelForm):
+class HorarioConsultaMixin:
+    def clean(self):
+        dados = super().clean()
+        dentista = dados.get('dentista') if 'dentista' in self.fields else self.instance.dentista
+        validar_horario_consulta(
+            dentista.pk if dentista else None, dados.get('data'),
+            dados.get('hora_inicio'), dados.get('hora_fim'), self.instance.pk,
+        )
+        return dados
+
+
+class ConsultaForm(HorarioConsultaMixin, forms.ModelForm):
     data = forms.DateField(
         label='data',
         input_formats=['%Y-%m-%d'],
@@ -157,6 +169,20 @@ class ConsultaForm(forms.ModelForm):
         ]
         widgets = {
             'observacoes': forms.Textarea(attrs={'rows': 3}),
+        }
+
+
+class RemarcacaoConsultaForm(HorarioConsultaMixin, forms.ModelForm):
+    # Reserva espaço para os dois intervalos e status na auditoria de 300 caracteres.
+    motivo = forms.CharField(required=False, max_length=100, widget=forms.Textarea(attrs={'rows': 3}))
+
+    class Meta:
+        model = Consulta
+        fields = ['data', 'hora_inicio', 'hora_fim']
+        widgets = {
+            'data': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'hora_inicio': forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
+            'hora_fim': forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
         }
 
 

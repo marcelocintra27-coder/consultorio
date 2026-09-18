@@ -34,7 +34,7 @@ financeiros e locação/rateio entre dentistas.
 
 | Módulo | Estado real |
 |---|---|
-| Agenda | Lista diária, criação de consulta, status (incluindo confirmação e chegada), cancelamento via status e ficha de consulta. `Disponibilidade` existe como modelo e no Django Admin, mas não tem telas próprias. **Não há fluxo próprio de remarcação** (A-005 / R-002: prioridade ALTA, bloqueador de produção; arquitetura ainda não decidida; implementação não autorizada por esta reconciliação). |
+| Agenda | Lista diária, criação de consulta auditada, status (incluindo confirmação e chegada), cancelamento via status, ficha de consulta e remarcação na mesma `Consulta` / mesmo `pk`, implementada e certificada na A-005. Criação e remarcação compartilham validação de conflito por dentista. `Disponibilidade` existe como modelo e no Django Admin, mas não tem telas próprias. |
 | Pacientes | Lista, busca, criação e edição de dados cadastrais. |
 | Prontuário | Anamnese, evolução clínica oficial (`RegistroEvolucaoClinica`), plano de tratamento, autorização de itens com custo e assinaturas. O modelo legado `Evolucao` continua no banco/Django Admin e não possui tela própria. |
 | Documentos e assinaturas | Assinatura manuscrita PNG, hash de conteúdo/imagem, dados de usuário, IP e user-agent; imagens servidas por endpoint autorizado. `FichaAutorizacaoCusto` tem campo de arquivo no modelo, mas ele ainda não está exposto por formulário/fluxo web. |
@@ -45,11 +45,15 @@ financeiros e locação/rateio entre dentistas.
 
 ### Roteiro ativo — Agenda / Consulta
 
-Aprovado em 17/09/2026 (usuário + GPT, OPÇÃO 1): remarcação é prioridade atual do roteiro de Agenda/Consulta, **antes** das pendências externas de infraestrutura e **sem** se misturar a PostgreSQL, SMTP, mídia persistente ou deploy.
+A prioridade de remarcação foi aprovada em 17/09/2026 (usuário + GPT, OPÇÃO 1). Em 18/09/2026, a A-005 foi encerrada no escopo aprovado, após revisão independente do Claude e certificação do GPT coordenador, sem se misturar a PostgreSQL, SMTP, mídia persistente ou deploy.
 
-- **Remarcação (A-005 / R-002):** prioridade ALTA e bloqueador de produção. Cancelar e recriar consulta **não** preserva adequadamente o vínculo/histórico da consulta original. É necessária rastreabilidade administrativa (quem remarcou, de/para qual data/hora, motivo opcional). A arquitetura — (a) campos/estado na própria `Consulta` ou (b) model de vínculo original↔nova — permanece **não decidida**. Esta entrada no roteiro **não autoriza** implementar R-002, abrir branch, criar migration nem integrar código.
+- **Remarcação (R-002): implementada e certificada.** UPDATE controlado na mesma `Consulta` / mesmo `pk`, preservando paciente, dentista e vínculos. Auditoria antes/depois, autoria, timestamp e motivo opcional; `confirmada` volta a `agendada`. Somente `agendada` e `confirmada` podem ser remarcadas. Permissões no servidor: secretária, administrador e dentista responsável; auxiliar e dentista alheio bloqueados.
 
-Demais itens da A-005 (R-003 auditoria de criação; R-004 teste HTTP de `faltou`) permanecem no registro de auditoria, sem implementação nesta reconciliação.
+- **R-003:** auditoria da criação implementada e certificada no fluxo web `agendar_consulta`, usando `AuditoriaConsulta` na mesma transação da gravação.
+- **R-004:** teste HTTP de `faltou` implementado e certificado, respeitando a matriz de permissões.
+- **Conflito compartilhado:** mesmo dentista/data, sobreposição bloqueada, consecutivos permitidos, cancelada não ocupa horário, própria consulta excluída na remarcação e `hora_fim > hora_inicio`. Conflito de sala e notificações e-mail/WhatsApp não foram implementados nesta etapa.
+- **Django Admin:** criação de `Consulta` desabilitada; `data`, `hora_inicio`, `hora_fim`, `status` e `dentista` protegidos; demais campos administrativos preservados.
+- **Validação:** 18 testes A-005 aprovados; execução conjunta anterior com 78 testes aprovados; `manage.py check` sem erros, mantendo somente W047 conhecido; `makemigrations --check --dry-run`: `No changes detected`. Nenhuma migration necessária. Na ficha, a exibição de `AuditoriaConsulta` permanece condicionada a `pode_financeiro` (administrador).
 
 ### Funcionalidades ainda não implementadas
 
@@ -229,7 +233,7 @@ O fluxo administrativo inclui confirmação (`confirmada`) e chegada do paciente
 Não exibe dados financeiros, clínicos ou administrativos. Secretária não pode
 marcar uma consulta como realizada; somente Dentista vinculado ou Administrador
 podem concluir `presente` para `realizada`. A suíte completa com 70 testes foi
-aprovada. Remarcação permanece no roteiro ativo de Agenda/Consulta (A-005 / R-002) e não foi implementada.
+aprovada. Remarcação foi posteriormente implementada e certificada na A-005 / R-002, na mesma `Consulta` / mesmo `pk`.
 
 **Ficha da consulta por contexto — concluída em 11/09/2026:** a ficha única
 foi reorganizada visualmente em Atendimento, Prontuário e documentos, Operação
@@ -692,15 +696,16 @@ declara o sistema pronto para uso em produção.
 - A imagem Docker exclui `.env`, chaves/certificados, banco SQLite, mídia,
   ambiente virtual e artefatos locais pelo `.dockerignore`.
 
-## Bloqueador de produção da aplicação — Remarcação (A-005 / R-002)
+## Bloqueador resolvido — Remarcação (A-005 / R-002)
 
 Distinto das pendências **externas** de infraestrutura listadas na seção
 seguinte. Não misturar remarcação com PostgreSQL, SMTP, mídia persistente,
 segredos Render ou `check --deploy`.
 
-**R-002** é prioridade **ALTA** e **bloqueador de produção**: não existe fluxo
-de remarcação na aplicação. Cancelar e recriar **não** preserva adequadamente
-o vínculo/histórico. Esta seção **não autoriza** implementação.
+**R-002** foi implementada e certificada na A-005: remarcação por UPDATE
+controlado na mesma `Consulta` / mesmo `pk`, com vínculos preservados e
+auditoria antes/depois. Isso não declara o projeto pronto para produção
+nem autoriza integração ou deploy.
 
 ## Pendências obrigatórias antes de produção real
 
@@ -735,9 +740,9 @@ não devem ser contornadas em código. Não incluem remarcação.
    mídia/documentos.
 10. Implementar prescrições e imagens/exames apenas com requisitos, permissões,
     armazenamento e auditoria definidos.
-11. Remarcação no roteiro ativo de Agenda/Consulta (A-005 / R-002): prioridade
-    ALTA, bloqueador de produção; arquitetura não decidida; implementação não
-    autorizada por esta linha do roteiro.
+11. **Concluída e certificada — A-005:** remarcação na mesma `Consulta` / mesmo
+    `pk` (R-002), auditoria de criação web (R-003), teste HTTP de `faltou`
+    (R-004), conflito compartilhado por dentista e proteção seletiva do Admin.
 12. Tratar pendências externas de produção (PostgreSQL, mídia persistente,
     SMTP, backups, hosts/HTTPS) e executar validação de deploy. Sem remarcação
     neste item.

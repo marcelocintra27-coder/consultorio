@@ -80,6 +80,9 @@ class EvolucaoAdmin(AdminClinicoProtegido, admin.ModelAdmin):
 
 @admin.register(Consulta)
 class ConsultaAdmin(admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return False
+
     list_display = (
         'paciente',
         'dentista',
@@ -96,6 +99,7 @@ class ConsultaAdmin(admin.ModelAdmin):
     search_fields = ('paciente__nome_completo',)
     autocomplete_fields = ('paciente', 'dentista')
     readonly_fields = (
+        'data', 'hora_inicio', 'hora_fim', 'status', 'dentista',
         'cadastrado_em',
         'valor_a_cobrar',
         'valor_historico',

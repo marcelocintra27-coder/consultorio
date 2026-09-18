@@ -131,9 +131,34 @@ Legenda:
 
 ## Agenda e pacientes
 
-- [ ] Criar fluxo próprio de reagendamento/cancelamento.
-  - Critérios: mantém histórico/auditoria, valida perfil de agenda, não altera
-    prontuário e possui testes de permitido/negado.
+- [x] Criar fluxo próprio de remarcação (A-005 / R-002); cancelamento via status preservado.
+  - Implementado e certificado em 18/09/2026, após revisão independente do
+    Claude e certificação do GPT coordenador: mesma `Consulta` / mesmo `pk`,
+    UPDATE de data/hora, paciente/dentista/vínculos preservados e auditoria
+    antes/depois com usuário, timestamp e motivo opcional.
+  - Somente `agendada` e `confirmada` podem ser remarcadas; `confirmada` volta
+    a `agendada`. Presente, realizada, faltou e cancelada são bloqueadas.
+    Permissões no servidor: secretária, administrador e dentista responsável;
+    auxiliar e dentista alheio recebem 403. Sem alteração de prontuário.
+- [x] Auditar criação no fluxo web `agendar_consulta` (A-005 / R-003).
+  - Implementada e certificada: `AuditoriaConsulta` registra usuário,
+    timestamp, paciente, dentista, data/horários e origem, atomicamente com
+    a criação. Nenhuma auditoria histórica artificial foi criada.
+- [x] Testar alteração HTTP válida para `faltou` (A-005 / R-004).
+  - Implementado e certificado, incluindo permissões e auditoria.
+- [x] Validar conflito compartilhado na criação e remarcação (A-005).
+  - Mesmo dentista/data; bloqueia sobreposição, permite consecutivos,
+    ignora cancelada, exclui a própria consulta e exige `hora_fim > hora_inicio`.
+    Conflito de sala e notificações e-mail/WhatsApp permanecem fora do escopo.
+- [x] Proteger seletivamente `ConsultaAdmin` (A-005).
+  - Criação desabilitada; data, hora_inicio, hora_fim, status e dentista
+    protegidos; demais campos administrativos preservados.
+  - Evidências A-005: 18 testes específicos aprovados; execução conjunta
+    anterior com 78 aprovados; `manage.py check` sem erros, somente W047
+    conhecido e não silenciado; `makemigrations --check --dry-run`:
+    `No changes detected`. Nenhuma migration necessária.
+  - A exibição da trilha `AuditoriaConsulta` na ficha permanece condicionada
+    a `pode_financeiro` (administrador).
 
 - [x] Criar confirmações e atendimento administrativo.
   - Critérios atendidos: status próprio/documentado, sem dado clínico, filtro
