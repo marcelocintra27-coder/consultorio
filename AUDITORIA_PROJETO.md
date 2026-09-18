@@ -406,6 +406,65 @@ O fluxo de criação de consulta não registra quem criou o agendamento (usuári
 
 O fluxo está certificado por leitura de código, mas não há teste via requisição HTTP real cobrindo esse status. Comportamento em produção não deve ser considerado garantido até esse teste existir.
 
+Tratamento previsto: auditoria **A-005** (ainda não iniciada).
+
+---
+
+## A-005 — Remarcação, Auditoria de Criação e Cobertura de Testes
+
+*Estado:* NÃO INICIADA
+
+*Origem:* bloqueadores identificados na A-004 (R-002, R-003, R-004)
+
+Nenhuma certificação, implementação, branch, migration, teste novo ou integração foi executada nesta abertura de etapa.
+
+### Escopo
+
+1. **R-002 — Remarcação de consulta (ALTA)**
+   - Definir se remarcação será:
+     (a) novo campo/estado na própria `Consulta` (preserva histórico), ou
+     (b) novo model de vínculo entre consulta original e nova.
+   - Deve manter rastreabilidade: quem remarcou, de qual data/hora para qual, e por quê (campo opcional de motivo).
+   - Definir se remarcação dispara notificação (mesmo que só na Etapa 5+/WhatsApp futura, deixar o gancho pronto).
+
+2. **R-003 — Auditoria de criação de agendamento (ALTA)**
+   - Registrar, na criação da consulta: usuário responsável, timestamp, e origem (painel admin, formulário, etc.).
+   - Decidir se isso é um campo direto no model `Consulta` ou um model de log separado (ex.: `LogAuditoria`) reutilizável para outras ações futuras.
+
+3. **R-004 — Teste HTTP para status “faltou” (MÉDIA)**
+   - Escrever teste de integração cobrindo a view que marca falta, validando: permissão, mudança de status, e efeito colateral (se houver).
+
+### Fora de escopo nesta auditoria
+
+- Conflito de horário/sala (dupla marcação) — não foi levantado até agora em nenhuma auditoria anterior; se for prioridade, precisa virar item explícito antes de entrar aqui.
+- Qualquer alteração em Locação de Consultórios (módulo pausado).
+
+### Decisões ainda não tomadas (bloqueiam implementação)
+
+A A-005 **não escolhe** as alternativas abaixo até aprovação explícita:
+
+- Remarcação: opção (a) ou (b).
+- Auditoria de criação: campos em `Consulta` ou model de log separado reutilizável.
+- Notificação na remarcação: gancho apenas vs. disparo imediato (e-mail/WhatsApp permanecem fora até etapa própria).
+
+### Regra de trabalho
+
+Seguir o fluxo já definido:
+
+1. GPT certifica estado real;
+2. Claude revisa riscos/lacunas;
+3. aprovação;
+4. branch isolada;
+5. implementação pelo agente definido;
+6. testes;
+7. nova auditoria antes de integrar.
+
+Não implementar, não criar branch, não criar migration e não integrar enquanto o estado for NÃO INICIADA e as decisões acima não forem aprovadas.
+
+### Conflito documental a informar (não resolvido nesta abertura)
+
+`PLANO_MESTRE.md` mantém a ordem oficial das próximas etapas com o item 11 como pendências externas de produção e validação de deploy. O `CHECKLIST_PROJETO.md` já lista fluxo próprio de reagendamento como pendente em Agenda. A A-005 trata bloqueadores de produção da Agenda **antes de deploy**, sem alterar aqueles dois arquivos nesta abertura. Qualquer alinhamento da ordem oficial no plano/checklist exige autorização explícita.
+
 ---
 
 # REGISTRO DE RISCOS ABERTOS
@@ -432,6 +491,8 @@ Não existe fluxo de remarcação na aplicação. Qualquer alteração de data/h
 
 Não trata a ausência de choice `remarcada` automaticamente como defeito de model (A-003). O bloqueio é a inexistência do fluxo na aplicação para uso real do consultório.
 
+*Tratamento previsto:* A-005 (NÃO INICIADA).
+
 ---
 
 ## R-003 — Agendamento sem auditoria de criação
@@ -445,6 +506,8 @@ O fluxo de criação de consulta não registra quem criou o agendamento (usuári
 
 Evidência já registrada em A-004: `agendar_consulta` não chama `_registrar_auditoria`; não foi identificada `AuditoriaConsulta` na criação; há apenas `cadastrado_em` no model.
 
+*Tratamento previsto:* A-005 (NÃO INICIADA).
+
 ---
 
 ## R-004 — Status “faltou” sem teste HTTP específico
@@ -457,6 +520,8 @@ Evidência já registrada em A-004: `agendar_consulta` não chama `_registrar_au
 O fluxo está certificado por leitura de código, mas não há teste via requisição HTTP real cobrindo esse status. Comportamento em produção não deve ser considerado garantido até esse teste existir.
 
 Evidência já registrada em A-004: não foi identificado `client.post(..., {'status': Consulta.Status.FALTOU})` nos testes rastreados.
+
+*Tratamento previsto:* A-005 (NÃO INICIADA).
 
 ---
 
@@ -478,14 +543,10 @@ Ao iniciar uma nova sessão, a IA deve usar este documento para descobrir o últ
 
 ## Próxima etapa oficial
 
-*A-004 — encerrada quanto ao recorte autorizado (controles de acesso + mapeamento dos sete fluxos + classificação de bloqueadores de produção).*
+*A-005 — Remarcação, Auditoria de Criação e Cobertura de Testes*
 
-Estado registrado:
+*Estado:* NÃO INICIADA
 
-- controles de acesso: CERTIFICADOS;
-- fluxo funcional completo: PARCIALMENTE CERTIFICADO;
-- A-004 **não** significa pronto para produção.
+Origem: R-002, R-003, R-004 (A-004). A-004 permanece encerrada no recorte já certificado e **não** significa pronto para produção.
 
-Bloqueadores de produção abertos: R-002, R-003, R-004. Devem ser tratados em auditoria numerada específica **antes de deploy**.
-
-Próxima auditoria numerada **ainda não aberta**.
+Não iniciar certificação de estado real, revisão Claude, branch isolada, implementação, testes novos, commit, push, merge ou deploy sem autorização explícita da próxima ação do fluxo de trabalho da A-005.
