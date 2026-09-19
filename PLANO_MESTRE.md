@@ -673,13 +673,23 @@ Retenção inicial: preservar originais e histórico sem expurgo automático.
 Temporários de requisição são limpos; há comando para temporários abandonados
 acima de 24h e inventário somente leitura de integridade/quarentena/órfãos.
 
-Pendências reais: validar motor antimalware real e atualização de assinaturas;
-provisionar armazenamento persistente privado e capacidade adequada; definir
+Pendências reais: concluir a homologação local de detecção, fluxo HTTP e
+continuidade após reinício; homologar antimalware e atualização de assinaturas
+separadamente em produção; provisionar armazenamento persistente privado e
+capacidade adequada; definir
 responsáveis e prazos definitivos de retenção/quarentena; validar backup e
 restauração no ambiente de produção. Os testes controlados de inspeção não
 equivalem a homologar um motor real. Sem inspeção disponível, novos arquivos
 ficam bloqueados. Não houve deploy, commit/push nem alteração de ambiente de
 produção; não foi iniciada outra etapa.
+
+Atualização local em 19/09/2026: `clamd` Running/Automatic no Windows,
+assinaturas `main.cvd`, `daily.cvd` e `bytecode.cvd` presentes e verificadas,
+TCP 3310 somente em 127.0.0.1, PING e INSTREAM inofensivo aprovados. O código
+do projeto retornou `liberado` para conteúdo inofensivo. Há dois processos
+`clamd` ouvindo na porta; um pertence ao serviço. As tarefas agendadas relatadas
+pelo usuário não puderam ser consultadas nesta sessão por acesso negado. Esta
+evidência resolve a ausência de motor local, mas não libera produção.
 
 Ver `RELATORIO_ITEM10_IMAGENS_EXAMES.md` para arquivos, evidências, parâmetros
 locais e limites operacionais. A conclusão da implementação do Item 10 não

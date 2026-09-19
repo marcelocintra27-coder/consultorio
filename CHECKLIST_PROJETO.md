@@ -261,9 +261,16 @@ Legenda:
   - Relatório e inventário de arquivos: `RELATORIO_ITEM10_IMAGENS_EXAMES.md`.
 
 - [!] Ativação operacional de imagens/exames depende de infraestrutura validada.
-  - Motor ClamAV real e atualização de assinaturas ainda não validados neste
-    ambiente; aprovação/rejeição foram testadas com respostas controladas.
-    Sem motor disponível, o upload real permanece em quarentena e sem download.
+  - Em 19/09/2026, no Windows local, `clamd` foi confirmado Running/Automatic;
+    `main.cvd`, `daily.cvd` e `bytecode.cvd` existem e passaram na verificação do
+    `sigtool`. A porta 3310 escuta somente em 127.0.0.1; PING, INSTREAM inofensivo
+    e a chamada `exames.antivirus.inspecionar` responderam com sucesso.
+    A detecção real de amostra de teste, o fluxo HTTP completo e a disponibilidade
+    após reinício ainda não foram homologados. Dois processos `clamd` aparecem
+    ouvindo na mesma porta; verificar a duplicidade sem interromper o serviço.
+    As tarefas agendadas foram informadas pelo usuário, mas sua consulta nesta
+    sessão retornou acesso negado. Sem motor disponível, uploads novos permanecem
+    em quarentena e sem download.
   - Volume persistente privado, capacidade, backup/restauração em produção,
     prazos definitivos de retenção/quarentena e responsáveis continuam pendentes.
     Nenhum deploy, provisionamento ou mudança de configuração de produção foi feito.

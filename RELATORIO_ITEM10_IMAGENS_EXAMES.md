@@ -152,11 +152,38 @@ Não remove originais, arquivos em quarentena ou documentos históricos.
 
 ## Pendências reais e limites
 
-1. Instalar/configurar e homologar ClamAV real, suas assinaturas atualizadas,
-   limites e disponibilidade. A implementação conecta apenas a loopback e
-   falha de modo fechado. No teste real de upload, o scanner estava indisponível
-   e o arquivo permaneceu corretamente em quarentena. Respostas simuladas não
-   comprovam capacidade real de detecção.
+### Revalidação local em 19/09/2026
+
+Após configuração administrativa manual pelo usuário, o serviço Windows `clamd`
+foi observado Running e Automatic (`sc queryex`: PID 13880). Os arquivos
+`main.cvd`, `daily.cvd` e `bytecode.cvd` existem em
+`C:\Program Files\ClamAV\database`, com horários de gravação em 19/09/2026,
+e `sigtool --info` confirmou a integridade das três bases. `daily.cvd` informa
+build em 19/09/2026 06:24 UTC, versão 28128. O `netstat` mostrou escuta apenas
+em `127.0.0.1:3310`, sem escuta em endereço de rede ou em `0.0.0.0`.
+
+O daemon respondeu `PONG` ao comando local e `stream: OK` ao INSTREAM de texto
+inofensivo. A função real `exames.antivirus.inspecionar(BytesIO(...))` retornou
+`liberado` para conteúdo inofensivo. Não se usou malware real nem se executou
+upload HTTP ou download nesta revalidação. O scan semanal foi informado pelo
+usuário como iniciado; as tarefas `ClamAV-Update` e `ClamAV-Scan-Semanal` e seus
+resultados não puderam ser consultados nesta sessão (`Acesso negado`). O usuário
+informou `ClamAV-Update` com `LastTaskResult = 0`; a presença e integridade das
+bases foram verificadas independentemente.
+
+Há dois processos `clamd` (PIDs 13880 e 14784) associados à escuta em
+`127.0.0.1:3310`; o primeiro é o PID do serviço. Falta identificar por que o
+segundo processo está ativo e confirmar continuidade após reinício, sem alterar
+o serviço durante esta auditoria. A ausência de motor antimalware local foi
+resolvida; homologação completa do fluxo e implantação em produção permanecem
+pendentes.
+
+1. Concluir homologação de detecção e limites com amostra de teste apropriada,
+   fluxo HTTP e disponibilidade após reinício; repetir instalação e validação
+   de ClamAV/assinaturas no ambiente de produção. A implementação conecta apenas
+   a loopback e falha de modo fechado. O teste histórico de upload ocorreu
+   antes da instalação local e permaneceu corretamente em quarentena. As respostas
+   simuladas de detecção ainda não comprovam capacidade real de detecção.
 2. Provisionar volume persistente privado, capacidade e permissões de acesso
    operacional. O disco de 1 GB documentado não foi provisionado nem alterado.
 3. Definir responsáveis, tratamento/prazos finais de quarentena e retenção,
