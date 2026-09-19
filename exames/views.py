@@ -11,7 +11,7 @@ from core.models import Paciente
 from .models import Exame
 from .forms import ExameForm, JustificativaForm
 from .permissoes import pode_corrigir
-from .services import autorizar, incluir, invalidar, reinspecionar, evento
+from .services import BloqueioTransitorioEsgotado, autorizar, incluir, invalidar, reinspecionar, evento
 from .uploads import UploadPrivado
 from .storage import abrir_verificado
 
@@ -130,6 +130,8 @@ def invalidacao(request, paciente_pk, pk):
             messages.success(request, 'Registro invalidado. Original e histórico preservados.')
         except (ValidationError, IntegrityError):
             messages.error(request, 'Registro já invalidado ou substituído.')
+        except BloqueioTransitorioEsgotado:
+            messages.error(request, 'Não foi possível invalidar o registro agora. Tente novamente.')
     else:
         messages.error(request, 'Informe uma justificativa de até 1000 caracteres.')
     return redirect('core:exames:detalhe', paciente_pk=paciente_pk, pk=pk)

@@ -14,7 +14,7 @@ from django.contrib import admin
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import transaction
+from django.db import OperationalError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase, TransactionTestCase, SimpleTestCase, Client, RequestFactory, override_settings
 from django.urls import reverse
@@ -22,7 +22,7 @@ from core.models import Paciente, Consulta
 from locacao.models import Dentista, PerfilUsuario, Sala
 from .models import Exame, EventoExame
 from . import storage, antivirus
-from .services import evento
+from .services import BloqueioTransitorioEsgotado, evento, invalidar
 
 
 def imagem(nome='exame.png', formato='PNG', tamanho=(20, 20)):
@@ -256,6 +256,43 @@ class ExamesTests(TestCase):
             self.client.post(self.url('invalidar', exame), {'justificativa': 'Teste'})
         self.assertEqual(exame.eventos.filter(acao='invalidado').count(), 1)
 
+    def test_invalidacao_repete_bloqueio_transitorio(self):
+        exame = self.criar()
+        tentativas = 0
+
+        def evento_com_bloqueio(*args, **kwargs):
+            nonlocal tentativas
+            tentativas += 1
+            if tentativas < 3:
+                raise OperationalError('database is locked')
+            return evento(*args, **kwargs)
+
+        with patch('exames.services.evento', side_effect=evento_com_bloqueio), patch('exames.services.sleep') as espera:
+            invalidar(self.user, exame, 'Invalidação fictícia')
+        self.assertEqual(tentativas, 3)
+        self.assertEqual(espera.call_count, 2)
+        self.assertEqual(exame.eventos.filter(acao='invalidado').count(), 1)
+
+    def test_invalidacao_bloqueio_esgota_cinco_tentativas(self):
+        exame = self.criar()
+        with patch('exames.services.evento', side_effect=OperationalError('database is locked')) as gravar, \
+                patch('exames.services.sleep') as espera:
+            with self.assertRaises(BloqueioTransitorioEsgotado):
+                invalidar(self.user, exame, 'Invalidação fictícia')
+        self.assertEqual(gravar.call_count, 5)
+        self.assertEqual(espera.call_count, 4)
+        self.assertEqual(exame.eventos.filter(acao='invalidado').count(), 0)
+
+    def test_view_trata_apenas_bloqueio_transitorio_esgotado(self):
+        exame = self.criar()
+        url = self.url('invalidar', exame)
+        with patch('exames.views.invalidar', side_effect=BloqueioTransitorioEsgotado('bloqueio')):
+            resposta = self.client.post(url, {'justificativa': 'Teste'})
+        self.assertEqual(resposta.status_code, 302)
+        with patch('exames.views.invalidar', side_effect=OperationalError('erro inesperado')):
+            with self.assertRaises(OperationalError):
+                self.client.post(url, {'justificativa': 'Teste'})
+
     def test_imutabilidade_orm_cascata_e_auditoria(self):
         exame = self.criar()
         for func in [lambda: exame.save(), lambda: exame.delete(), lambda: Exame.objects.filter(pk=exame.pk).update(titulo='x'),
@@ -411,13 +448,14 @@ class ConcorrenciaTests(TransactionTestCase):
                 barreira.wait(timeout=10)
                 invalidar(usuario, obj, 'Teste de concorrência')
                 return 'ok'
-            except (ValidationError, IntegrityError, OperationalError):
-                return 'conflito'
+            except (ValidationError, IntegrityError, OperationalError) as exc:
+                return type(exc).__name__
             finally:
                 connections.close_all()
         with ThreadPoolExecutor(max_workers=2) as executor:
             resultados = list(executor.map(lambda _: executar(), range(2)))
-        self.assertEqual(resultados.count('ok'), 1)
+        self.assertEqual(resultados.count('ok'), 1, resultados)
+        self.assertNotIn('OperationalError', resultados)
         self.assertEqual(EventoExame.objects.filter(exame=exame, acao='invalidado').count(), 1)
 
     def test_gravacoes_simultaneas_nao_sobrescrevem(self):

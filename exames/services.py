@@ -1,9 +1,14 @@
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from time import sleep
+from django.db import OperationalError, transaction
 from core.permissoes import usuario_e_administrador, usuario_pode_acessar_consulta
 from .models import Exame, EventoExame
 from .permissoes import pode_acessar, pode_corrigir
 from . import antivirus, storage
+
+
+class BloqueioTransitorioEsgotado(OperationalError):
+    """O SQLite continuou bloqueado após as tentativas de invalidação."""
 
 
 def evento(user, acao, resultado='ok', exame=None, justificativa=''):
@@ -58,11 +63,20 @@ def invalidar(user, exame, justificativa):
         raise PermissionDenied
     if not justificativa.strip():
         raise ValidationError('Justificativa obrigatória.')
-    with transaction.atomic():
-        exame = Exame.objects.select_for_update().get(pk=exame.pk)
-        if exame.invalidado:
-            raise ValidationError('Registro já invalidado ou substituído.')
-        evento(user, 'invalidado', exame=exame, justificativa=justificativa)
+    for tentativa in range(5):
+        try:
+            with transaction.atomic():
+                atual = Exame.objects.select_for_update().get(pk=exame.pk)
+                if atual.invalidado:
+                    raise ValidationError('Registro já invalidado ou substituído.')
+                evento(user, 'invalidado', exame=atual, justificativa=justificativa)
+            return
+        except OperationalError as exc:
+            if transaction.get_connection().vendor != 'sqlite' or 'locked' not in str(exc).lower():
+                raise
+            if tentativa == 4:
+                raise BloqueioTransitorioEsgotado('Bloqueio transitório do SQLite esgotado.') from exc
+            sleep(0.01 * (tentativa + 1))
 
 
 def reinspecionar(user, exame):
