@@ -2,6 +2,37 @@
 
 Concluído em 15/09/2026. Escopo: somente o recorte aprovado de prescrições.
 
+## Revalidação em 19/09/2026
+
+Na retomada solicitada, o repositório estava sem alterações pendentes, no
+commit `bf63831`, com a implementação de prescrições e trabalhos posteriores
+já incorporados. Os 23 arquivos mencionados na conversa não estavam pendentes
+no diretório de trabalho. Nenhuma implementação foi reiniciada ou recuperada
+novamente; código, dados e migrations existentes foram preservados.
+
+- Testes específicos de prescrições e integridade: **53 aprovados**.
+- Suíte completa: primeira execução com **238 testes, 1 falha** em
+  `exames.tests.ConcorrenciaTests.test_invalidacoes_simultaneas_preservam_evento_unico`
+  (nenhuma operação retornou sucesso quando o teste esperava uma).
+- Diagnóstico: os **2 testes de concorrência passaram isoladamente**;
+  uma segunda execução integral teve **238 aprovados, 0 falhas**.
+  A falha intermitente de concorrência em exames permanece registrada para
+  investigação no escopo desse módulo; nenhum teste foi excluído ou relaxado.
+- `manage.py check`: sem problemas ou warnings nesta revisão.
+- `manage.py makemigrations --check --dry-run`: sem mudanças detectadas.
+- `manage.py migrate --check`: sem migrations pendentes;
+  `0028_prescricoes` já aplicada, sem regeneração ou reaplicação.
+- `git diff --check`: sem erros.
+
+A suíte completa utilizou diretório temporário de mídia e hasher MD5 somente
+no processo de testes, sem alterar as configurações da aplicação. A validação
+visual anterior, descrita abaixo, foi preservada e não repetida; impressão em
+impressora física continua não verificada. O warning SQLite registrado no
+encerramento histórico abaixo não apareceu nesta revalidação.
+
+Nesta retomada foi atualizado somente este relatório. Não houve `git add`,
+commit, push, deploy ou alteração de regras de negócio.
+
 ## Ponto de interrupção e recuperação
 
 A tarefa anterior foi interrompida pelo limite de uso depois de gerar
