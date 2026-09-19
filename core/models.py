@@ -327,8 +327,13 @@ class PrecoProcedimento(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=['procedimento', 'convenio'],
-                name='preco_unico_procedimento_tabela',
-                nulls_distinct=False,
+                condition=Q(convenio__isnull=False),
+                name='preco_unico_procedimento_convenio',
+            ),
+            models.UniqueConstraint(
+                fields=['procedimento'],
+                condition=Q(convenio__isnull=True),
+                name='preco_unico_procedimento_particular',
             ),
         ]
 
