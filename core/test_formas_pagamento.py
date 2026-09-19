@@ -20,6 +20,19 @@ from .models import (
 
 
 class FormasPagamentoTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        for codigo, nome in (
+            ('pix', 'Pix'),
+            ('dinheiro', 'Dinheiro'),
+            ('cartao_debito', 'Cartão de Débito'),
+            ('cartao_credito', 'Cartão de Crédito'),
+            ('transferencia', 'Transferência'),
+        ):
+            FormaPagamentoConfiguravel.objects.get_or_create(
+                codigo=codigo, defaults={'nome': nome, 'ativo': True},
+            )
+
     def setUp(self):
         sala = Sala.objects.create(nome='Sala Formas')
         dentista = Dentista.objects.create(nome_completo='Dentista Formas', sala=sala)

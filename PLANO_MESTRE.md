@@ -722,6 +722,13 @@ nem autoriza integração ou deploy.
 Estas pendências são bloqueadoras de produção **de infraestrutura/ambiente** e
 não devem ser contornadas em código. Não incluem remarcação.
 
+Em 19/09/2026, o PostgreSQL 17 local foi homologado para desenvolvimento e
+testes: conexão Django, migrations, backup e restauração em banco separado e
+suíte completa (241/241 testes) passaram. O SQLite e seus dados reais foram
+preservados. Consultar
+[`RELATORIO_POSTGRESQL_LOCAL.md`](RELATORIO_POSTGRESQL_LOCAL.md). Esta preparação
+local não conclui o provisionamento de produção nem autoriza deploy.
+
 1. Provisionar PostgreSQL e configurar `DATABASE_URL`.
 2. Provisionar armazenamento persistente para `MEDIA_ROOT` e assinaturas,
    configurando `RENDER_DISK_PATH`.

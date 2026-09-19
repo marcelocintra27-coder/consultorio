@@ -109,7 +109,8 @@ class PrescricoesTests(TestCase):
         self.assertContains(self.client.get(self.url('ver_prescricao', ficha)), 'Prescrição assinada')
         resposta = self.client.get(reverse('core:ver_imagem_assinatura', args=[sig.pk]))
         self.assertEqual(resposta.status_code, 200)
-        resposta.close()
+        for fechar in resposta._resource_closers:
+            fechar()
 
     def test_texto_livre_sem_medicamentos(self):
         ficha = self.criar(itens=0, texto_livre='Prescrição fictícia em texto livre.')

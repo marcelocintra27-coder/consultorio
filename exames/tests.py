@@ -14,7 +14,7 @@ from django.contrib import admin
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import OperationalError, transaction
+from django.db import OperationalError, connection, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase, TransactionTestCase, SimpleTestCase, Client, RequestFactory, override_settings
 from django.urls import reverse
@@ -93,7 +93,8 @@ class ExamesTests(TestCase):
         resposta = self.client.get(self.url('download', exame))
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(b''.join(resposta.streaming_content), conteudo)
-        resposta.close()
+        for fechar in resposta._resource_closers:
+            fechar()
         self.assertIn('attachment;', resposta['Content-Disposition'])
         self.assertIn('no-store', resposta['Cache-Control'])
         self.assertEqual(resposta['X-Content-Type-Options'], 'nosniff')
@@ -243,7 +244,9 @@ class ExamesTests(TestCase):
         self.assertTrue(exame.invalidado)
         self.assertEqual(storage.caminho(exame.chave).read_bytes(), original)
         resposta = self.client.get(self.url('download', exame))
-        self.assertEqual(resposta.status_code, 200); resposta.close()
+        self.assertEqual(resposta.status_code, 200)
+        for fechar in resposta._resource_closers:
+            fechar()
         self.assertEqual(self.enviar(acao='corrigir', obj=exame, justificativa='Reenvio').status_code, 200)
         self.assertEqual(Exame.objects.count(), 2)
 
@@ -268,19 +271,24 @@ class ExamesTests(TestCase):
             return evento(*args, **kwargs)
 
         with patch('exames.services.evento', side_effect=evento_com_bloqueio), patch('exames.services.sleep') as espera:
-            invalidar(self.user, exame, 'Invalidação fictícia')
-        self.assertEqual(tentativas, 3)
-        self.assertEqual(espera.call_count, 2)
-        self.assertEqual(exame.eventos.filter(acao='invalidado').count(), 1)
+            if connection.vendor == 'sqlite':
+                invalidar(self.user, exame, 'Invalidação fictícia')
+            else:
+                with self.assertRaises(OperationalError):
+                    invalidar(self.user, exame, 'Invalidação fictícia')
+        self.assertEqual(tentativas, 3 if connection.vendor == 'sqlite' else 1)
+        self.assertEqual(espera.call_count, 2 if connection.vendor == 'sqlite' else 0)
+        self.assertEqual(exame.eventos.filter(acao='invalidado').count(), 1 if connection.vendor == 'sqlite' else 0)
 
     def test_invalidacao_bloqueio_esgota_cinco_tentativas(self):
         exame = self.criar()
         with patch('exames.services.evento', side_effect=OperationalError('database is locked')) as gravar, \
                 patch('exames.services.sleep') as espera:
-            with self.assertRaises(BloqueioTransitorioEsgotado):
+            esperado = BloqueioTransitorioEsgotado if connection.vendor == 'sqlite' else OperationalError
+            with self.assertRaises(esperado):
                 invalidar(self.user, exame, 'Invalidação fictícia')
-        self.assertEqual(gravar.call_count, 5)
-        self.assertEqual(espera.call_count, 4)
+        self.assertEqual(gravar.call_count, 5 if connection.vendor == 'sqlite' else 1)
+        self.assertEqual(espera.call_count, 4 if connection.vendor == 'sqlite' else 0)
         self.assertEqual(exame.eventos.filter(acao='invalidado').count(), 0)
 
     def test_view_trata_apenas_bloqueio_transitorio_esgotado(self):

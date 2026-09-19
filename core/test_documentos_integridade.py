@@ -330,7 +330,8 @@ class DocumentosIntegridadeTests(TestCase):
             self.client.force_login(user)
             resposta = self.client.get(url)
             self.assertEqual(resposta.status_code, 200)
-            resposta.close()
+            for fechar in resposta._resource_closers:
+                fechar()
         for user in self.negados:
             self.client.force_login(user)
             self.assertEqual(self.client.get(url).status_code, 403)

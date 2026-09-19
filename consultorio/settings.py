@@ -172,12 +172,12 @@ WSGI_APPLICATION = 'consultorio.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-if EM_PRODUCAO:
-    banco_url = os.environ.get('DATABASE_URL', '').strip()
-    if not banco_url:
-        raise ImproperlyConfigured(
-            'DATABASE_URL é obrigatória em produção. Use o PostgreSQL do Render.'
-        )
+banco_url = os.environ.get('DATABASE_URL', '').strip()
+if EM_PRODUCAO and not banco_url:
+    raise ImproperlyConfigured(
+        'DATABASE_URL é obrigatória em produção. Use o PostgreSQL do Render.'
+    )
+if banco_url:
     try:
         import dj_database_url
     except ImportError as exc:
@@ -189,7 +189,7 @@ if EM_PRODUCAO:
             banco_url,
             conn_max_age=600,
             conn_health_checks=True,
-            ssl_require=True,
+            ssl_require=EM_PRODUCAO,
         )
     }
 else:

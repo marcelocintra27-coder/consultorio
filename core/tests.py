@@ -22,6 +22,7 @@ from .tabela_uniodonto import (
     FATOR_US_UNIODONTO,
     LOTE_PROCEDIMENTOS_UNIODONTO,
     NOME_CONVENIO_UNIODONTO,
+    popular_convenio_e_tabela,
 )
 
 
@@ -276,6 +277,10 @@ class AtendimentoProcedimentoTests(TestCase):
 
 
 class TabelaUniodontoTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        popular_convenio_e_tabela(Convenio, ProcedimentoUniodonto)
+
     def setUp(self):
         self.sala = Sala.objects.create(nome='Sala Teste Uniodonto')
         self.dentista = Dentista.objects.create(

@@ -393,6 +393,18 @@ Legenda:
 
 ## Produção e infraestrutura
 
+- [x] Validar PostgreSQL local para homologação, sem migrar dados reais.
+  - PostgreSQL 17 local em `127.0.0.1:5432`, com banco e usuário exclusivos;
+    migrations aplicadas e conexão Django validada. Backup do banco de
+    homologação restaurado em banco separado, com estrutura e contagens
+    conferidas. SQLite original e backup preservados.
+  - Suíte completa no PostgreSQL com `--keepdb`: 241/241 testes aprovados;
+    `check`, `makemigrations --check --dry-run` e `migrate --check` aprovados.
+    Testes foram ajustados para fechar arquivos sem encerrar a conexão do
+    `TestCase`, conferir o comportamento de cada backend e criar seus próprios
+    dados iniciais. Detalhes em
+    [`RELATORIO_POSTGRESQL_LOCAL.md`](RELATORIO_POSTGRESQL_LOCAL.md).
+
 - [!] Provisionar PostgreSQL para produção.
   - Bloqueio: decisão atual de não contratar/provisionar recursos Render.
   - Critérios para concluir: banco provisionado, `DATABASE_URL` segura,
