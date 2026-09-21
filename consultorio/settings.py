@@ -83,6 +83,103 @@ def _inteiro_positivo_de_ambiente(nome, padrao):
     return valor
 
 
+def _flag_ambiente(environ, nome):
+    return str(environ.get(nome, '') or '').strip().lower() in ('true', '1', 'yes')
+
+
+def _pastas_homolog_local(base_dir):
+    raiz = Path(base_dir) / 'homolog_local'
+    return {
+        'media': (raiz / 'media').resolve(),
+        'exames': (raiz / 'private_exames').resolve(),
+        'tmp': (raiz / 'tmp').resolve(),
+    }
+
+
+def _caminho_no_projeto(base_dir, valor):
+    caminho = Path(valor)
+    if not caminho.is_absolute():
+        caminho = Path(base_dir) / caminho
+    return caminho
+
+
+def _resolver_exames_root_ambiente(environ, base_dir):
+    configurada = str(environ.get('EXAMES_ROOT', '') or '').strip()
+    if configurada:
+        return _caminho_no_projeto(base_dir, configurada)
+    return Path(base_dir) / 'private_exames'
+
+
+def resolver_media_root(em_producao, environ, base_dir):
+    """MEDIA_ROOT: disco do Render em produção; opcional DJANGO_MEDIA_ROOT só no local."""
+    if em_producao:
+        raiz_midia = str(environ.get('RENDER_DISK_PATH', '') or '').strip()
+        if not raiz_midia:
+            raise ImproperlyConfigured(
+                'RENDER_DISK_PATH é obrigatório para armazenar mídia em disco persistente.'
+            )
+        return Path(raiz_midia) / 'media'
+    configurada = str(environ.get('DJANGO_MEDIA_ROOT', '') or '').strip()
+    if configurada:
+        return _caminho_no_projeto(base_dir, configurada)
+    return Path(base_dir) / 'media'
+
+
+def resolver_upload_temp_local(em_producao, environ, base_dir):
+    """FILE_UPLOAD_TEMP_DIR opcional só fora de produção; produção mantém o padrão do Django."""
+    if em_producao:
+        return None
+    configurada = str(environ.get('DJANGO_FILE_UPLOAD_TEMP_DIR', '') or '').strip()
+    if not configurada:
+        return None
+    return str(_caminho_no_projeto(base_dir, configurada))
+
+
+def validar_homolog_local(
+    environ,
+    *,
+    em_producao,
+    media_root,
+    file_upload_temp_dir,
+    database_name,
+    database_engine,
+    base_dir,
+):
+    """Aborta o processo se HOMOLOG_LOCAL=1 e o isolamento não estiver completo."""
+    if not _flag_ambiente(environ, 'HOMOLOG_LOCAL'):
+        return
+    if em_producao:
+        raise ImproperlyConfigured(
+            'HOMOLOG_LOCAL não pode estar ativo em produção.'
+        )
+    engine = str(database_engine or '').lower().replace('-', '_')
+    if 'postgres' not in engine:
+        raise ImproperlyConfigured(
+            'HOMOLOG_LOCAL exige PostgreSQL no banco consultorio_homolog.'
+        )
+    nome = Path(str(database_name or '')).name
+    if nome != 'consultorio_homolog':
+        raise ImproperlyConfigured(
+            'HOMOLOG_LOCAL exige o banco PostgreSQL consultorio_homolog.'
+        )
+    pastas = _pastas_homolog_local(base_dir)
+    if Path(media_root).resolve() != pastas['media']:
+        raise ImproperlyConfigured(
+            'HOMOLOG_LOCAL exige MEDIA_ROOT em homolog_local/media.'
+        )
+    exames_root = _resolver_exames_root_ambiente(environ, base_dir)
+    if exames_root.resolve() != pastas['exames']:
+        raise ImproperlyConfigured(
+            'HOMOLOG_LOCAL exige EXAMES_ROOT em homolog_local/private_exames.'
+        )
+    if not file_upload_temp_dir or Path(file_upload_temp_dir).resolve() != pastas['tmp']:
+        raise ImproperlyConfigured(
+            'HOMOLOG_LOCAL exige FILE_UPLOAD_TEMP_DIR em homolog_local/tmp.'
+        )
+    for pasta in pastas.values():
+        pasta.mkdir(parents=True, exist_ok=True)
+
+
 _hosts_configurados = _lista_de_ambiente('DJANGO_ALLOWED_HOSTS')
 _host_render = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '').strip()
 ALLOWED_HOSTS = list(dict.fromkeys([
@@ -269,15 +366,19 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_URL = '/media/'
-if EM_PRODUCAO:
-    _raiz_midia = os.environ.get('RENDER_DISK_PATH', '').strip()
-    if not _raiz_midia:
-        raise ImproperlyConfigured(
-            'RENDER_DISK_PATH é obrigatório para armazenar mídia em disco persistente.'
-        )
-    MEDIA_ROOT = Path(_raiz_midia) / 'media'
-else:
-    MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = resolver_media_root(EM_PRODUCAO, os.environ, BASE_DIR)
+_upload_temp_local = resolver_upload_temp_local(EM_PRODUCAO, os.environ, BASE_DIR)
+if _upload_temp_local:
+    FILE_UPLOAD_TEMP_DIR = _upload_temp_local
+validar_homolog_local(
+    os.environ,
+    em_producao=EM_PRODUCAO,
+    media_root=MEDIA_ROOT,
+    file_upload_temp_dir=globals().get('FILE_UPLOAD_TEMP_DIR'),
+    database_name=DATABASES['default'].get('NAME'),
+    database_engine=DATABASES['default'].get('ENGINE'),
+    base_dir=BASE_DIR,
+)
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',

@@ -16,6 +16,7 @@ __pycache__/
 db.sqlite3
 media/
 private_exames/
+homolog_local/
 tmp/exames-auditoria/
 staticfiles/
 *.mp3
