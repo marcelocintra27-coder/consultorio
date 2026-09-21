@@ -327,3 +327,21 @@ def usuario_pode_emitir_prescricao(user, paciente, prescricao=None):
     if not Consulta.objects.filter(paciente=paciente, dentista=dentista).exists():
         return False
     return prescricao is None or prescricao.dentista_id == dentista.pk
+
+
+def usuario_pode_digitalizar(user):
+    """Acesso ao fluxo de digitalização, sem mudar a matriz dos demais módulos."""
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if usuario_e_administrador(user):
+        return True
+    dentista = dentista_do_usuario(user)
+    return bool(dentista and dentista.ativo)
+
+
+def usuario_pode_acessar_digitalizacao(user, paciente):
+    if not usuario_pode_digitalizar(user):
+        return False
+    if usuario_e_administrador(user):
+        return True
+    return paciente is not None and usuario_pode_acessar_prontuario(user, paciente)

@@ -511,3 +511,129 @@ Ao iniciar uma nova sessão, a IA deve usar este documento para descobrir o últ
 A-005 encerrada documentalmente no escopo implementado e certificado. R-002, R-003 (fluxo web) e R-004 resolvidos; R-001 / W047 permanece aberto.
 
 Devolver este encerramento ao GPT coordenador e aguardar definição explícita da próxima ação. Nenhuma nova auditoria numerada, implementação, branch, migration, commit, push, merge ou deploy está autorizada por este registro. As pendências externas do plano mestre permanecem; não há declaração de produção pronta.
+
+
+## H-001 — Escopo fechado 1.1–1.3 (21/09/2026)
+
+Baseline: main, árvore limpa, commit 1b0c36cd52023114b0c4230c5ea5cfc94ac2789f.
+Autorização explícita do usuário: corrigir somente 1.1, 1.2 e 1.3, testar em
+PostgreSQL isolado, conferir diff e documentar. Sem commit, push ou deploy.
+Este registro é canônico para esta etapa; o histórico anterior permanece preservado.
+
+Classificações vigentes: CONFIRMADO NO CÓDIGO, DEPENDENTE DO AMBIENTE,
+PREVENTIVO, NÃO CONFIRMADO e CORRIGIDO E FECHADO.
+NOVO ACHADO PENDENTE é andamento na fila, acompanhado de classificação.
+Itens fechados só reabrem por evidência objetiva: teste falhando, comportamento
+reproduzível, vulnerabilidade demonstrável, requisito alterado ou incompatibilidade.
+
+| Item | Classificação inicial | Evidência | Comportamento aprovado |
+|---|---|---|---|
+| 1.1 | CONFIRMADO NO CÓDIGO | core/views.py: digitalizacao_upload/processar_ia; core/forms.py: DigitalizacaoFichaForm sem escopo | Administrador ou dentista ativo vinculado; sem paciente somente administrador; negar antes de IA; preservar POST/CSRF |
+| 1.2 | CONFIRMADO NO CÓDIGO | core/views.py: teste_assinatura sem restrição, listagem global | GET/POST somente superusuário; imagens clínicas mantêm regra atual |
+| 1.3 | CONFIRMADO NO CÓDIGO | DigitalizacaoFicha.imagem FileField; upload sem controles específicos | JPEG/PNG/GIF/WebP estáticos, 1 arquivo, 20 MiB, 40 milhões de pixels, worker 15 s/512 MiB, ClamAV liberado, limpeza e revalidação antes da IA |
+| 2.1–2.3 | DEPENDENTE DO AMBIENTE | Armazenamento privado, ClamAV, inicialização/PostgreSQL/HTTPS online não verificados | Fora desta implementação |
+| 3.1–3.2 | PREVENTIVO | Dados fictícios e nova aceitação antes da liberação online | Fora desta implementação; testes desta etapa não certificam hospedagem |
+
+Arquivos autorizados: core/views.py, core/forms.py, core/permissoes.py,
+core/ia_digitalizacao.py, core/digitalizacao_uploads.py (novo),
+core/digitalizacao_worker.py (novo), core/test_digitalizacao.py (novo),
+core/test_security.py e AUDITORIA_PROJETO.md. Qualquer outro arquivo exige
+nova autorização. Sem modelos, migrations, dependências ou configuração persistente.
+
+Critérios de fechamento: causa corrigida, teste específico reproduz/protege,
+testes específicos e suíte completa aprovados no PostgreSQL isolado, diff
+conferido, nenhuma alteração fora do escopo e resultado documentado.
+241 testes anteriores são evidência histórica, não substituem nova execução.
+Situação inicial: implementação e validação pendentes; nenhum item fechado.
+
+### H-001 — Evidência de reprodução e validação específica
+
+Antes da correção, quatro testes novos foram executados no PostgreSQL isolado:
+formulário com paciente alheio, processamento sem vínculo, arquivos inválidos e
+acesso não administrativo à tela técnica. Resultado: 4 testes, 12 falhas de
+asserção (incluindo subtestes), reproduzindo os três itens.
+
+Após a implementação, a primeira rodada de 18 testes encontrou uma inspeção
+indevida do primeiro arquivo de um upload múltiplo rejeitado. Corrigida dentro
+de 1.3, sem ampliar arquivos ou comportamento aprovado.
+
+Rodada específica final: 51 testes, 106,478 s, OK, zero falhas/erros.
+Seleção: core.test_digitalizacao, core.test_security,
+core.tests.AssinaturaEletronicaTests e core.test_permission_matrix.
+Inclui 30 testes novos de digitalização e 3 novos da tela técnica.
+
+Execução: Python do .venv com -B; DiscoverRunner(interactive=False, keepdb=True).
+Banco PostgreSQL existente test_consultorio_homolog, definido explicitamente
+somente no processo antes de django.setup(); SELECT current_database() confere
+a identidade. Schema verificado com MigrationExecutor: nenhuma migration pendente;
+runner confirmou No migrations to apply. MEDIA_ROOT e FILE_UPLOAD_TEMP_DIR
+redirecionados somente em memória a diretório temporário, removido ao final.
+Nenhuma configuração persistente alterada e nenhuma escrita no banco principal.
+ClamAV e fornecedor de IA simulados nos testes; worker de imagens realmente
+executado com limites de tempo/memória. Não houve chamada externa de IA.
+
+Revisão parcial: exatamente nove arquivos autorizados (seis modificados e três
+novos); oito arquivos Python com sintaxe válida. A leitura estática respeitou o
+BOM preexistente de forms.py. Ajustado espaço em branco introduzido neste registro.
+Suíte completa e fechamento final ainda pendentes neste ponto do histórico.
+
+### H-001 — Resultado final e fechamento (21/09/2026)
+
+| Item | Status final | Correção e evidência de aceite |
+|---|---|---|
+| 1.1 | CORRIGIDO E FECHADO | Formulário e POST restritos ao vínculo clínico; apenas administrador ou dentista ativo; sem paciente somente administrador; autorização anterior à IA. Testes de perfis, paciente forjado, perda de vínculo, dentista inativo, autoria distinta, vínculo compartilhado, métodos e CSRF aprovados. |
+| 1.2 | CORRIGIDO E FECHADO | Tela técnica GET/POST restrita a superusuário; demais perfis não recebem nomes nem gravam assinatura; funcionamento administrativo e autorização das imagens preservados. TelaTecnicaAssinaturaTests e testes administrativos/clínicos existentes aprovados. |
+| 1.3 | CORRIGIDO E FECHADO | Recebimento limitado, conteúdo decodificado em worker, bloqueio de animação, nome controlado, inspeção obrigatória, revalidação de legado antes da IA e limpeza de temporários. Testes de formatos, bytes, pixels, múltiplos arquivos, malware/quarentena, timeout, falhas de banco/storage e ausência de envio indevido aprovados. |
+
+Resultados da versão final:
+- Específicos e regressões relacionadas: **51/51 aprovados**, 106,478 segundos.
+- Suíte completa: **274/274 aprovados**, 525,387 segundos; zero falhas e erros.
+- System check: **System check identified no issues (0 silenced)**.
+- Execução no PostgreSQL isolado test_consultorio_homolog, usando Python 3.14.6
+  do .venv. Nenhuma alteração do hasher global; ajustes de testes preexistentes
+  e o override local da nova classe de digitalização limitam-se aos testes.
+- Suíte completa usa a mesma preparação isolada descrita acima e
+  DiscoverRunner(verbosity=1, interactive=False, keepdb=True).run_tests([]).
+- Nenhuma migration criada ou aplicada; schema previamente conferido.
+- Diff de código/testes revisado; git diff --check aprovado; novos arquivos
+  também conferidos quanto a espaços finais e sintaxe.
+- Exatamente seis arquivos modificados e três novos da lista autorizada.
+  Index sem alterações; branch e HEAD preservados. Sem commit ou push.
+- Nenhuma regressão conhecida nos testes executados.
+- Código/testes não foram alterados entre a rodada específica final, a suíte
+  completa e o fechamento. Depois da suíte, somente este registro foi atualizado.
+
+Limites do fechamento:
+- Escopo dos uploads: rotas de digitalização e revalidação anterior ao envio à IA;
+  não constitui auditoria universal de outros caminhos de gravação do sistema.
+- Limites aprovados: 20 MiB, 40 milhões de pixels, 15 s e 512 MiB no worker.
+  O worker reutiliza limitar_memoria de exames.worker sem alterar esse arquivo.
+- Sem ClamAV liberando o arquivo, o fluxo recusa upload/envio à IA. ClamAV real,
+  assinaturas do antivírus, Render, Docker e infraestrutura online não foram
+  provisionados nem certificados. Não houve transmissão de arquivos à IA real.
+- Nenhum modelo, regra externa à etapa, migration, dependência ou configuração
+  persistente foi alterado. Banco principal e arquivos clínicos de uso não foram
+  usados para gravações; dados e mídia dos testes são descartáveis.
+- Itens 2.1–2.3 continuam DEPENDENTES DO AMBIENTE; 3.1–3.2 continuam PREVENTIVOS
+  para liberação online, fora da implementação desta etapa.
+- Fila de NOVOS ACHADOS PENDENTES desta implementação: nenhum item adicional
+  incluído. Pendências previamente registradas fora do escopo permanecem abertas.
+
+### H-001 — Identificação exata da versão validada
+
+Baseline Git: 1b0c36cd52023114b0c4230c5ea5cfc94ac2789f, branch main.
+Alterações permanecem sem commit para revisão do usuário.
+Os hashes abaixo identificam os bytes dos oito arquivos de código/testes
+validados, incluindo os três arquivos novos ainda não rastreados pelo Git.
+Este documento não inclui seu próprio hash para evitar autorreferência.
+
+| Arquivo | SHA-256 |
+|---|---|
+| core/views.py | 6e377bb94eb5e4f393bdcec1e5da5aaa6f7bbe26bf04ba477872af6cbfa3edf5 |
+| core/forms.py | cb7d9b00d5beda9b3fe1688b718bc3087d3b95d6d12826900346df144f132eda |
+| core/permissoes.py | 6aa6d077e3f1a38b16a18f0139a510c8fa505163d79a71fd7c43bc4a5f2e3e1b |
+| core/ia_digitalizacao.py | 607cef21f5d8c39e978434a217859c26f492f911629ee8781bb783b5cd77735c |
+| core/digitalizacao_uploads.py | ed0be07e209f558efdad7259c14fc192fb57dd36fd1ce9caf5327aafd61374d9 |
+| core/digitalizacao_worker.py | 45e00b7e2622dc2b047d5882c1bd6009d701ea95d1471caf613551d245b41af4 |
+| core/test_digitalizacao.py | 5632e7d660dc5a2d6c91da058b2751a1d691913f7c9de3a677385f2a7ccfc066 |
+| core/test_security.py | 8ba436a27ffca1d9d371026e3f575b497f586d3d82c628146cbd29578c7a1f8c |

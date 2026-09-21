@@ -146,3 +146,54 @@ class ProntuarioEAssinaturaSegurancaTests(TestCase):
         self.assertEqual(resposta.status_code, 302)
         self.consulta.refresh_from_db()
         self.assertEqual(self.consulta.status, Consulta.Status.REALIZADA)
+
+
+class TelaTecnicaAssinaturaTests(TestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from django.test import override_settings
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.raiz = Path(self.tmp.name)
+        cfg = override_settings(MEDIA_ROOT=self.raiz)
+        cfg.enable()
+        self.addCleanup(cfg.disable)
+        self.admin = User.objects.create_superuser('admin_tecnica', password='teste')
+        self.negados = []
+        for papel in ('dentista', 'secretaria', 'auxiliar'):
+            usuario = User.objects.create_user(papel + '_tecnica', password='teste')
+            PerfilUsuario.objects.create(usuario=usuario, papel=papel)
+            self.negados.append(usuario)
+        self.negados.append(User.objects.create_user('sem_perfil_tecnica', password='teste'))
+        self.negados.append(User.objects.create_user('staff_tecnica', password='teste', is_staff=True))
+
+    def payload(self):
+        import base64
+        return {'papel': 'dentista', 'nome_assinante': 'Nome restrito fictício',
+                'imagem_base64': 'data:image/png;base64,' + base64.b64encode(PNG).decode()}
+
+    def test_get_post_negados_sem_metadados_ou_gravacao(self):
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.post('/fichas/assinatura/', self.payload()).status_code, 302)
+        antes = set(self.raiz.rglob('*.png'))
+        for usuario in self.negados:
+            with self.subTest(usuario=usuario.username):
+                self.client.force_login(usuario)
+                resposta = self.client.get('/fichas/assinatura/')
+                self.assertEqual(resposta.status_code, 403)
+                self.assertNotContains(resposta, 'Nome restrito fictício', status_code=403)
+                self.assertEqual(self.client.post('/fichas/assinatura/', self.payload()).status_code, 403)
+        self.assertEqual(AssinaturaEletronica.objects.count(), 1)
+        self.assertEqual(set(self.raiz.rglob('*.png')), antes)
+
+    def test_administrador_preserva_get_post(self):
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get('/fichas/assinatura/').status_code, 200)
+        self.assertEqual(self.client.post('/fichas/assinatura/', self.payload()).status_code, 302)
+        self.assertEqual(AssinaturaEletronica.objects.count(), 1)
+
+    def test_anonimo_redirecionado(self):
+        self.assertEqual(self.client.get('/fichas/assinatura/').status_code, 302)
+        self.assertEqual(self.client.post('/fichas/assinatura/', self.payload()).status_code, 302)
+        self.assertFalse(AssinaturaEletronica.objects.exists())

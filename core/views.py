@@ -8,14 +8,17 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_not_required, login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
-from django.http import FileResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST, require_http_methods
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
+from .permissoes import usuario_pode_digitalizar, usuario_pode_acessar_digitalizacao
+from .digitalizacao_uploads import UploadDigitalizacao
 
 from locacao.models import Dentista, Despesa, PerfilUsuario, Sala
 
@@ -297,14 +300,41 @@ def editar_paciente(request, pk):
     })
 
 
+@csrf_exempt
 @login_required
+@require_http_methods(['GET', 'POST'])
 def digitalizacao_upload(request):
+    if not usuario_pode_digitalizar(request.user):
+        raise PermissionDenied
+    handler = UploadDigitalizacao(request)
+    request.upload_handlers = [handler]
+    try:
+        return _digitalizacao_upload_protegido(request)
+    except OSError:
+        return HttpResponse('Armazenamento temporariamente indisponível.', status=503)
+    finally:
+        handler.fechar()
+
+
+@csrf_protect
+def _digitalizacao_upload_protegido(request):
     if request.method == 'POST':
-        form = DigitalizacaoFichaForm(request.POST, request.FILES)
+        form = DigitalizacaoFichaForm(request.POST, request.FILES, user=request.user)
+        if getattr(request, 'digitalizacao_upload_erro', False):
+            form = DigitalizacaoFichaForm(request.POST, user=request.user)
+            form.add_error(None, 'Envie somente uma imagem de até 20 MiB.')
+            # Não validar nem inspecionar o primeiro arquivo de um envio rejeitado.
+            return render(request, 'core/digitalizacao_upload.html', {'form': form})
         if form.is_valid():
             digitalizacao = form.save(commit=False)
             digitalizacao.digitalizado_por = request.user
-            digitalizacao.save()
+            try:
+                with transaction.atomic():
+                    digitalizacao.save()
+            except (DatabaseError, OSError):
+                if digitalizacao.imagem and digitalizacao.imagem._committed:
+                    digitalizacao.imagem.storage.delete(digitalizacao.imagem.name)
+                return HttpResponse('Não foi possível registrar a digitalização.', status=503)
             messages.success(
                 request,
                 'Digitalização enviada. A ficha ficou pendente de revisão.',
@@ -315,7 +345,7 @@ def digitalizacao_upload(request):
             'Não foi possível enviar. Confira os avisos no formulário.',
         )
     else:
-        form = DigitalizacaoFichaForm()
+        form = DigitalizacaoFichaForm(user=request.user)
     return render(request, 'core/digitalizacao_upload.html', {
         'form': form,
     })
@@ -325,6 +355,8 @@ def digitalizacao_upload(request):
 @require_POST
 def digitalizacao_processar_ia(request, pk):
     digitalizacao = get_object_or_404(DigitalizacaoFicha, pk=pk)
+    if not usuario_pode_acessar_digitalizacao(request.user, digitalizacao.paciente):
+        raise PermissionDenied
     ok = processar_digitalizacao_com_ia(digitalizacao)
     if ok:
         messages.success(
@@ -2209,6 +2241,8 @@ def _ip_do_pedido(request):
 
 
 def teste_assinatura(request):
+    if not usuario_e_administrador(request.user):
+        raise PermissionDenied
     if request.method == 'POST':
         form = AssinaturaTesteForm(request.POST)
         if form.is_valid():

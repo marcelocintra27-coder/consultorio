@@ -56,16 +56,9 @@ def processar_digitalizacao_com_ia(digitalizacao):
         if not digitalizacao.imagem:
             raise RuntimeError('A digitalização não tem imagem anexada.')
 
+        from .digitalizacao_uploads import validar_imagem
         with digitalizacao.imagem.open('rb') as arquivo:
-            bytes_imagem = arquivo.read()
-        if not bytes_imagem:
-            raise RuntimeError('O arquivo da imagem está vazio.')
-
-        media_type = _tipo_midia(digitalizacao)
-        if media_type not in TIPOS_IMAGEM:
-            raise RuntimeError(
-                f'Tipo de arquivo não suportado para visão: {media_type}.'
-            )
+            bytes_imagem, media_type = validar_imagem(arquivo, digitalizacao.imagem.name)
 
         cliente = Anthropic(api_key=chave)
         resposta = cliente.messages.create(
