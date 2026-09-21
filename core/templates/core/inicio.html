@@ -227,11 +227,13 @@
                 <a href="{% url 'core:listar_pacientes' %}" class="botao">Acessar</a>
             </div>
 
+            {% if pode_digitalizar %}
             <div class="card">
                 <h3>Digitalizar ficha antiga</h3>
                 <p>Envio de ficha física digitalizada para revisão.</p>
                 <a href="{% url 'core:digitalizacao_upload' %}" class="botao">Acessar</a>
             </div>
+            {% endif %}
 
             {% if pode_financeiro %}
             <div class="card">

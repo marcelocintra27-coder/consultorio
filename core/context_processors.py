@@ -1,7 +1,12 @@
 from django.utils import timezone
 from django.urls import reverse
 
-from .permissoes import perfil_do_usuario, usuario_e_administrador, usuario_pode_financeiro
+from .permissoes import (
+    perfil_do_usuario,
+    usuario_e_administrador,
+    usuario_pode_digitalizar,
+    usuario_pode_financeiro,
+)
 
 
 def _item(request, rotulo, icone, rota):
@@ -23,7 +28,10 @@ def admin_local_date(request):
 
 
 def permissoes_usuario(request):
-    return {'pode_financeiro': usuario_pode_financeiro(request.user)}
+    return {
+        'pode_financeiro': usuario_pode_financeiro(request.user),
+        'pode_digitalizar': usuario_pode_digitalizar(request.user),
+    }
 
 
 def navegacao_usuario(request):

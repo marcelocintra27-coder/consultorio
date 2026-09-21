@@ -381,12 +381,45 @@ class MatrizPermissoesTests(TestCase):
         self.assertContains(resposta, 'Consulta')
         self.assertNotContains(resposta, reverse('core:agendar_consulta'))
         self.assertNotContains(resposta, 'Materiais utilizados')
+        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
 
         self.client.force_login(self.admin)
         resposta = self.client.get(inicio)
         self.assertContains(resposta, 'Administrador')
         self.assertContains(resposta, 'Financeiro atual')
         self.assertContains(resposta, 'Administração')
+        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
+
+    def test_home_nao_oferece_digitalizacao_sem_permissao_backend(self):
+        inicio = reverse('core:inicio')
+        digitalizar = reverse('core:digitalizacao_upload')
+
+        self.client.force_login(self.auxiliar)
+        resposta = self.client.get(inicio)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Auxiliar')
+        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
+        self.assertEqual(self.client.get(digitalizar).status_code, 403)
+        self.assertEqual(self.client.post(digitalizar).status_code, 403)
+
+        self.client.force_login(self.secretaria)
+        resposta = self.client.get(inicio)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
+        self.assertEqual(self.client.get(digitalizar).status_code, 403)
+        self.assertEqual(self.client.post(digitalizar).status_code, 403)
+
+        self.client.force_login(self.dentista_user)
+        resposta = self.client.get(inicio)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Rotina clínica')
+        self.assertEqual(self.client.get(digitalizar).status_code, 200)
+
+        self.client.force_login(self.admin)
+        resposta = self.client.get(inicio)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Painel administrativo')
+        self.assertEqual(self.client.get(digitalizar).status_code, 200)
 
     def test_administracao_e_dashboard_sao_exclusivos_do_superusuario(self):
         administracao = reverse('core:administracao')
@@ -404,6 +437,7 @@ class MatrizPermissoesTests(TestCase):
         self.assertContains(resposta, 'Consultas em andamento')
         self.assertContains(resposta, 'Gerenciar acesso e configurações')
         self.assertNotContains(resposta, 'Rotina clínica')
+        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
 
         resposta = self.client.get(administracao)
         self.assertContains(resposta, 'Administração da clínica')
@@ -435,6 +469,7 @@ class MatrizPermissoesTests(TestCase):
         self.assertNotContains(resposta, 'Materiais')
         self.assertNotContains(resposta, 'Administração técnica')
         self.assertNotContains(resposta, 'Prontuário')
+        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
 
     def test_dashboard_do_dentista_exibe_apenas_rotina_clinica_vinculada(self):
         self.consulta_um.data = timezone.localdate()
@@ -472,6 +507,7 @@ class MatrizPermissoesTests(TestCase):
         self.assertNotContains(resposta, 'Pagamentos')
         self.assertNotContains(resposta, 'Financeiro atual')
         self.assertNotContains(resposta, 'Administração técnica')
+        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
 
     def test_ficha_separa_contextos_sem_ampliar_permissoes(self):
         ficha = reverse('core:ficha_consulta', args=[self.consulta_um.pk])
