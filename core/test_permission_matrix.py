@@ -38,6 +38,12 @@ class MatrizPermissoesTests(TestCase):
             data_nascimento=date(1981, 1, 1),
             telefone='11900000002',
         )
+        self.paciente_sem_vinculo = Paciente.objects.create(
+            nome_completo='Paciente sem consulta',
+            cpf=None,
+            data_nascimento=date(1982, 1, 1),
+            telefone='11900000004',
+        )
         self.consulta_um = Consulta.objects.create(
             paciente=self.paciente_um,
             dentista=self.dentista_um,
@@ -219,13 +225,114 @@ class MatrizPermissoesTests(TestCase):
                 'hora_fim': '10:00',
             },
         )
-        self.assertEqual(resposta.status_code, 302)
-        self.assertTrue(
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(
             Consulta.objects.filter(
                 paciente=novo_paciente,
                 dentista=self.dentista_um,
             ).exists()
         )
+
+        resposta = self.client.post(
+            reverse('core:agendar_consulta'),
+            {
+                'paciente': self.paciente_um.pk,
+                'dentista': self.dentista_um.pk,
+                'data': '2026-09-12',
+                'hora_inicio': '09:00',
+                'hora_fim': '10:00',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertTrue(
+            Consulta.objects.filter(
+                paciente=self.paciente_um,
+                dentista=self.dentista_um,
+                data=date(2026, 9, 12),
+            ).exists()
+        )
+
+    def test_form_agendar_paciente_respeita_visibilidade_do_usuario(self):
+        url = reverse('core:agendar_consulta')
+
+        self.client.force_login(self.dentista_user)
+        resposta = self.client.get(url)
+        self.assertEqual(resposta.status_code, 200)
+        html = resposta.content.decode()
+        self.assertIn(self.paciente_um.nome_completo, html)
+        self.assertNotIn(self.paciente_dois.nome_completo, html)
+        self.assertNotIn(self.paciente_sem_vinculo.nome_completo, html)
+        self.assertContains(resposta, self.dentista_um.nome_completo)
+        self.assertNotContains(resposta, self.dentista_dois.nome_completo)
+
+        for paciente in (self.paciente_dois, self.paciente_sem_vinculo):
+            resposta = self.client.post(
+                url,
+                {
+                    'paciente': paciente.pk,
+                    'dentista': self.dentista_um.pk,
+                    'data': '2026-09-13',
+                    'hora_inicio': '14:00',
+                    'hora_fim': '15:00',
+                },
+            )
+            self.assertEqual(resposta.status_code, 200)
+            self.assertFalse(
+                Consulta.objects.filter(
+                    paciente=paciente, dentista=self.dentista_um, data=date(2026, 9, 13)
+                ).exists()
+            )
+
+        self.client.force_login(self.secretaria)
+        resposta = self.client.get(url)
+        self.assertContains(resposta, self.paciente_um.nome_completo)
+        self.assertContains(resposta, self.paciente_dois.nome_completo)
+        self.assertContains(resposta, self.paciente_sem_vinculo.nome_completo)
+        self.assertContains(resposta, self.dentista_um.nome_completo)
+        self.assertContains(resposta, self.dentista_dois.nome_completo)
+
+        self.client.force_login(self.admin)
+        resposta = self.client.get(url)
+        self.assertContains(resposta, self.paciente_um.nome_completo)
+        self.assertContains(resposta, self.paciente_dois.nome_completo)
+        self.assertContains(resposta, self.paciente_sem_vinculo.nome_completo)
+
+    def test_anamnese_aceita_paciente_sem_cpf_e_bloqueia_secretaria(self):
+        sem_cpf = Paciente.objects.create(
+            nome_completo='Paciente anamnese sem CPF',
+            cpf=None,
+            data_nascimento=date(1983, 2, 2),
+            telefone='11900000005',
+        )
+        Consulta.objects.create(
+            paciente=sem_cpf,
+            dentista=self.dentista_um,
+            data=date(2026, 9, 11),
+            hora_inicio=time(11),
+            hora_fim=time(12),
+        )
+        url = reverse('core:nova_ficha_anamnese', args=[sem_cpf.pk])
+
+        self.client.force_login(self.secretaria)
+        self.assertEqual(self.client.post(url).status_code, 403)
+        self.assertFalse(FichaCadastroAnamnese.objects.filter(paciente=sem_cpf).exists())
+
+        self.client.force_login(self.dentista_user)
+        resposta = self.client.post(url)
+        self.assertEqual(resposta.status_code, 302)
+        ficha = FichaCadastroAnamnese.objects.get(paciente=sem_cpf)
+        self.assertEqual(ficha.cpf, '')
+        sem_cpf.refresh_from_db()
+        self.assertIsNone(sem_cpf.cpf)
+
+        self.client.force_login(self.admin)
+        com_cpf = self.paciente_um
+        resposta = self.client.post(
+            reverse('core:nova_ficha_anamnese', args=[com_cpf.pk])
+        )
+        self.assertEqual(resposta.status_code, 302)
+        ficha_com_cpf = FichaCadastroAnamnese.objects.get(paciente=com_cpf)
+        self.assertEqual(ficha_com_cpf.cpf, com_cpf.cpf)
 
     def test_financeiro_administrativo_e_negado_ao_dentista_mas_lancamento_proprio_e_permitido(self):
         pagamentos = reverse('core:listar_pagamentos_consulta')

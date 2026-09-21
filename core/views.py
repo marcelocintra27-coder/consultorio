@@ -1802,7 +1802,7 @@ def agendar_consulta(request):
         raise PermissionDenied
     dentista_logado = dentista_do_usuario(request.user)
     if request.method == 'POST':
-        form = ConsultaForm(request.POST)
+        form = ConsultaForm(request.POST, user=request.user)
         if dentista_logado:
             form.fields['dentista'].queryset = Dentista.objects.filter(pk=dentista_logado.pk)
         if form.is_valid():
@@ -1828,7 +1828,7 @@ def agendar_consulta(request):
                     f"{reverse('core:listar_consultas')}?data={consulta.data.isoformat()}"
                 )
     else:
-        form = ConsultaForm(initial={'data': timezone.localdate()})
+        form = ConsultaForm(user=request.user, initial={'data': timezone.localdate()})
         if dentista_logado:
             form.fields['dentista'].queryset = Dentista.objects.filter(pk=dentista_logado.pk)
             form.fields['dentista'].initial = dentista_logado.pk
@@ -2327,7 +2327,7 @@ def _criar_rascunho_anamnese(paciente, usuario):
         criado_por=usuario if usuario.is_authenticated else None,
         nome_completo=paciente.nome_completo,
         data_nascimento=paciente.data_nascimento,
-        cpf=paciente.cpf,
+        cpf=paciente.cpf or '',
         telefone=paciente.telefone,
         whatsapp=paciente.whatsapp or '',
         email=paciente.email or '',

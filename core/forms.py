@@ -182,9 +182,18 @@ class ConsultaForm(HorarioConsultaMixin, forms.ModelForm):
     )
     paciente = forms.ModelChoiceField(
         label='paciente',
-        queryset=Paciente.objects.filter(ativo=True).order_by('nome_completo'),
+        queryset=Paciente.objects.none(),
         required=True,
     )
+
+    def __init__(self, *args, user, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .permissoes import pacientes_visiveis_para_usuario
+
+        self.fields['paciente'].queryset = pacientes_visiveis_para_usuario(
+            user,
+            Paciente.objects.filter(ativo=True).order_by('nome_completo'),
+        )
 
     class Meta:
         model = Consulta

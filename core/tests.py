@@ -775,6 +775,21 @@ class FichaCadastroAnamneseTests(TestCase):
 
         return FichaCadastroAnamnese.objects.filter(paciente=paciente).latest('pk')
 
+    def test_rascunho_aceita_cpf_nulo_do_paciente(self):
+        from .models import FichaCadastroAnamnese
+
+        sem_cpf = Paciente.objects.create(
+            nome_completo='Paciente Sem CPF',
+            cpf=None,
+            data_nascimento=date(1988, 3, 3),
+            telefone='11900001111',
+        )
+        ficha = self._abrir_ficha(sem_cpf)
+        self.assertEqual(ficha.status, FichaCadastroAnamnese.Status.RASCUNHO)
+        self.assertEqual(ficha.cpf, '')
+        sem_cpf.refresh_from_db()
+        self.assertIsNone(sem_cpf.cpf)
+
     def test_link_publico_sem_login_e_texto_da_declaracao(self):
         from .anamnese import TEXTO_DECLARACAO_ANAMNESE
 
