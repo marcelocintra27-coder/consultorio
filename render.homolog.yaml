@@ -1,0 +1,36 @@
+# Blueprint somente da homologação externa controlada.
+# Arquivo independente. Não sincronizar este serviço com o ambiente de produção.
+services:
+  - type: web
+    name: consultorio-homolog
+    runtime: docker
+    plan: starter
+    autoDeployTrigger: 'off'
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /entrar/
+    disk:
+      name: consultorio-homolog-media
+      mountPath: /var/homolog-data
+      sizeGB: 1
+    envVars:
+      - key: DJANGO_ENV
+        value: homologacao
+      - key: DATABASE_URL
+        fromDatabase:
+          name: consultorio-homolog-db
+          property: connectionString
+      - key: HOMOLOG_EXTERNA_DISK_PATH
+        value: /var/homolog-data
+      - key: SECRET_KEY
+        sync: false
+      - key: DJANGO_ALLOWED_HOSTS
+        value: consultorio-homolog.onrender.com
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://consultorio-homolog.onrender.com
+
+databases:
+  - name: consultorio-homolog-db
+    databaseName: consultorio_homolog_externa
+    user: consultorio_homolog_externa
+    plan: 0.1c-256mb
+    diskSizeGB: 1
