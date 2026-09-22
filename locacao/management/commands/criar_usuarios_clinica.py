@@ -1,8 +1,37 @@
+from pathlib import Path
+
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+from django.db import connection, transaction
 
 from locacao.models import Dentista, PerfilUsuario
+
+BANCOS_HOMOLOG = frozenset({
+    'consultorio_homolog',
+    'consultorio_homolog_externa',
+})
+
+
+def recusar_em_homologacao():
+    """Recusa a carga real nos bancos e no ambiente de homologação.
+
+    Produção com outro nome de banco segue o fluxo normal. Não usa
+    EM_PRODUCAO=False como critério.
+    """
+    if getattr(settings, 'AMBIENTE', '') == 'homologacao':
+        raise CommandError('Comando recusado no ambiente de homologação externa.')
+    nome = Path(str(settings.DATABASES['default'].get('NAME') or '')).name
+    if nome in BANCOS_HOMOLOG:
+        raise CommandError('Comando recusado: banco de homologação.')
+    engine = str(settings.DATABASES['default'].get('ENGINE') or '').lower()
+    if 'postgres' not in engine:
+        return
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT current_database()')
+        atual = cursor.fetchone()[0]
+    if atual in BANCOS_HOMOLOG:
+        raise CommandError('Comando recusado: current_database() é de homologação.')
 
 USUARIOS = (
     {
@@ -64,6 +93,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        recusar_em_homologacao()
         senha = options['senha']
         with transaction.atomic():
             for dados in USUARIOS:
