@@ -53,22 +53,6 @@ if not SECRET_KEY:
         'arquivo .env na raiz do projeto, fora do Git).'
     )
 
-# O Render sempre roda em produção; uma variável DEBUG acidental não pode
-# reativar páginas de erro detalhadas nesse ambiente.
-EM_PRODUCAO = bool(os.environ.get('RENDER')) or os.environ.get(
-    'DJANGO_ENV', ''
-).lower() == 'production'
-if EM_PRODUCAO and (
-    len(SECRET_KEY) < 50 or SECRET_KEY.startswith('django-insecure-')
-):
-    raise ImproperlyConfigured(
-        'SECRET_KEY de produção deve ser aleatória, exclusiva e ter ao menos '
-        '50 caracteres. Configure-a somente no ambiente seguro do Render.'
-    )
-DEBUG = not EM_PRODUCAO and os.environ.get('DEBUG', 'True').lower() in (
-    'true', '1', 'yes'
-)
-
 def _lista_de_ambiente(nome):
     return [item.strip() for item in os.environ.get(nome, '').split(',') if item.strip()]
 
@@ -180,40 +164,259 @@ def validar_homolog_local(
         pasta.mkdir(parents=True, exist_ok=True)
 
 
-_hosts_configurados = _lista_de_ambiente('DJANGO_ALLOWED_HOSTS')
-_host_render = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '').strip()
-ALLOWED_HOSTS = list(dict.fromkeys([
-    'consultorio-a7um.onrender.com',
-    '127.0.0.1',
+BANCO_HOMOLOG_EXTERNA = 'consultorio_homolog_externa'
+_HOSTS_PROIBIDOS_HOMOLOG_EXTERNA = frozenset({
     'localhost',
+    '127.0.0.1',
     '192.168.1.103',
-    *_hosts_configurados,
-    *([_host_render] if _host_render else []),
-]))
-if EM_PRODUCAO and not _host_render and not _hosts_configurados:
+    'consultorio-a7um.onrender.com',
+})
+_ORIGEM_CSRF_PRODUCAO = 'https://consultorio-a7um.onrender.com'
+
+
+def _itens_environ(environ, nome):
+    return [
+        item.strip()
+        for item in str(environ.get(nome, '') or '').split(',')
+        if item.strip()
+    ]
+
+
+def _render_presente(environ):
+    return bool(str(environ.get('RENDER', '') or ''))
+
+
+def resolver_ambiente(environ):
+    """development, homologacao ou production.
+
+    No Render, só homologacao e production são explícitos. RENDER sozinho
+    não liga produção nem desenvolvimento.
+    """
+    bruto = str(environ.get('DJANGO_ENV', '') or '').strip().lower()
+    if _render_presente(environ):
+        if bruto in ('homologacao', 'production'):
+            return bruto
+        raise ImproperlyConfigured(
+            'RENDER exige DJANGO_ENV explícito: homologacao ou production.'
+        )
+    if bruto in ('', 'development'):
+        return 'development'
+    if bruto in ('homologacao', 'production'):
+        return bruto
     raise ImproperlyConfigured(
-        'Defina RENDER_EXTERNAL_HOSTNAME ou DJANGO_ALLOWED_HOSTS em produção.'
+        'DJANGO_ENV inválido. Use development, homologacao ou production.'
     )
 
-# Render termina TLS no proxy e encaminha X-Forwarded-Proto para a aplicação.
-# Estas opções só são forçadas em produção para manter o runserver local simples.
-_origens_configuradas = _lista_de_ambiente('CSRF_TRUSTED_ORIGINS')
-CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([
-    'https://consultorio-a7um.onrender.com',
-    *[f'https://{host}' for host in _hosts_configurados if host not in {'localhost', '127.0.0.1'}],
-    *([f'https://{_host_render}'] if _host_render else []),
-    *_origens_configuradas,
-]))
-if EM_PRODUCAO:
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = True
-    SECURE_HSTS_SECONDS = 31_536_000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get(
-        'SECURE_HSTS_INCLUDE_SUBDOMAINS', 'false'
-    ).lower() in ('true', '1', 'yes')
-    SECURE_HSTS_PRELOAD = False
+
+def debug_habilitado(ambiente, environ):
+    if ambiente != 'development':
+        return False
+    return str(environ.get('DEBUG', 'True')).lower() in ('true', '1', 'yes')
+
+
+def validar_secret_key_publica(secret_key, ambiente):
+    if ambiente not in ('production', 'homologacao'):
+        return
+    insegura = (
+        len(secret_key) < 50 or str(secret_key).startswith('django-insecure-')
+    )
+    if not insegura:
+        return
+    if ambiente == 'production':
+        raise ImproperlyConfigured(
+            'SECRET_KEY de produção deve ser aleatória, exclusiva e ter ao menos '
+            '50 caracteres. Configure-a somente no ambiente seguro do Render.'
+        )
+    raise ImproperlyConfigured(
+        'SECRET_KEY de homologação externa deve ser aleatória, exclusiva e ter '
+        'ao menos 50 caracteres.'
+    )
+
+
+def exige_smtp(ambiente):
+    return ambiente == 'production'
+
+
+def ssl_banco_exigido(ambiente):
+    return ambiente in ('production', 'homologacao')
+
+
+def exigir_database_url(ambiente, banco_url):
+    if ambiente == 'production' and not str(banco_url or '').strip():
+        raise ImproperlyConfigured(
+            'DATABASE_URL é obrigatória em produção. Use o PostgreSQL do Render.'
+        )
+    if ambiente == 'homologacao' and not str(banco_url or '').strip():
+        raise ImproperlyConfigured(
+            'DATABASE_URL é obrigatória na homologação externa.'
+        )
+
+
+def validar_banco_homolog_externa(database):
+    engine = str(database.get('ENGINE') or '').lower().replace('-', '_')
+    if 'postgres' not in engine:
+        raise ImproperlyConfigured(
+            'Homologação externa exige PostgreSQL.'
+        )
+    nome = Path(str(database.get('NAME') or '')).name
+    if nome != BANCO_HOMOLOG_EXTERNA:
+        raise ImproperlyConfigured(
+            'Homologação externa exige o banco PostgreSQL '
+            'consultorio_homolog_externa.'
+        )
+
+
+def recusar_homolog_local_na_externa(environ, ambiente):
+    if ambiente == 'homologacao' and _flag_ambiente(environ, 'HOMOLOG_LOCAL'):
+        raise ImproperlyConfigured(
+            'HOMOLOG_LOCAL não pode estar ativo na homologação externa.'
+        )
+
+
+def configuracao_https_publica(ambiente, environ):
+    if ambiente not in ('production', 'homologacao'):
+        return None
+    return {
+        'SECURE_PROXY_SSL_HEADER': ('HTTP_X_FORWARDED_PROTO', 'https'),
+        'SESSION_COOKIE_SECURE': True,
+        'CSRF_COOKIE_SECURE': True,
+        'SECURE_SSL_REDIRECT': True,
+        'SECURE_HSTS_SECONDS': 31_536_000,
+        'SECURE_HSTS_INCLUDE_SUBDOMAINS': _flag_ambiente(
+            environ, 'SECURE_HSTS_INCLUDE_SUBDOMAINS'
+        ),
+        'SECURE_HSTS_PRELOAD': False,
+    }
+
+
+def resolver_hosts_homolog_externa(environ):
+    hosts = _itens_environ(environ, 'DJANGO_ALLOWED_HOSTS')
+    host_render = str(environ.get('RENDER_EXTERNAL_HOSTNAME', '') or '').strip()
+    if host_render:
+        hosts.append(host_render)
+    hosts = list(dict.fromkeys(hosts))
+    if not hosts:
+        raise ImproperlyConfigured(
+            'DJANGO_ALLOWED_HOSTS é obrigatório na homologação externa.'
+        )
+    if any(host.lower() in _HOSTS_PROIBIDOS_HOMOLOG_EXTERNA for host in hosts):
+        raise ImproperlyConfigured(
+            'Homologação externa não pode herdar localhost, IP local ou '
+            'hostname de produção.'
+        )
+    return hosts
+
+
+def resolver_csrf_homolog_externa(environ):
+    origens = list(dict.fromkeys(_itens_environ(environ, 'CSRF_TRUSTED_ORIGINS')))
+    if not origens:
+        raise ImproperlyConfigured(
+            'CSRF_TRUSTED_ORIGINS é obrigatório na homologação externa.'
+        )
+    for origem in origens:
+        if not origem.startswith('https://'):
+            raise ImproperlyConfigured(
+                'CSRF_TRUSTED_ORIGINS da homologação externa deve usar HTTPS.'
+            )
+        normalizada = origem.rstrip('/')
+        if (
+            normalizada == _ORIGEM_CSRF_PRODUCAO
+            or normalizada.startswith(_ORIGEM_CSRF_PRODUCAO + '/')
+        ):
+            raise ImproperlyConfigured(
+                'Homologação externa não pode herdar a origem CSRF de produção.'
+            )
+    return origens
+
+
+def _usa_disco_de_producao(valor):
+    texto = str(valor).replace('\\', '/').rstrip('/')
+    return texto == '/var/data' or texto.startswith('/var/data/')
+
+
+def resolver_disco_homolog_externa(environ, base_dir):
+    bruto = str(environ.get('HOMOLOG_EXTERNA_DISK_PATH', '') or '').strip()
+    if not bruto:
+        raise ImproperlyConfigured(
+            'HOMOLOG_EXTERNA_DISK_PATH é obrigatório na homologação externa.'
+        )
+    if _usa_disco_de_producao(bruto):
+        raise ImproperlyConfigured(
+            'Homologação externa não pode usar o disco de produção /var/data.'
+        )
+    caminho = Path(bruto)
+    if not caminho.is_absolute():
+        caminho = Path(base_dir) / caminho
+    disco = caminho.resolve()
+    if _usa_disco_de_producao(disco):
+        raise ImproperlyConfigured(
+            'Homologação externa não pode usar o disco de produção /var/data.'
+        )
+    raiz_local = (Path(base_dir) / 'homolog_local').resolve()
+    if disco == raiz_local or raiz_local in disco.parents:
+        raise ImproperlyConfigured(
+            'Homologação externa não pode usar os diretórios da homologação local.'
+        )
+    pastas_locais = set(_pastas_homolog_local(base_dir).values())
+    for derivado in (disco / 'media', disco / 'private_exames', disco / 'tmp'):
+        resolvido = derivado.resolve()
+        if resolvido in pastas_locais or raiz_local in resolvido.parents:
+            raise ImproperlyConfigured(
+                'Homologação externa não pode usar os diretórios da homologação local.'
+            )
+    return disco
+
+
+AMBIENTE = resolver_ambiente(os.environ)
+EM_PRODUCAO = AMBIENTE == 'production'
+EM_HOMOLOGACAO_EXTERNA = AMBIENTE == 'homologacao'
+validar_secret_key_publica(SECRET_KEY, AMBIENTE)
+recusar_homolog_local_na_externa(os.environ, AMBIENTE)
+DEBUG = debug_habilitado(AMBIENTE, os.environ)
+
+
+if EM_HOMOLOGACAO_EXTERNA:
+    ALLOWED_HOSTS = resolver_hosts_homolog_externa(os.environ)
+    CSRF_TRUSTED_ORIGINS = resolver_csrf_homolog_externa(os.environ)
+else:
+    _hosts_configurados = _lista_de_ambiente('DJANGO_ALLOWED_HOSTS')
+    _host_render = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '').strip()
+    ALLOWED_HOSTS = list(dict.fromkeys([
+        'consultorio-a7um.onrender.com',
+        '127.0.0.1',
+        'localhost',
+        '192.168.1.103',
+        *_hosts_configurados,
+        *([_host_render] if _host_render else []),
+    ]))
+    if EM_PRODUCAO and not _host_render and not _hosts_configurados:
+        raise ImproperlyConfigured(
+            'Defina RENDER_EXTERNAL_HOSTNAME ou DJANGO_ALLOWED_HOSTS em produção.'
+        )
+
+    # Render termina TLS no proxy e encaminha X-Forwarded-Proto para a aplicação.
+    # Estas opções só são forçadas em produção para manter o runserver local simples.
+    _origens_configuradas = _lista_de_ambiente('CSRF_TRUSTED_ORIGINS')
+    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([
+        'https://consultorio-a7um.onrender.com',
+        *[
+            f'https://{host}'
+            for host in _hosts_configurados
+            if host not in {'localhost', '127.0.0.1'}
+        ],
+        *([f'https://{_host_render}'] if _host_render else []),
+        *_origens_configuradas,
+    ]))
+
+_https_publico = configuracao_https_publica(AMBIENTE, os.environ)
+if _https_publico:
+    SECURE_PROXY_SSL_HEADER = _https_publico['SECURE_PROXY_SSL_HEADER']
+    SESSION_COOKIE_SECURE = _https_publico['SESSION_COOKIE_SECURE']
+    CSRF_COOKIE_SECURE = _https_publico['CSRF_COOKIE_SECURE']
+    SECURE_SSL_REDIRECT = _https_publico['SECURE_SSL_REDIRECT']
+    SECURE_HSTS_SECONDS = _https_publico['SECURE_HSTS_SECONDS']
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _https_publico['SECURE_HSTS_INCLUDE_SUBDOMAINS']
+    SECURE_HSTS_PRELOAD = _https_publico['SECURE_HSTS_PRELOAD']
 
 
 # Application definition
@@ -270,10 +473,7 @@ WSGI_APPLICATION = 'consultorio.wsgi.application'
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
 banco_url = os.environ.get('DATABASE_URL', '').strip()
-if EM_PRODUCAO and not banco_url:
-    raise ImproperlyConfigured(
-        'DATABASE_URL é obrigatória em produção. Use o PostgreSQL do Render.'
-    )
+exigir_database_url(AMBIENTE, banco_url)
 if banco_url:
     try:
         import dj_database_url
@@ -286,9 +486,11 @@ if banco_url:
             banco_url,
             conn_max_age=600,
             conn_health_checks=True,
-            ssl_require=EM_PRODUCAO,
+            ssl_require=ssl_banco_exigido(AMBIENTE),
         )
     }
+    if EM_HOMOLOGACAO_EXTERNA:
+        validar_banco_homolog_externa(DATABASES['default'])
 else:
     DATABASES = {
         'default': {
@@ -366,10 +568,22 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_URL = '/media/'
-MEDIA_ROOT = resolver_media_root(EM_PRODUCAO, os.environ, BASE_DIR)
-_upload_temp_local = resolver_upload_temp_local(EM_PRODUCAO, os.environ, BASE_DIR)
-if _upload_temp_local:
-    FILE_UPLOAD_TEMP_DIR = _upload_temp_local
+if EM_HOMOLOGACAO_EXTERNA:
+    _disco_homolog_externa = resolver_disco_homolog_externa(os.environ, BASE_DIR)
+    MEDIA_ROOT = _disco_homolog_externa / 'media'
+    EXAMES_ROOT = _disco_homolog_externa / 'private_exames'
+    FILE_UPLOAD_TEMP_DIR = str(_disco_homolog_externa / 'tmp')
+    for _pasta_homolog_externa in (
+        MEDIA_ROOT,
+        EXAMES_ROOT,
+        Path(FILE_UPLOAD_TEMP_DIR),
+    ):
+        _pasta_homolog_externa.mkdir(parents=True, exist_ok=True)
+else:
+    MEDIA_ROOT = resolver_media_root(EM_PRODUCAO, os.environ, BASE_DIR)
+    _upload_temp_local = resolver_upload_temp_local(EM_PRODUCAO, os.environ, BASE_DIR)
+    if _upload_temp_local:
+        FILE_UPLOAD_TEMP_DIR = _upload_temp_local
 validar_homolog_local(
     os.environ,
     em_producao=EM_PRODUCAO,
@@ -392,7 +606,7 @@ STORAGES = {
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-if EM_PRODUCAO:
+if exige_smtp(AMBIENTE):
     _smtp_obrigatorio = ('SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'DEFAULT_FROM_EMAIL')
     _smtp_ausente = [nome for nome in _smtp_obrigatorio if not os.environ.get(nome)]
     if _smtp_ausente:
