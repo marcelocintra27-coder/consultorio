@@ -1,3 +1,7 @@
+import os
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 from django.conf import settings
@@ -51,3 +55,79 @@ class DockerDeploySecurityTests(SimpleTestCase):
         self.assertIn('python:3.12.14-slim-bookworm@sha256:', dockerfile)
         self.assertIn('ffmpeg=7:5.1.9-0+deb12u1', dockerfile)
         self.assertIn('python manage.py migrate --noinput', dockerfile)
+
+
+class HomologacaoExternaBlueprintTests(SimpleTestCase):
+    def setUp(self):
+        self.raiz = Path(settings.BASE_DIR)
+        self.blueprint = (self.raiz / 'render.homolog.yaml').read_text(
+            encoding='utf-8'
+        )
+
+    def test_blueprint_homolog_free_sem_disco_e_isolado_da_producao(self):
+        for trecho in (
+            'name: consultorio-homolog\n    runtime: docker\n    plan: free',
+            "autoDeployTrigger: 'off'",
+            'key: DJANGO_ENV\n        value: homologacao',
+            'name: consultorio-homolog-db',
+            'databaseName: consultorio_homolog_externa',
+            'key: HOMOLOG_EXTERNA_DISK_PATH\n        value: /tmp/consultorio-homolog',
+            'key: SECRET_KEY\n        sync: false',
+            'value: consultorio-homolog.onrender.com',
+            'value: https://consultorio-homolog.onrender.com',
+        ):
+            self.assertIn(trecho, self.blueprint)
+        linhas = [
+            linha for linha in self.blueprint.splitlines()
+            if not linha.lstrip().startswith('#')
+        ]
+        conteudo = '\n'.join(linhas)
+        for proibido in (
+            'disk:',
+            'mountPath:',
+            '/var/data',
+            'RENDER_DISK_PATH',
+            'consultorio-db',
+            'consultorio-a7um',
+            'plan: starter',
+            'HOMOLOG_LOCAL',
+            'carregar_homolog',
+        ):
+            self.assertNotIn(proibido, conteudo)
+        self.assertEqual(conteudo.count('plan: free'), 2)
+
+
+class ProducaoSemFallbackEfemeroTests(SimpleTestCase):
+    def _importar_settings(self, **variaveis):
+        ambiente = dict(os.environ)
+        ambiente.update({
+            'DJANGO_ENV': 'production',
+            'RENDER': 'true',
+            'SECRET_KEY': 'p' * 50,
+            'DJANGO_ALLOWED_HOSTS': 'consultorio-a7um.onrender.com',
+            'DATABASE_URL': 'postgres://usuario:segredo@db.example.com:5432/consultorio',
+            'HOMOLOG_LOCAL': '',
+            'PYTHONIOENCODING': 'utf-8',
+        })
+        ambiente.update(variaveis)
+        return subprocess.run(
+            [sys.executable, '-c', 'import consultorio.settings'],
+            cwd=settings.BASE_DIR,
+            env=ambiente,
+            capture_output=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=120,
+        )
+
+    def test_producao_ignora_disco_homolog_e_exige_render_disk_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            resultado = self._importar_settings(
+                RENDER_DISK_PATH='',
+                HOMOLOG_EXTERNA_DISK_PATH=tmp,
+            )
+            self.assertNotEqual(resultado.returncode, 0)
+            self.assertIn('ImproperlyConfigured', resultado.stderr)
+            self.assertIn('RENDER_DISK_PATH é obrigatório', resultado.stderr)
+            for pasta in ('media', 'private_exames', 'tmp'):
+                self.assertFalse((Path(tmp) / pasta).exists())
