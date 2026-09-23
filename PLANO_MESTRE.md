@@ -701,10 +701,129 @@ declara o sistema pronto para uso em produção.
   versionado.
 - Dependências diretas atuais: Django, Gunicorn, WhiteNoise, faster-whisper,
   dj-database-url e psycopg.
-- Dockerfile e `render.yaml` existem no diretório de trabalho, mas não houve
-  deploy nem provisionamento externo nesta etapa.
+- Dockerfile, `render.yaml` (produção) e `render.homolog.yaml` (homologação
+  externa) existem no diretório de trabalho, mas não houve deploy nem
+  provisionamento externo nesta etapa.
 - A imagem Docker exclui `.env`, chaves/certificados, banco SQLite, mídia,
   ambiente virtual e artefatos locais pelo `.dockerignore`.
+
+## Homologação local (21/09/2026)
+
+Ambiente de homologação na máquina de desenvolvimento, isolado dos dados
+locais do dia a dia.
+
+- Commit `96f7e3d`: com `HOMOLOG_LOCAL=1` o Django só sobe fora de produção,
+  no PostgreSQL `consultorio_homolog` e com `MEDIA_ROOT`, `EXAMES_ROOT` e
+  `FILE_UPLOAD_TEMP_DIR` em `homolog_local/media`, `homolog_local/private_exames`
+  e `homolog_local/tmp`. Qualquer divergência aborta a inicialização. Sem a
+  flag, o local continua em `media/` e `private_exames/`. `homolog_local/`
+  está no `.gitignore` e no `.dockerignore`; as variáveis estão documentadas
+  em `.env.example`. Testes: `consultorio/test_homolog_local.py`.
+- Commit `505fa6a`: comando `carregar_homolog_local` cria dados fictícios
+  (prefixo `HOMOLOG-`) e seis usuários `homolog.*` (admin, secretária,
+  dentistas A e B, dentista inativo, auxiliar). Recusa a carga se não houver
+  `HOMOLOG_LOCAL`, se o banco (configurado e `current_database()`) não for
+  `consultorio_homolog` ou se as pastas não forem as de `homolog_local/`.
+  Senhas aleatórias ficam só em `homolog_local/SENHAS.txt`, nunca no stdout.
+  Testes: `core/test_carregar_homolog_local.py`.
+
+Correções encontradas na homologação local:
+
+- Commit `2e600e3` (dentista): o agendamento passou a listar só os pacientes
+  visíveis ao usuário (`pacientes_visiveis_para_usuario`), em vez de todos os
+  ativos; o rascunho de anamnese aceita paciente sem CPF.
+- Commit `b17a013` (auxiliar): o card "Digitalizar ficha antiga" da tela
+  inicial só aparece para quem tem `pode_digitalizar`.
+
+## Homologação externa controlada (configuração em 22/09/2026)
+
+Commit `06df732`: `consultorio/settings.py` passou a reconhecer três ambientes
+explícitos e ganhou regras de isolamento para uma homologação externa. Cobertura
+em `consultorio/test_homolog_externa.py` (12 testes, passando). Isso prepara a
+configuração; não houve provisionamento, deploy nem homologação externa
+executada.
+
+**Seleção de ambiente (`DJANGO_ENV`)**
+
+- Valores aceitos: `development` (padrão fora do Render), `homologacao` e
+  `production`; qualquer outro valor falha.
+- No Render, `DJANGO_ENV` precisa ser `homologacao` ou `production`. A variável
+  `RENDER` sozinha **não** liga mais produção: sem `DJANGO_ENV` válido o
+  processo não sobe. O `render.yaml` de produção já define
+  `DJANGO_ENV=production`.
+- `DEBUG` só pode ser ligado em `development`; fica desligado em homologação e
+  produção mesmo com `DEBUG=true`.
+
+**Regras obrigatórias em `homologacao` (falham fechado se violadas)**
+
+- `SECRET_KEY` aleatória com ao menos 50 caracteres, sem prefixo
+  `django-insecure-`.
+- `DATABASE_URL` obrigatória, PostgreSQL com SSL e banco com nome exato
+  `consultorio_homolog_externa`.
+- `HOMOLOG_LOCAL` não pode estar ativo.
+- `DJANGO_ALLOWED_HOSTS` (e/ou `RENDER_EXTERNAL_HOSTNAME`) próprios; recusa
+  `localhost`, `127.0.0.1`, `192.168.1.103` e o hostname de produção.
+- `CSRF_TRUSTED_ORIGINS` próprio, somente HTTPS e sem a origem de produção.
+- `HOMOLOG_EXTERNA_DISK_PATH` obrigatório; recusa `/var/data` (disco de
+  produção) e `homolog_local/`. Dele derivam `media/`, `private_exames/` e
+  `tmp/`.
+- HTTPS atrás de proxy, cookies seguros, redirecionamento SSL e HSTS iguais aos
+  de produção.
+- SMTP não é exigido (continua obrigatório apenas em produção).
+
+**Carga fictícia externa (commit `22b04e8`)**
+
+- Comando `carregar_homolog_externa`: cria os mesmos seis usuários `homolog.*`
+  e dados `HOMOLOG-`, sem chamar a carga local nem criar os logins reais.
+- Recusa antes de qualquer escrita se: estiver em produção, `AMBIENTE` não for
+  `homologacao`, `HOMOLOG_LOCAL` estiver ativo, o banco configurado ou
+  `current_database()` não for `consultorio_homolog_externa`, o disco for
+  inválido ou já existirem usuários, pacientes, dentistas ou salas fora do
+  namespace fictício.
+- Senhas gravadas somente em `<HOMOLOG_EXTERNA_DISK_PATH>/private/SENHAS.txt`
+  (fora de `media/`), após o commit da transação e nunca no stdout. Se já
+  existirem usuários `homolog.*` sem senha coerente no arquivo, a carga para;
+  `--regerar-senhas` gira apenas as senhas dos seis usuários esperados.
+- `criar_usuarios_clinica` (logins reais) passou a recusar execução em
+  `homologacao` e nos bancos `consultorio_homolog` e
+  `consultorio_homolog_externa`.
+- Testes: `core/test_carregar_homolog_externa.py`.
+
+**Blueprint isolado (commit `d81bb36`)**
+
+- `render.homolog.yaml`, separado do `render.yaml` de produção: serviço
+  `consultorio-homolog` (Docker, deploy automático desligado, health check em
+  `/entrar/`), disco próprio em `/var/homolog-data`, banco
+  `consultorio-homolog-db` com `databaseName` `consultorio_homolog_externa`,
+  `DJANGO_ENV=homologacao`, host e origem CSRF
+  `consultorio-homolog.onrender.com`. `SECRET_KEY` fica com `sync: false`
+  (definida só no painel).
+
+**Pendências para usar a homologação externa**
+
+1. Criar os recursos a partir do `render.homolog.yaml`, sem sincronizar com o
+   serviço de produção, e conferir que nada aponta para `/var/data` ou para o
+   banco de produção.
+2. Definir `SECRET_KEY` somente no painel do provedor.
+3. Executar `check --deploy`, migrations e testes no ambiente antes de liberar
+   acesso; depois rodar `carregar_homolog_externa`.
+4. Usar apenas dados fictícios; nunca copiar dados reais de pacientes.
+
+## Testes de homologação no PostgreSQL (23/09/2026)
+
+- Módulos: `consultorio/test_homolog_local.py`,
+  `consultorio/test_homolog_externa.py`, `core/test_carregar_homolog_local.py`,
+  `core/test_carregar_homolog_externa.py` e `core/test_permission_matrix.py`.
+- Execução no PostgreSQL local com o `.env` de homologação
+  (`HOMOLOG_LOCAL=1`), `manage.py test ... --keepdb --noinput`:
+  **71 testes executados, 71 aprovados, 0 falhas e 0 erros**.
+- As 3 falhas de 22/09/2026 ocorreram no SQLite com `HOMOLOG_LOCAL` desligado
+  e não se repetiram no PostgreSQL.
+- O usuário `consultorio_homolog` continua **sem** `CREATEDB` e sem
+  superusuário, como definido em
+  [`RELATORIO_POSTGRESQL_LOCAL.md`](RELATORIO_POSTGRESQL_LOCAL.md). Os testes
+  usam o banco `test_consultorio_homolog` já existente via `--keepdb`; rodar sem
+  `--keepdb` exigiria conceder `CREATEDB` com o superusuário `postgres`.
 
 ## Bloqueador resolvido — Remarcação (A-005 / R-002)
 
