@@ -702,8 +702,9 @@ declara o sistema pronto para uso em produção.
 - Dependências diretas atuais: Django, Gunicorn, WhiteNoise, faster-whisper,
   dj-database-url e psycopg.
 - Dockerfile, `render.yaml` (produção) e `render.homolog.yaml` (homologação
-  externa) existem no diretório de trabalho, mas não houve deploy nem
-  provisionamento externo nesta etapa.
+  externa, plano Free sem disco) existem no repositório. A homologação externa
+  ainda não foi provisionada; o banco criado por engano em 23/09/2026 foi
+  excluído (ver "Plano Free sem disco").
 - A imagem Docker exclui `.env`, chaves/certificados, banco SQLite, mídia,
   ambiente virtual e artefatos locais pelo `.dockerignore`.
 
@@ -797,17 +798,56 @@ executada.
   `consultorio-homolog-db` com `databaseName` `consultorio_homolog_externa`,
   `DJANGO_ENV=homologacao`, host e origem CSRF
   `consultorio-homolog.onrender.com`. `SECRET_KEY` fica com `sync: false`
-  (definida só no painel).
+  (definida só no painel). Plano e disco substituídos em `e7b5419` (abaixo).
+
+**Plano Free sem disco (commit `e7b5419`, 23/09/2026)**
+
+Antes, em 23/09/2026, um PostgreSQL criado por engano (`consultorio-homolog`,
+banco `consultorio_homolog`, nome da homologação local) teve a `DATABASE_URL`
+colocada no serviço de produção `consultorio`. O deploy falhou no boot antes
+de conectar; a variável foi removida da produção e o banco foi excluído, sem
+ter recebido migrations nem carga fictícia. `DJANGO_ENV` e `SECRET_KEY` da produção não
+foram alterados.
+
+O Web Service Free do Render não tem Persistent Disk. Uma auditoria somente
+leitura mostrou que o código já sobe sem disco: `resolver_disco_homolog_externa`
+valida apenas o caminho e cria as pastas. Por isso a mudança foi só de
+configuração, sem alterar código:
+
+- `render.homolog.yaml`: serviço e banco em `plan: free`; bloco `disk:`
+  removido; `HOMOLOG_EXTERNA_DISK_PATH=/tmp/consultorio-homolog`. Mantidos
+  `DJANGO_ENV=homologacao`, `databaseName` `consultorio_homolog_externa`,
+  `SECRET_KEY` com `sync: false`, deploy automático desligado e host/CSRF
+  próprios.
+- Armazenamento efêmero: `media/`, `private_exames/` (inclusive quarentena),
+  `tmp/` e `private/SENHAS.txt` somem a cada reinício, deploy ou hibernação;
+  o banco persiste. Registros de mídia e exames podem apontar para arquivos
+  ausentes (`verificar_exames` acusa). Aceito só por conter dados fictícios:
+  **a persistência de arquivos não é homologada neste ambiente**. Se o
+  `SENHAS.txt` sumir, usar `carregar_homolog_externa --regerar-senhas`.
+- `carregar_homolog_externa` não precisou de alteração.
+- Produção continua protegida: o ramo de produção nunca lê
+  `HOMOLOG_EXTERNA_DISK_PATH` e exige `RENDER_DISK_PATH`.
+- Testes em `consultorio/test_deploy_security.py`:
+  `HomologacaoExternaBlueprintTests` valida o blueprint (Free, sem disco, sem
+  `/var/data`, `RENDER_DISK_PATH`, `consultorio-db` ou host de produção) e
+  `ProducaoSemFallbackEfemeroTests` importa o `settings.py` em subprocesso com
+  `DJANGO_ENV=production`, `HOMOLOG_EXTERNA_DISK_PATH` preenchido e sem
+  `RENDER_DISK_PATH`, exigindo a recusa e nenhuma pasta criada.
+- Endurecimento opcional adiado (opção B): exigir `os.path.ismount` no disco
+  da homologação, salvo flag explícita de armazenamento efêmero.
 
 **Pendências para usar a homologação externa**
 
 1. Criar os recursos a partir do `render.homolog.yaml`, sem sincronizar com o
    serviço de produção, e conferir que nada aponta para `/var/data` ou para o
-   banco de produção.
+   banco de produção. No banco, o campo Database deve ser exatamente
+   `consultorio_homolog_externa`.
 2. Definir `SECRET_KEY` somente no painel do provedor.
 3. Executar `check --deploy`, migrations e testes no ambiente antes de liberar
    acesso; depois rodar `carregar_homolog_externa`.
-4. Usar apenas dados fictícios; nunca copiar dados reais de pacientes.
+4. Decidir onde rodar a carga manual: o plano Free não oferece Shell.
+5. Usar apenas dados fictícios; nunca copiar dados reais de pacientes.
 
 ## Testes de homologação no PostgreSQL (23/09/2026)
 
