@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 import os
+import re
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -259,7 +260,10 @@ def validar_banco_homolog_externa(database):
             'Homologação externa exige PostgreSQL.'
         )
     nome = Path(str(database.get('NAME') or '')).name
-    if nome != BANCO_HOMOLOG_EXTERNA:
+    if not re.fullmatch(
+        rf'{re.escape(BANCO_HOMOLOG_EXTERNA)}(_[a-z0-9]{{4}})?',
+        nome,
+    ):
         raise ImproperlyConfigured(
             'Homologação externa exige o banco PostgreSQL '
             'consultorio_homolog_externa.'

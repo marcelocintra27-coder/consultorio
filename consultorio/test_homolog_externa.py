@@ -115,6 +115,22 @@ class RegrasHomologacaoExternaTests(SimpleTestCase):
         )
         validar_banco_homolog_externa(externo)
         self.assertEqual(externo['NAME'], BANCO_HOMOLOG_EXTERNA)
+        sufixo_render = _banco(
+            'postgres://usuario:segredo@db.example.com:5432/'
+            'consultorio_homolog_externa_183n'
+        )
+        validar_banco_homolog_externa(sufixo_render)
+        self.assertEqual(sufixo_render['NAME'], 'consultorio_homolog_externa_183n')
+        for nome_recusado in (
+            'consultorio',
+            'consultorio_homolog_externa_x',
+            'outro_banco_183n',
+            'consultorio_homolog_externa_183n_extra',
+        ):
+            with self.assertRaises(ImproperlyConfigured):
+                validar_banco_homolog_externa(_banco(
+                    f'postgres://usuario:segredo@db.example.com:5432/{nome_recusado}'
+                ))
         self.assertTrue(ssl_banco_exigido('homologacao'))
         self.assertTrue(ssl_banco_exigido('production'))
         self.assertFalse(ssl_banco_exigido('development'))
