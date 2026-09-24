@@ -253,6 +253,13 @@ def exigir_database_url(ambiente, banco_url):
         )
 
 
+def nome_banco_homolog_externa_valido(nome):
+    return re.fullmatch(
+        rf'{re.escape(BANCO_HOMOLOG_EXTERNA)}(_[a-z0-9]{{4}})?',
+        str(nome or ''),
+    ) is not None
+
+
 def validar_banco_homolog_externa(database):
     engine = str(database.get('ENGINE') or '').lower().replace('-', '_')
     if 'postgres' not in engine:
@@ -260,10 +267,7 @@ def validar_banco_homolog_externa(database):
             'Homologação externa exige PostgreSQL.'
         )
     nome = Path(str(database.get('NAME') or '')).name
-    if not re.fullmatch(
-        rf'{re.escape(BANCO_HOMOLOG_EXTERNA)}(_[a-z0-9]{{4}})?',
-        nome,
-    ):
+    if not nome_banco_homolog_externa_valido(nome):
         raise ImproperlyConfigured(
             'Homologação externa exige o banco PostgreSQL '
             'consultorio_homolog_externa.'

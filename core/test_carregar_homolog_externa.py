@@ -160,6 +160,69 @@ class GuardsCarregarHomologExternaTests(SimpleTestCase):
                     exigir_ambiente_homolog_externa()
         self.assertIn('current_database()', str(contexto.exception))
 
+    def _aceita(self, configurado, atual):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {
+                'HOMOLOG_LOCAL': '',
+                'HOMOLOG_EXTERNA_DISK_PATH': tmp,
+            }):
+                with patch(CURSOR_EXTERNO, _conexao(atual)):
+                    with override_settings(
+                        AMBIENTE='homologacao',
+                        EM_PRODUCAO=False,
+                        DATABASES=_banco(configurado),
+                    ):
+                        disco = exigir_ambiente_homolog_externa()
+        self.assertEqual(disco, Path(tmp).resolve())
+
+    def test_aceita_nome_exato(self):
+        self._aceita('consultorio_homolog_externa', 'consultorio_homolog_externa')
+
+    def test_aceita_sufixo_do_render(self):
+        self._aceita(
+            'consultorio_homolog_externa_183n',
+            'consultorio_homolog_externa_183n',
+        )
+
+    @override_settings(
+        AMBIENTE='homologacao',
+        EM_PRODUCAO=False,
+        DATABASES=_banco('consultorio_homolog_externa'),
+    )
+    def test_recusa_current_database_diferente_do_configurado(self):
+        with patch.dict(os.environ, {'HOMOLOG_LOCAL': ''}):
+            with patch(CURSOR_EXTERNO, _conexao('consultorio_homolog_externa_183n')):
+                with self.assertRaises(CommandError) as contexto:
+                    exigir_ambiente_homolog_externa()
+        self.assertIn(
+            'current_database() diferente do banco configurado',
+            str(contexto.exception),
+        )
+
+    @override_settings(
+        AMBIENTE='homologacao',
+        EM_PRODUCAO=False,
+        DATABASES=_banco('consultorio_homolog_externa_x'),
+    )
+    def test_recusa_sufixo_invalido_configurado(self):
+        with patch.dict(os.environ, {'HOMOLOG_LOCAL': ''}):
+            with self.assertRaises(CommandError) as contexto:
+                exigir_ambiente_homolog_externa()
+        self.assertIn('consultorio_homolog_externa', str(contexto.exception))
+        self.assertNotIn('current_database()', str(contexto.exception))
+
+    @override_settings(
+        AMBIENTE='homologacao',
+        EM_PRODUCAO=False,
+        DATABASES=_banco('consultorio_homolog_externa_183n'),
+    )
+    def test_recusa_current_database_fora_do_padrao(self):
+        with patch.dict(os.environ, {'HOMOLOG_LOCAL': ''}):
+            with patch(CURSOR_EXTERNO, _conexao('consultorio_homolog_externa_183n_extra')):
+                with self.assertRaises(CommandError) as contexto:
+                    exigir_ambiente_homolog_externa()
+        self.assertIn('current_database()', str(contexto.exception))
+
     def test_call_command_e_regerar_recusam_o_banco_de_teste(self):
         with self.assertRaises(CommandError):
             call_command('carregar_homolog_externa')

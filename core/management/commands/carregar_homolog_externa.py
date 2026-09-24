@@ -16,8 +16,8 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from consultorio.settings import (
-    BANCO_HOMOLOG_EXTERNA,
     _flag_ambiente,
+    nome_banco_homolog_externa_valido,
     resolver_disco_homolog_externa,
 )
 from core.management.commands.carregar_homolog_local import gerar_senha_homolog
@@ -69,12 +69,16 @@ def exigir_ambiente_homolog_externa():
     engine = str(settings.DATABASES['default'].get('ENGINE') or '').lower()
     if 'postgres' not in engine:
         raise CommandError('Carga recusada: engine não é PostgreSQL.')
-    if _nome_banco_configurado() != BANCO_HOMOLOG_EXTERNA:
+    if not nome_banco_homolog_externa_valido(_nome_banco_configurado()):
         raise CommandError(
             'Carga recusada: banco não é consultorio_homolog_externa.'
         )
     atual = _current_database()
-    if atual != BANCO_HOMOLOG_EXTERNA:
+    if atual != _nome_banco_configurado():
+        raise CommandError(
+            'Carga recusada: current_database() diferente do banco configurado.'
+        )
+    if not nome_banco_homolog_externa_valido(atual):
         raise CommandError(
             'Carga recusada: current_database() diferente de '
             'consultorio_homolog_externa.'
