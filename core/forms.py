@@ -1,4 +1,5 @@
-﻿from datetime import date
+﻿import re
+from datetime import date
 from decimal import Decimal
 from itertools import groupby
 
@@ -50,12 +51,49 @@ from .models import (
 from locacao.models import Dentista
 
 
+class DataNascimentoField(forms.DateField):
+    def to_python(self, value):
+        bruto = str(value or '').strip()
+        if bruto and not re.fullmatch(r'\d{2}/\d{2}/\d{4}', bruto):
+            raise forms.ValidationError(
+                'Digite a data completa com 8 números. Exemplo: 12/05/1940.'
+            )
+        return super().to_python(bruto if bruto else value)
+
+
+class DataNascimentoInput(forms.TextInput):
+    """Texto DD/MM/AAAA. Não usa o calendário de type=date."""
+
+    def format_value(self, value):
+        if isinstance(value, date):
+            return value.strftime('%d/%m/%Y')
+        return super().format_value(value)
+
+
 class PacienteForm(forms.ModelForm):
-    data_nascimento = forms.DateField(
+    data_nascimento = DataNascimentoField(
         label='data de nascimento',
-        input_formats=['%Y-%m-%d'],
-        widget=forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+        input_formats=['%d/%m/%Y'],
+        widget=DataNascimentoInput(attrs={
+            'inputmode': 'numeric',
+            'autocomplete': 'bday',
+            'placeholder': 'DD/MM/AAAA',
+            'maxlength': '10',
+        }),
+        error_messages={
+            'invalid': 'Data inexistente. Confira o dia e o mês.',
+        },
     )
+
+    def clean_data_nascimento(self):
+        valor = self.cleaned_data.get('data_nascimento')
+        if valor.year < 1900:
+            raise forms.ValidationError('O ano não pode ser antes de 1900.')
+        if valor > timezone.localdate():
+            raise forms.ValidationError(
+                'A data de nascimento não pode ser no futuro.'
+            )
+        return valor
 
     class Meta:
         model = Paciente

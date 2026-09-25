@@ -1165,7 +1165,7 @@ class PacienteRedesSociaisTests(TestCase):
             {
                 'nome_completo': 'Paciente Redes',
                 'cpf': '444.444.444-44',
-                'data_nascimento': '1991-04-04',
+                'data_nascimento': '04/04/1991',
                 'telefone': '11944445555',
                 'instagram': '@paciente.redes',
                 'facebook': 'paciente.redes',

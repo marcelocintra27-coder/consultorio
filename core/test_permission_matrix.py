@@ -190,7 +190,7 @@ class MatrizPermissoesTests(TestCase):
             {
                 'nome_completo': 'Novo paciente da dentista',
                 'cpf': '701.000.000-03',
-                'data_nascimento': '1990-01-01',
+                'data_nascimento': '01/01/1990',
                 'telefone': '11900000003',
             },
         )

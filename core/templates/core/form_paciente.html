@@ -33,3 +33,22 @@
             <button type="submit" class="botao">Salvar</button>
         </form>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var campo = document.getElementById('id_data_nascimento');
+    if (!campo) return;
+    campo.addEventListener('input', function () {
+        var digitos = campo.value.replace(/\D/g, '').slice(0, 8);
+        var formatado = digitos;
+        if (digitos.length > 4) {
+            formatado = digitos.slice(0, 2) + '/' + digitos.slice(2, 4) + '/' + digitos.slice(4);
+        } else if (digitos.length > 2) {
+            formatado = digitos.slice(0, 2) + '/' + digitos.slice(2);
+        }
+        campo.value = formatado;
+    });
+})();
+</script>
+{% endblock %}
