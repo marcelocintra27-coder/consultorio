@@ -31,7 +31,11 @@
 
             <div class="campo">
                 <label for="{{ form.imagem.id_for_label }}">{{ form.imagem.label }}</label>
-                {{ form.imagem }}
+                <div class="acoes">
+                    {{ form.imagem }}
+                    <button type="button" class="botao secundario" data-remover-arquivo hidden>Remover arquivo</button>
+                </div>
+                <p data-arquivo-escolhido hidden></p>
                 {% if form.imagem.errors %}
                 <div class="erro">{{ form.imagem.errors }}</div>
                 {% endif %}
@@ -47,4 +51,39 @@
 
             <button type="submit" class="botao">Salvar</button>
         </form>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+    function tamanhoLegivel(bytes) {
+        if (bytes < 1024) return bytes + ' bytes';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1).replace('.', ',') + ' KB';
+        return (bytes / 1048576).toFixed(1).replace('.', ',') + ' MB';
+    }
+    document.querySelectorAll('input[type="file"]').forEach(function (campo) {
+        var bloco = campo.closest('.campo');
+        if (!bloco) return;
+        var botao = bloco.querySelector('[data-remover-arquivo]');
+        var info = bloco.querySelector('[data-arquivo-escolhido]');
+        if (!botao || !info) return;
+        function atualizar() {
+            var arquivo = campo.files && campo.files[0];
+            if (!arquivo) {
+                botao.hidden = true;
+                info.hidden = true;
+                info.textContent = '';
+                return;
+            }
+            botao.hidden = false;
+            info.hidden = false;
+            info.textContent = arquivo.name + ' — ' + tamanhoLegivel(arquivo.size);
+        }
+        campo.addEventListener('change', atualizar);
+        botao.addEventListener('click', function () {
+            campo.value = '';
+            atualizar();
+        });
+    });
+})();
+</script>
 {% endblock %}

@@ -26,7 +26,7 @@
             <tr>
                 <td>{{ paciente.nome_completo }}</td>
                 <td>{{ paciente.telefone }}</td>
-                <td>{{ paciente.convenio }}</td>
+                <td>{% if paciente.convenio %}{{ paciente.convenio }}{% else %}—{% endif %}</td>
                 <td>
                     {% if user.perfil.papel != 'auxiliar' %}<a href="{% url 'core:editar_paciente' paciente.pk %}" class="botao">Editar</a>{% endif %}
                     {% if pode_clinico %}

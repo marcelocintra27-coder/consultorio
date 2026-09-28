@@ -13,8 +13,52 @@
 <div role="alert">{{ form.non_field_errors }}</div>
 {% for field in form %}<div class="campo">
   <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} (obrigatório){% endif %}</label>
-  {{ field }}<div role="alert">{{ field.errors }}</div>
+  {% if field.field.widget.input_type == 'file' %}
+  <div class="acoes">
+    {{ field }}
+    <button type="button" class="botao secundario" data-remover-arquivo hidden>Remover arquivo</button>
+  </div>
+  <p data-arquivo-escolhido hidden></p>
+  {% else %}
+  {{ field }}
+  {% endif %}
+  <div role="alert">{{ field.errors }}</div>
 </div>{% endfor %}
 <button class="botao" type="submit">{% if anterior %}Confirmar correção e preservar original{% else %}Enviar para inspeção{% endif %}</button>
 </form>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+    function tamanhoLegivel(bytes) {
+        if (bytes < 1024) return bytes + ' bytes';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1).replace('.', ',') + ' KB';
+        return (bytes / 1048576).toFixed(1).replace('.', ',') + ' MB';
+    }
+    document.querySelectorAll('input[type="file"]').forEach(function (campo) {
+        var bloco = campo.closest('.campo');
+        if (!bloco) return;
+        var botao = bloco.querySelector('[data-remover-arquivo]');
+        var info = bloco.querySelector('[data-arquivo-escolhido]');
+        if (!botao || !info) return;
+        function atualizar() {
+            var arquivo = campo.files && campo.files[0];
+            if (!arquivo) {
+                botao.hidden = true;
+                info.hidden = true;
+                info.textContent = '';
+                return;
+            }
+            botao.hidden = false;
+            info.hidden = false;
+            info.textContent = arquivo.name + ' — ' + tamanhoLegivel(arquivo.size);
+        }
+        campo.addEventListener('change', atualizar);
+        botao.addEventListener('click', function () {
+            campo.value = '';
+            atualizar();
+        });
+    });
+})();
+</script>
 {% endblock %}

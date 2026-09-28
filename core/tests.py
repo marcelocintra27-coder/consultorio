@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.urls import reverse
 
 from locacao.models import Dentista, PerfilUsuario, Sala
 
@@ -24,6 +25,34 @@ from .tabela_uniodonto import (
     NOME_CONVENIO_UNIODONTO,
     popular_convenio_e_tabela,
 )
+
+
+class ListaPacientesConvenioTests(TestCase):
+    def test_convenio_vazio_mostra_traco_e_nao_none(self):
+        secretaria = User.objects.create_user('secretaria_lista_convenio', password='x')
+        PerfilUsuario.objects.create(
+            usuario=secretaria,
+            papel=PerfilUsuario.Papel.SECRETARIA,
+        )
+        convenio = Convenio.objects.create(nome='Particular Lista')
+        Paciente.objects.create(
+            nome_completo='Sem Convenio Lista',
+            data_nascimento=date(1940, 5, 12),
+            telefone='11900000001',
+        )
+        Paciente.objects.create(
+            nome_completo='Com Convenio Lista',
+            data_nascimento=date(1940, 5, 13),
+            telefone='11900000002',
+            convenio=convenio,
+        )
+        self.client.force_login(secretaria)
+        resposta = self.client.get(reverse('core:listar_pacientes'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Sem Convenio Lista')
+        self.assertContains(resposta, '<td>—</td>')
+        self.assertContains(resposta, 'Particular Lista')
+        self.assertNotContains(resposta, '<td>None</td>')
 
 
 class AtendimentoProcedimentoTests(TestCase):

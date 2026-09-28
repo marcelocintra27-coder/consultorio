@@ -83,6 +83,12 @@ class ExamesTests(TestCase):
         self.assertEqual(resposta.status_code, 302, resposta.content[:3000])
         return Exame.objects.latest('criado_em')
 
+    def test_formulario_mostra_botao_remover_arquivo(self):
+        resposta = self.client.get(self.url('novo'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Remover arquivo')
+        self.assertContains(resposta, 'type="file"')
+
     def test_inclusao_integridade_download_auditoria(self):
         original = imagem()
         conteudo = original.read(); original.seek(0)
