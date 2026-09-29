@@ -1,6 +1,14 @@
 from django.contrib import admin
+from django.db import transaction
 
 from .admin_clinico import AdminClinicoProtegido, InlineClinicoProtegido
+from .auditoria_paciente import (
+    acao_da_mudanca,
+    diferencas,
+    registrar_auditoria_paciente,
+    snapshot,
+    valores_iniciais,
+)
 from .models import RetificacaoDocumento
 from .models import Prescricao
 from .models import (
@@ -13,6 +21,7 @@ from .models import (
     PrecoProcedimento,
     LancamentoAtendimento,
     AuditoriaConsulta,
+    AuditoriaPaciente,
     ContaReceber,
     ParcelaContaReceber,
     RecebimentoPaciente,
@@ -71,6 +80,51 @@ class PacienteAdmin(admin.ModelAdmin):
     autocomplete_fields = ('convenio',)
     readonly_fields = ('cadastrado_em',)
     list_per_page = 25
+
+    def save_model(self, request, obj, form, change):
+        with transaction.atomic():
+            if change:
+                original = Paciente.objects.select_for_update().get(pk=obj.pk)
+                alteracoes = diferencas(snapshot(original), obj)
+            super().save_model(request, obj, form, change)
+            if change and not alteracoes:
+                return
+            registrar_auditoria_paciente(
+                paciente=obj,
+                usuario=request.user,
+                acao=(
+                    acao_da_mudanca(alteracoes)
+                    if change
+                    else AuditoriaPaciente.Acao.CRIADO
+                ),
+                origem=AuditoriaPaciente.Origem.ADMINISTRACAO,
+                alteracoes=alteracoes if change else valores_iniciais(obj),
+            )
+
+
+@admin.register(AuditoriaPaciente)
+class AuditoriaPacienteAdmin(admin.ModelAdmin):
+    list_display = ('paciente', 'usuario', 'acao', 'origem', 'criado_em')
+    list_filter = ('paciente', 'usuario', 'acao', 'criado_em')
+    search_fields = ('paciente__nome_completo', 'usuario__username')
+    readonly_fields = (
+        'paciente', 'usuario', 'acao', 'origem', 'alteracoes', 'criado_em',
+    )
+
+    def has_module_permission(self, request):
+        return self.has_view_permission(request)
+
+    def has_view_permission(self, request, obj=None):
+        return bool(request.user.is_active and request.user.is_superuser)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Evolucao)

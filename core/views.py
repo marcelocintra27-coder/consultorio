@@ -48,6 +48,13 @@ from .anamnese import (
     sincronizar_paciente,
     texto_para_hash,
 )
+from .auditoria_paciente import (
+    acao_da_mudanca,
+    diferencas,
+    registrar_auditoria_paciente,
+    snapshot,
+    valores_iniciais,
+)
 from .ia_digitalizacao import processar_digitalizacao_com_ia
 from .tabela_uniodonto import FATOR_US_UNIODONTO
 from .models import (
@@ -59,6 +66,7 @@ from .models import (
     PrecoProcedimento,
     LancamentoAtendimento,
     AuditoriaConsulta,
+    AuditoriaPaciente,
     ProcedimentoUniodonto,
     RepasseUniodonto,
     soma_producao_uniodonto,
@@ -271,7 +279,15 @@ def cadastrar_paciente(request):
     if request.method == 'POST':
         form = PacienteForm(request.POST)
         if form.is_valid():
-            form.save()
+            with transaction.atomic():
+                paciente = form.save()
+                registrar_auditoria_paciente(
+                    paciente=paciente,
+                    usuario=request.user,
+                    acao=AuditoriaPaciente.Acao.CRIADO,
+                    origem=AuditoriaPaciente.Origem.TELA,
+                    alteracoes=valores_iniciais(paciente),
+                )
             return redirect('core:listar_pacientes')
     else:
         form = PacienteForm()
@@ -286,9 +302,20 @@ def editar_paciente(request, pk):
     if not usuario_pode_editar_cadastro_paciente(request.user, paciente):
         raise PermissionDenied
     if request.method == 'POST':
+        anteriores = snapshot(paciente)
         form = PacienteForm(request.POST, instance=paciente)
         if form.is_valid():
-            form.save()
+            alteracoes = diferencas(anteriores, paciente)
+            with transaction.atomic():
+                form.save()
+                if alteracoes:
+                    registrar_auditoria_paciente(
+                        paciente=paciente,
+                        usuario=request.user,
+                        acao=acao_da_mudanca(alteracoes),
+                        origem=AuditoriaPaciente.Origem.TELA,
+                        alteracoes=alteracoes,
+                    )
             return redirect('core:listar_pacientes')
     else:
         form = PacienteForm(instance=paciente)

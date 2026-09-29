@@ -91,6 +91,44 @@ class Paciente(models.Model):
     def __str__(self):
         return self.nome_completo
 
+
+class AuditoriaPaciente(models.Model):
+    class Acao(models.TextChoices):
+        CRIADO = 'criado', 'criado'
+        ALTERADO = 'alterado', 'alterado'
+        DESATIVADO = 'desativado', 'desativado'
+        REATIVADO = 'reativado', 'reativado'
+
+    class Origem(models.TextChoices):
+        TELA = 'tela', 'tela do sistema'
+        ADMINISTRACAO = 'administracao', 'administração'
+
+    paciente = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente',
+        on_delete=models.PROTECT,
+        related_name='auditorias',
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='usuário',
+        on_delete=models.PROTECT,
+        related_name='auditorias_paciente',
+    )
+    acao = models.CharField('ação', max_length=20, choices=Acao.choices)
+    origem = models.CharField('origem', max_length=20, choices=Origem.choices)
+    alteracoes = models.JSONField('alterações', default=dict, blank=True)
+    criado_em = models.DateTimeField('data e hora', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'auditoria de paciente'
+        verbose_name_plural = 'auditorias de paciente'
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'{self.paciente_id} — {self.get_acao_display()}'
+
+
 class Evolucao(ModeloClinicoProtegido):
     paciente = models.ForeignKey(Paciente, verbose_name='paciente', on_delete=models.CASCADE, related_name='evolucoes')
     data = models.DateField('data do atendimento')
