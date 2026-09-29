@@ -1,0 +1,75 @@
+{% extends "core/base.html" %}
+
+{% block title %}Relatório de atividade{% endblock %}
+{% block titulo %}Relatório de atividade{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+<section class="secao" aria-labelledby="titulo-atividade">
+    <h2 id="titulo-atividade">Atividade por funcionária</h2>
+    <p class="subtitulo">De {{ data_inicial|date:"d/m/Y" }} até {{ data_final|date:"d/m/Y" }}. Os horários são de São Paulo.</p>
+
+    <div class="acoes">
+        <a class="botao" href="{% url 'core:relatorio_atividade_csv' %}?data_inicial={{ data_inicial|date:'Y-m-d' }}&amp;data_final={{ data_final|date:'Y-m-d' }}{% if usuaria %}&amp;usuaria={{ usuaria.pk }}{% endif %}">Baixar CSV</a>
+    </div>
+
+    <form method="get" class="busca-form">
+        <div class="campo">
+            <label for="{{ form.data_inicial.id_for_label }}">De</label>
+            {{ form.data_inicial }}
+            {% if form.data_inicial.errors %}<div class="erro">{{ form.data_inicial.errors }}</div>{% endif %}
+        </div>
+        <div class="campo">
+            <label for="{{ form.data_final.id_for_label }}">Até</label>
+            {{ form.data_final }}
+            {% if form.data_final.errors %}<div class="erro">{{ form.data_final.errors }}</div>{% endif %}
+        </div>
+        <div class="campo">
+            <label for="{{ form.usuaria.id_for_label }}">Funcionária</label>
+            {{ form.usuaria }}
+        </div>
+        <button type="submit" class="botao secundario">Filtrar</button>
+    </form>
+
+    <div class="tabela-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Funcionária</th>
+                    <th scope="col">Dia</th>
+                    <th scope="col">Primeira atividade</th>
+                    <th scope="col">Última atividade</th>
+                    <th scope="col">Entradas</th>
+                    <th scope="col">Senha incorreta</th>
+                    <th scope="col">Pacientes cadastrados</th>
+                    <th scope="col">Pacientes alterados</th>
+                    <th scope="col">Ações em consultas</th>
+                    <th scope="col">Fotos enviadas</th>
+                    <th scope="col">Detalhe</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for linha in linhas %}
+                <tr>
+                    <td>{{ linha.usuario.get_full_name|default:linha.usuario.username }}</td>
+                    <td>{{ linha.data|date:"d/m/Y" }}</td>
+                    <td>{% if linha.primeira %}{{ linha.primeira|time:"H:i" }}{% else %}—{% endif %}</td>
+                    <td>{% if linha.ultima %}{{ linha.ultima|time:"H:i" }}{% else %}—{% endif %}</td>
+                    <td>{{ linha.entradas }}</td>
+                    <td>{{ linha.tentativas }}</td>
+                    <td>{{ linha.pacientes_cadastrados }}</td>
+                    <td>{{ linha.pacientes_alterados }}</td>
+                    <td>{{ linha.consultas }}</td>
+                    <td>{{ linha.fotos }}</td>
+                    <td><a class="botao secundario" href="{% url 'core:relatorio_atividade_dia' linha.usuario.pk linha.data|date:'Y-m-d' %}?data_inicial={{ data_inicial|date:'Y-m-d' }}&amp;data_final={{ data_final|date:'Y-m-d' }}{% if usuaria %}&amp;usuaria={{ usuaria.pk }}{% endif %}">Ver dia</a></td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="11" class="vazio">Nenhuma atividade no período.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

@@ -129,6 +129,62 @@ class AuditoriaPaciente(models.Model):
         return f'{self.paciente_id} — {self.get_acao_display()}'
 
 
+class RegistroAcesso(models.Model):
+    class Tipo(models.TextChoices):
+        ENTROU = 'entrou', 'entrou'
+        SAIU = 'saiu', 'saiu'
+        TENTATIVA_FALHOU = 'tentativa_falhou', 'tentativa falhou'
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='usuário',
+        on_delete=models.PROTECT,
+        related_name='registros_acesso',
+        null=True,
+        blank=True,
+    )
+    usuario_digitado = models.CharField(
+        'usuário digitado', max_length=150, blank=True, default='',
+    )
+    tipo = models.CharField('tipo', max_length=20, choices=Tipo.choices)
+    criado_em = models.DateTimeField('data e hora', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'registro de acesso'
+        verbose_name_plural = 'registros de acesso'
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        quem = self.usuario_id or self.usuario_digitado or 'desconhecido'
+        return f'{quem} — {self.get_tipo_display()}'
+
+
+class AtividadeDiaria(models.Model):
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='usuário',
+        on_delete=models.PROTECT,
+        related_name='atividades_diarias',
+    )
+    data = models.DateField('dia')
+    primeira_atividade = models.DateTimeField('primeira atividade')
+    ultima_atividade = models.DateTimeField('última atividade')
+
+    class Meta:
+        verbose_name = 'atividade diária'
+        verbose_name_plural = 'atividades diárias'
+        ordering = ['-data', 'usuario_id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=('usuario', 'data'),
+                name='atividade_diaria_unica',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.usuario_id} — {self.data}'
+
+
 class Evolucao(ModeloClinicoProtegido):
     paciente = models.ForeignKey(Paciente, verbose_name='paciente', on_delete=models.CASCADE, related_name='evolucoes')
     data = models.DateField('data do atendimento')

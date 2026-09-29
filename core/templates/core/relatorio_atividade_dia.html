@@ -1,0 +1,37 @@
+{% extends "core/base.html" %}
+
+{% block title %}Atividade do dia{% endblock %}
+{% block titulo %}Relatório de atividade{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+<section class="secao" aria-labelledby="titulo-dia">
+    <h2 id="titulo-dia">{{ usuaria.get_full_name|default:usuaria.username }} — {{ dia|date:"d/m/Y" }}</h2>
+    <p class="subtitulo">Horários de São Paulo.</p>
+    <div class="acoes">
+        <a class="botao secundario" href="{{ voltar }}">Voltar</a>
+    </div>
+    <div class="tabela-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Horário</th>
+                    <th scope="col">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for evento in eventos %}
+                <tr>
+                    <td>{{ evento.quando|time:"H:i" }}</td>
+                    <td>{{ evento.texto }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="2" class="vazio">Nenhuma ação registrada neste dia.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

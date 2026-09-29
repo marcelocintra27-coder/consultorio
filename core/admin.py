@@ -22,6 +22,8 @@ from .models import (
     LancamentoAtendimento,
     AuditoriaConsulta,
     AuditoriaPaciente,
+    AtividadeDiaria,
+    RegistroAcesso,
     ContaReceber,
     ParcelaContaReceber,
     RecebimentoPaciente,
@@ -125,6 +127,39 @@ class AuditoriaPacienteAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+class _SomenteLeituraSuperusuarioAdmin(admin.ModelAdmin):
+    def has_module_permission(self, request):
+        return self.has_view_permission(request)
+
+    def has_view_permission(self, request, obj=None):
+        return bool(request.user.is_active and request.user.is_superuser)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(RegistroAcesso)
+class RegistroAcessoAdmin(_SomenteLeituraSuperusuarioAdmin):
+    list_display = ('usuario', 'usuario_digitado', 'tipo', 'criado_em')
+    list_filter = ('tipo', 'criado_em')
+    search_fields = ('usuario__username', 'usuario_digitado')
+    readonly_fields = ('usuario', 'usuario_digitado', 'tipo', 'criado_em')
+
+
+@admin.register(AtividadeDiaria)
+class AtividadeDiariaAdmin(_SomenteLeituraSuperusuarioAdmin):
+    list_display = ('usuario', 'data', 'primeira_atividade', 'ultima_atividade')
+    list_filter = ('data',)
+    search_fields = ('usuario__username',)
+    readonly_fields = ('usuario', 'data', 'primeira_atividade', 'ultima_atividade')
 
 
 @admin.register(Evolucao)

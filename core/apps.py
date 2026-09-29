@@ -6,4 +6,5 @@ class CoreConfig(AppConfig):
     name = 'core'
 
     def ready(self):
+        from . import sinais_acesso  # noqa: F401
         from . import sinais_clinicos  # noqa: F401

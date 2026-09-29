@@ -70,6 +70,7 @@ def navegacao_usuario(request):
                 ]),
                 _grupo('Administração', [
                     _item(request, 'Administração', 'configuracoes', 'core:administracao'),
+                    _item(request, 'Relatório de atividade', 'relatorios', 'core:relatorio_atividade'),
                 ]),
             ],
         }

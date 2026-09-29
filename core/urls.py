@@ -87,6 +87,11 @@ from .views import (
 app_name = 'core'
 from django.urls import include
 
+from .relatorio_atividade import (
+    relatorio_atividade,
+    relatorio_atividade_csv,
+    relatorio_atividade_dia,
+)
 from .retificacoes import retificar_documento
 from .prescricoes import listar_prescricoes, editar_prescricao, ver_prescricao, imprimir_prescricao
 
@@ -107,6 +112,13 @@ urlpatterns = [
         name='digitalizacao_processar_ia',
     ),
     path('administracao/', administracao, name='administracao'),
+    path('relatorio-atividade/', relatorio_atividade, name='relatorio_atividade'),
+    path('relatorio-atividade/csv/', relatorio_atividade_csv, name='relatorio_atividade_csv'),
+    path(
+        'relatorio-atividade/<int:usuario_id>/<str:dia>/',
+        relatorio_atividade_dia,
+        name='relatorio_atividade_dia',
+    ),
     path('financeiro/caixa/', caixa_diario, name='caixa_diario'),
     path('financeiro/caixa/abrir/', abrir_caixa, name='abrir_caixa'),
     path('financeiro/caixa/<int:pk>/movimento/', movimento_manual_caixa, name='movimento_manual_caixa'),
