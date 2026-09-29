@@ -1,6 +1,7 @@
 #!/bin/sh
 # Sobe o consultório.
 # Sem CLAMAV_ATIVO=1 o arranque é o de sempre: migrate, collectstatic e gunicorn.
+# Com CLAMAV_ATIVO=1 o antivírus prepara em segundo plano e o site sobe na hora.
 # O valor 1 é só para o plano com 2 GB. O plano de 512 MB não aguenta o ClamAV.
 set -eu
 
@@ -14,139 +15,143 @@ if [ "${CLAMAV_ATIVO:-}" != "1" ]; then
   iniciar_aplicacao
 fi
 
-DISCO="${RENDER_DISK_PATH:-}"
-if [ -z "$DISCO" ]; then
-  echo "ClamAV: RENDER_DISK_PATH não está definido. O antivírus não será iniciado."
-  iniciar_aplicacao
-fi
+# Erros deste bloco só vão para o log. Não usam set -e e não seguram o gunicorn.
+(
+  trap '' HUP
+  set +e
 
-DIR="${DISCO%/}/clamav"
-mkdir -p "$DIR"
-
-PORTA="${EXAMES_CLAMD_PORT:-3310}"
-case "$PORTA" in
-  ''|*[!0-9]*) PORTA=3310 ;;
-esac
-
-ESPERA="${CLAMAV_ESPERA_SEGUNDOS:-120}"
-case "$ESPERA" in
-  ''|*[!0-9]*) ESPERA=120 ;;
-esac
-
-CLAMD_CONF="${DIR}/clamd.conf"
-FRESH_UMA_VEZ="${DIR}/freshclam-uma-vez.conf"
-FRESH_DAEMON="${DIR}/freshclam.conf"
-
-if id clamav >/dev/null 2>&1; then
-  chown clamav:clamav "$DIR"
-else
-  echo "ClamAV: usuário clamav não encontrado. O serviço seguirá com o usuário atual."
-fi
-chmod 755 "$DIR"
-
-{
-  echo "DatabaseDirectory ${DIR}"
-  echo "LogTime yes"
-  echo "PidFile ${DIR}/clamd.pid"
-  echo "TCPSocket ${PORTA}"
-  echo "TCPAddr 127.0.0.1"
-  echo "StreamMaxLength 25M"
-  echo "ConcurrentDatabaseReload no"
-  echo "Foreground yes"
-  if id clamav >/dev/null 2>&1; then
-    echo "User clamav"
+  if ! id clamav >/dev/null 2>&1; then
+    echo "ClamAV: usuário clamav não encontrado. O antivírus não será iniciado."
+    exit 0
   fi
-} > "$CLAMD_CONF"
-chmod 644 "$CLAMD_CONF"
 
-escrever_fresh() {
-  arquivo="$1"
-  foreground="$2"
-  checks="$3"
-  notificar="$4"
+  DISCO="${RENDER_DISK_PATH:-}"
+  if [ -z "$DISCO" ]; then
+    echo "ClamAV: RENDER_DISK_PATH não está definido. O antivírus não será iniciado."
+    exit 0
+  fi
+
+  DIR="${DISCO%/}/clamav"
+  PORTA="${EXAMES_CLAMD_PORT:-3310}"
+  case "$PORTA" in
+    ''|*[!0-9]*) PORTA=3310 ;;
+  esac
+
+  CLAMD_CONF="${DIR}/clamd.conf"
+  FRESH_UMA_VEZ="${DIR}/freshclam-uma-vez.conf"
+  FRESH_DAEMON="${DIR}/freshclam.conf"
+  CLAMD_PID=""
+
+  if ! mkdir -p "$DIR"; then
+    echo "ClamAV: não foi possível criar a pasta de assinaturas."
+    exit 0
+  fi
+  if ! chown clamav:clamav "$DIR"; then
+    echo "ClamAV: não foi possível entregar a pasta ao usuário clamav. O antivírus não será iniciado."
+    exit 0
+  fi
+  if ! chmod 750 "$DIR"; then
+    echo "ClamAV: não foi possível ajustar a permissão da pasta de assinaturas. O antivírus não será iniciado."
+    exit 0
+  fi
+
   {
     echo "DatabaseDirectory ${DIR}"
     echo "LogTime yes"
-    echo "Foreground ${foreground}"
-    echo "Checks ${checks}"
-    echo "DatabaseMirror database.clamav.net"
-    echo "ConnectTimeout 30"
-    # Evita segurar o site para sempre se o espelho travar. O daemon tenta de novo.
-    echo "ReceiveTimeout 300"
-    echo "Bytecode yes"
-    if id clamav >/dev/null 2>&1; then
+    echo "PidFile ${DIR}/clamd.pid"
+    echo "TCPSocket ${PORTA}"
+    echo "TCPAddr 127.0.0.1"
+    echo "StreamMaxLength 25M"
+    echo "ConcurrentDatabaseReload no"
+    echo "Foreground yes"
+    echo "User clamav"
+  } > "$CLAMD_CONF"
+
+  escrever_fresh() {
+    arquivo="$1"
+    foreground="$2"
+    checks="$3"
+    notificar="$4"
+    {
+      echo "DatabaseDirectory ${DIR}"
+      echo "LogTime yes"
+      echo "Foreground ${foreground}"
+      echo "Checks ${checks}"
+      echo "DatabaseMirror database.clamav.net"
+      echo "ConnectTimeout 30"
+      echo "ReceiveTimeout 300"
+      echo "Bytecode yes"
       echo "DatabaseOwner clamav"
-    fi
-    if [ "$notificar" = "sim" ]; then
-      echo "NotifyClamd ${CLAMD_CONF}"
-    fi
-  } > "$arquivo"
-  chmod 644 "$arquivo"
-}
+      if [ "$notificar" = "sim" ]; then
+        echo "NotifyClamd ${CLAMD_CONF}"
+      fi
+    } > "$arquivo"
+  }
 
-escrever_fresh "$FRESH_UMA_VEZ" yes 1 nao
-escrever_fresh "$FRESH_DAEMON" no 12 sim
+  escrever_fresh "$FRESH_UMA_VEZ" yes 1 nao
+  escrever_fresh "$FRESH_DAEMON" no 12 sim
 
-if freshclam --config-file="$FRESH_UMA_VEZ" --foreground --stdout; then
-  echo "ClamAV: assinaturas atualizadas."
-else
-  if find "$DIR" -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) | grep -q .; then
-    echo "ClamAV: a atualização falhou, mas já existem assinaturas no disco. Seguindo."
+  for arquivo in "$CLAMD_CONF" "$FRESH_UMA_VEZ" "$FRESH_DAEMON"; do
+    if ! chown clamav:clamav "$arquivo"; then
+      echo "ClamAV: não foi possível ajustar o dono de ${arquivo}. O antivírus não será iniciado."
+      exit 0
+    fi
+    if ! chmod 640 "$arquivo"; then
+      echo "ClamAV: não foi possível ajustar a permissão de ${arquivo}. O antivírus não será iniciado."
+      exit 0
+    fi
+  done
+
+  tem_assinatura() {
+    find "$DIR" -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) 2>/dev/null | grep -q .
+  }
+
+  if ! command -v timeout >/dev/null 2>&1; then
+    echo "ClamAV: comando timeout não encontrado. A atualização inicial foi pulada."
   else
-    echo "ClamAV: a atualização falhou e ainda não há assinaturas no disco. Seguindo."
+    timeout --foreground 900 freshclam --config-file="$FRESH_UMA_VEZ" --foreground --stdout
+    codigo=$?
+    if [ "$codigo" -eq 0 ]; then
+      echo "ClamAV: assinaturas atualizadas."
+    elif [ "$codigo" -eq 124 ]; then
+      echo "ClamAV: a atualização inicial passou de 900 segundos e foi interrompida."
+    elif tem_assinatura; then
+      echo "ClamAV: a atualização falhou, mas já existem assinaturas no disco."
+    else
+      echo "ClamAV: a atualização falhou e ainda não há assinaturas no disco."
+    fi
   fi
-fi
 
-# Somente 127.0.0.1. A porta não é publicada para fora do container.
-clamd --config-file="$CLAMD_CONF" &
-CLAMD_PID=$!
+  clamd_rodando() {
+    if [ -z "$CLAMD_PID" ]; then
+      return 1
+    fi
+    kill -0 "$CLAMD_PID" 2>/dev/null
+  }
 
-if python - "$PORTA" "$ESPERA" "$CLAMD_PID" <<'PY'
-import os
-import socket
-import sys
-import time
+  iniciar_clamd() {
+    if clamd_rodando; then
+      return 0
+    fi
+    echo "ClamAV: iniciando clamd."
+    clamd --config-file="$CLAMD_CONF" &
+    CLAMD_PID=$!
+  }
 
-porta = int(sys.argv[1])
-espera = int(sys.argv[2])
-pid = int(sys.argv[3])
-prazo = time.monotonic() + espera
+  iniciar_clamd
 
+  freshclam --config-file="$FRESH_DAEMON" --daemon --checks=12
+  if [ $? -ne 0 ]; then
+    echo "ClamAV: o freshclam em segundo plano não iniciou."
+  fi
 
-def processo_vivo():
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
-
-
-while True:
-    try:
-        with socket.create_connection(("127.0.0.1", porta), timeout=2) as sock:
-            sock.settimeout(2)
-            sock.sendall(b"zPING\0")
-            dados = b""
-            while b"\0" not in dados and len(dados) < 64:
-                parte = sock.recv(64)
-                if not parte:
-                    break
-                dados += parte
-            if b"PONG" in dados:
-                raise SystemExit(0)
-    except OSError:
-        pass
-    if not processo_vivo() or time.monotonic() >= prazo:
-        raise SystemExit(1)
-    time.sleep(1)
-PY
-then
-  echo "ClamAV: clamd pronto."
-else
-  echo "ClamAV: clamd não respondeu em ${ESPERA} segundos. O sistema segue; fotos e exames ficam retidos até o antivírus responder."
-fi
-
-freshclam --config-file="$FRESH_DAEMON" --daemon --checks=12 \
-  || echo "ClamAV: o freshclam em segundo plano não iniciou. O clamd segue com as assinaturas que já estiverem no disco."
+  while true; do
+    sleep 60
+    if tem_assinatura && ! clamd_rodando; then
+      echo "ClamAV: clamd parado com assinaturas no disco. Iniciando de novo."
+      iniciar_clamd
+    fi
+  done
+) &
 
 iniciar_aplicacao

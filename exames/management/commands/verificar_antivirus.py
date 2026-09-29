@@ -17,16 +17,23 @@ def _ler(sock):
     return resposta.split(b'\0', 1)[0].decode('utf-8', 'replace')
 
 
-def consultar():
-    """PING e VERSION em 127.0.0.1. Não usa INSTREAM e não lê arquivo."""
-    porta = limite('EXAMES_CLAMD_PORT', 3310)
+def _comando(porta, comando):
     with socket.create_connection(('127.0.0.1', porta), timeout=3) as sock:
         sock.settimeout(3)
-        sock.sendall(b'zPING\0')
-        if 'PONG' not in _ler(sock):
-            return False, ''
-        sock.sendall(b'zVERSION\0')
-        return True, _ler(sock)
+        sock.sendall(comando)
+        return _ler(sock)
+
+
+def consultar():
+    """PING e VERSION em conexões separadas. Não usa INSTREAM e não lê arquivo."""
+    porta = limite('EXAMES_CLAMD_PORT', 3310)
+    if 'PONG' not in _comando(porta, b'zPING\0'):
+        return False, ''
+    try:
+        versao = _comando(porta, b'zVERSION\0')
+    except (OSError, TimeoutError):
+        return True, ''
+    return True, versao
 
 
 def data_das_assinaturas(versao):
