@@ -75,7 +75,7 @@ class DigitalizacaoTests(TestCase):
         self.assertNotContains(resposta, self.outro.nome_completo)
         self.assertEqual(list(resposta.context['form'].fields['paciente'].queryset),
                          [self.paciente])
-        self.assertContains(resposta, 'Remover arquivo')
+        self.assertContains(resposta, 'data-remover-arquivo hidden')
         self.assertContains(resposta, 'type="file"')
 
     def test_perfis_negados_get_post_sem_gravacao(self):

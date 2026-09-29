@@ -86,8 +86,12 @@ class ExamesTests(TestCase):
     def test_formulario_mostra_botao_remover_arquivo(self):
         resposta = self.client.get(self.url('novo'))
         self.assertEqual(resposta.status_code, 200)
-        self.assertContains(resposta, 'Remover arquivo')
+        self.assertContains(resposta, 'data-remover-arquivo hidden')
         self.assertContains(resposta, 'type="file"')
+        css = Path(__file__).resolve().parents[1].joinpath(
+            'core/static/core/css/app.css'
+        ).read_text(encoding='utf-8')
+        self.assertRegex(css, r'\[hidden\]\s*\{[^}]*display:\s*none\s*!important')
 
     def test_inclusao_integridade_download_auditoria(self):
         original = imagem()
