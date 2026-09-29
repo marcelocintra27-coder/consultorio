@@ -1,5 +1,5 @@
 import json
-from datetime import date, timedelta
+from datetime import timedelta
 from uuid import uuid4
 
 from django.utils import timezone
@@ -76,7 +76,7 @@ SAUDE_BUCAL = [
 def idade_em_anos(data_nascimento, hoje=None):
     if data_nascimento is None:
         return None
-    hoje = hoje or date.today()
+    hoje = hoje or timezone.localdate()
     anos = hoje.year - data_nascimento.year
     if (hoje.month, hoje.day) < (data_nascimento.month, data_nascimento.day):
         anos -= 1

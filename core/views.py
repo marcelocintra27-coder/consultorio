@@ -1,6 +1,6 @@
 ﻿from decimal import Decimal
 import json
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 
@@ -2680,7 +2680,7 @@ def ficha_evolucao_clinica(request, pk):
     else:
         form = RegistroEvolucaoClinicaForm(
             initial={
-                'data': date.today(),
+                'data': timezone.localdate(),
                 'nome_profissional': nome_sugerido,
             }
         )
@@ -2722,7 +2722,7 @@ def _criar_rascunho_plano(paciente, usuario):
         uf=(ultima.uf if ultima else ''),
         profissao=(ultima.profissao if ultima else ''),
         nome_responsavel=(ultima.nome_responsavel if ultima else ''),
-        data_consentimento=date.today(),
+        data_consentimento=timezone.localdate(),
     )
 
 

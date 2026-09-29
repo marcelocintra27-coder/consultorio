@@ -158,11 +158,11 @@ def valor_origem(item):
 
 def data_origem(item):
     if isinstance(item, RecebimentoPaciente):
-        return item.recebido_em.date()
+        return timezone.localtime(item.recebido_em).date()
     if isinstance(item, BaixaContaPagar):
-        return item.baixado_em.date()
+        return timezone.localtime(item.baixado_em).date()
     if isinstance(item, MovimentoCaixa):
-        return item.criado_em.date()
+        return timezone.localtime(item.criado_em).date()
     return item.competencia
 
 

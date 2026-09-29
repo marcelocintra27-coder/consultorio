@@ -3,9 +3,14 @@ from django.utils import timezone
 from .models import AuditoriaCaixa, CaixaDiario, MovimentoCaixa
 
 
+def _dia_local(instante):
+    """Dia civil em America/Sao_Paulo. .date() em datetime UTC vira o dia seguinte após 21h."""
+    return timezone.localtime(instante).date()
+
+
 def registrar_movimento_automatico(*, recebimento=None, baixa=None, usuario):
     """Registra uma única origem no caixa aberto da data da operação."""
-    data = (recebimento.recebido_em if recebimento else baixa.baixado_em).date()
+    data = _dia_local(recebimento.recebido_em if recebimento else baixa.baixado_em)
     try:
         caixa = CaixaDiario.objects.get(data=data, situacao=CaixaDiario.Situacao.ABERTO)
     except CaixaDiario.DoesNotExist:

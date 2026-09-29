@@ -1,6 +1,8 @@
-from datetime import date, time
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
+from unittest.mock import patch
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth.models import User
 from django.test import TestCase
@@ -162,6 +164,93 @@ class CaixaTests(TestCase):
         self.assertEqual(caixa.saldo_esperado, Decimal('20.00'))
         self.assertEqual(MovimentoCaixa.objects.count(), 3)
         self.assertEqual(AuditoriaCaixa.objects.filter(caixa=caixa).count(), 4)
+
+    def _no_instante(self, momento):
+        instante = momento.astimezone(UTC)
+
+        def congelado():
+            return instante
+
+        campos = (
+            RecebimentoPaciente._meta.get_field('recebido_em'),
+            BaixaContaPagar._meta.get_field('baixado_em'),
+        )
+        originais = [(campo, campo.default) for campo in campos]
+        for campo, _default in originais:
+            campo.default = congelado
+            campo.__dict__.pop('_get_default', None)
+        relogio = patch('django.utils.timezone.now', congelado)
+        relogio.start()
+        self.addCleanup(relogio.stop)
+        self.addCleanup(self._restaurar_defaults, originais)
+        return instante
+
+    def _restaurar_defaults(self, originais):
+        for campo, default in originais:
+            campo.default = default
+            campo.__dict__.pop('_get_default', None)
+
+    def _recebimento_e_baixa_no_dia_local(self, momento):
+        instante = self._no_instante(momento)
+        dia = timezone.localdate()
+        self.assertEqual(dia, momento.date())
+        self.assertEqual(self.abrir('0.00').status_code, 302)
+        caixa = CaixaDiario.objects.get()
+        self.assertEqual(caixa.data, dia)
+        parcela = self._parcela_receber()
+        resposta = self.client.post(
+            reverse('core:registrar_recebimento', args=[parcela.pk]),
+            {
+                'valor': '100.00',
+                'desconto': '0.00',
+                'forma_pagamento': Consulta.FormaPagamento.PIX,
+                'observacoes': 'Recebimento testado',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        recebimento = RecebimentoPaciente.objects.get()
+        self.assertEqual(recebimento.recebido_em, instante)
+        self.assertEqual(
+            MovimentoCaixa.objects.filter(recebido=recebimento, caixa=caixa).count(),
+            1,
+        )
+        conta_pagar = self._conta_pagar_aprovada()
+        resposta = self.client.post(
+            reverse('core:registrar_baixa_conta_pagar', args=[conta_pagar.pk]),
+            {
+                'valor': '60.00',
+                'chave_operacao': uuid4(),
+                'observacoes': 'Baixa testada',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        baixa = BaixaContaPagar.objects.get()
+        self.assertEqual(baixa.baixado_em, instante)
+        self.assertEqual(
+            MovimentoCaixa.objects.filter(baixa=baixa, caixa=caixa).count(),
+            1,
+        )
+        self.assertEqual(caixa.data, dia)
+
+    def test_recebimento_e_baixa_no_caixa_local_as_15h(self):
+        self._recebimento_e_baixa_no_dia_local(
+            datetime(2026, 9, 28, 15, 0, tzinfo=ZoneInfo('America/Sao_Paulo'))
+        )
+
+    def test_recebimento_e_baixa_no_caixa_local_as_21h30(self):
+        self._recebimento_e_baixa_no_dia_local(
+            datetime(2026, 9, 28, 21, 30, tzinfo=ZoneInfo('America/Sao_Paulo'))
+        )
+
+    def test_recebimento_e_baixa_no_caixa_local_as_23h59(self):
+        self._recebimento_e_baixa_no_dia_local(
+            datetime(2026, 9, 28, 23, 59, tzinfo=ZoneInfo('America/Sao_Paulo'))
+        )
+
+    def test_recebimento_e_baixa_no_caixa_local_as_00h01(self):
+        self._recebimento_e_baixa_no_dia_local(
+            datetime(2026, 9, 29, 0, 1, tzinfo=ZoneInfo('America/Sao_Paulo'))
+        )
 
     def test_fechamento_exige_justificativa_e_e_imutavel(self):
         self.abrir('0.00')
