@@ -137,9 +137,9 @@ class DigitalizacaoFichaForm(forms.ModelForm):
         self.fields['paciente'].required = not usuario_e_administrador(user)
 
     def clean_paciente(self):
-        from .permissoes import usuario_pode_acessar_digitalizacao
+        from .permissoes import usuario_pode_enviar_digitalizacao
         paciente = self.cleaned_data.get('paciente')
-        if not usuario_pode_acessar_digitalizacao(self.user, paciente):
+        if not usuario_pode_enviar_digitalizacao(self.user, paciente):
             raise forms.ValidationError('Paciente não autorizado para digitalização.')
         return paciente
 

@@ -364,6 +364,8 @@ class MatrizPermissoesTests(TestCase):
         self.assertContains(resposta, 'Secretária')
         self.assertContains(resposta, 'Agenda')
         self.assertContains(resposta, 'Pacientes')
+        self.assertContains(resposta, 'Digitalizar ficha antiga')
+        self.assertContains(resposta, reverse('core:digitalizacao_upload'))
         self.assertNotContains(resposta, 'Financeiro atual')
         self.assertNotContains(resposta, 'Materiais utilizados')
 
@@ -405,9 +407,10 @@ class MatrizPermissoesTests(TestCase):
         self.client.force_login(self.secretaria)
         resposta = self.client.get(inicio)
         self.assertEqual(resposta.status_code, 200)
-        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
-        self.assertEqual(self.client.get(digitalizar).status_code, 403)
-        self.assertEqual(self.client.post(digitalizar).status_code, 403)
+        self.assertContains(resposta, 'Digitalizar ficha antiga')
+        self.assertContains(resposta, digitalizar)
+        self.assertEqual(self.client.get(digitalizar).status_code, 200)
+        self.assertNotEqual(self.client.post(digitalizar).status_code, 403)
 
         self.client.force_login(self.dentista_user)
         resposta = self.client.get(inicio)
@@ -469,7 +472,8 @@ class MatrizPermissoesTests(TestCase):
         self.assertNotContains(resposta, 'Materiais')
         self.assertNotContains(resposta, 'Administração técnica')
         self.assertNotContains(resposta, 'Prontuário')
-        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
+        self.assertContains(resposta, 'Digitalizar ficha antiga')
+        self.assertContains(resposta, reverse('core:digitalizacao_upload'))
 
     def test_dashboard_do_dentista_exibe_apenas_rotina_clinica_vinculada(self):
         self.consulta_um.data = timezone.localdate()

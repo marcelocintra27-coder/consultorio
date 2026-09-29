@@ -86,6 +86,7 @@ def navegacao_usuario(request):
                 _grupo('Operação', [
                     _item(request, 'Agenda', 'agenda', 'core:listar_consultas'),
                     _item(request, 'Pacientes', 'pacientes', 'core:listar_pacientes'),
+                    _item(request, 'Digitalizar ficha antiga', 'pacientes', 'core:digitalizacao_upload'),
                 ]),
             ],
         }

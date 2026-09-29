@@ -84,6 +84,17 @@
         </div>
     </section>
 
+    <section class="secao" aria-labelledby="titulo-digitalizar-secretaria">
+        <h2 id="titulo-digitalizar-secretaria">Fichas antigas</h2>
+        <div class="cards">
+            <div class="card">
+                <h3>Digitalizar ficha antiga</h3>
+                <p>Envio de ficha física digitalizada para revisão.</p>
+                <a href="{% url 'core:digitalizacao_upload' %}" class="botao">Acessar</a>
+            </div>
+        </div>
+    </section>
+
     <section class="secao" aria-labelledby="titulo-proximas-consultas">
         <h2 id="titulo-proximas-consultas">Consultas de hoje</h2>
         {% if consultas_hoje %}

@@ -330,16 +330,43 @@ def usuario_pode_emitir_prescricao(user, paciente, prescricao=None):
 
 
 def usuario_pode_digitalizar(user):
-    """Acesso ao fluxo de digitalização, sem mudar a matriz dos demais módulos."""
+    """Abre a tela de envio. Não libera ver a imagem nem processar a ficha."""
     if not user or not user.is_authenticated or not user.is_active:
         return False
     if usuario_e_administrador(user):
+        return True
+    perfil = perfil_do_usuario(user)
+    if perfil is not None and perfil.papel == PerfilUsuario.Papel.SECRETARIA:
         return True
     dentista = dentista_do_usuario(user)
     return bool(dentista and dentista.ativo)
 
 
+def usuario_pode_enviar_digitalizacao(user, paciente):
+    """Autoriza gravar a foto de um paciente ativo.
+
+    A secretária alcança qualquer paciente ativo, o mesmo conjunto de
+    pacientes_visiveis_para_usuario. Isso não abre prontuário, anamnese,
+    evolução nem o processamento com IA.
+    """
+    if not usuario_pode_digitalizar(user):
+        return False
+    if usuario_e_administrador(user):
+        return True
+    if paciente is None or not paciente.ativo:
+        return False
+    perfil = perfil_do_usuario(user)
+    if perfil is not None and perfil.papel == PerfilUsuario.Papel.SECRETARIA:
+        from core.models import Paciente
+
+        return pacientes_visiveis_para_usuario(
+            user, Paciente.objects.filter(pk=paciente.pk, ativo=True)
+        ).exists()
+    return usuario_pode_acessar_digitalizacao(user, paciente)
+
+
 def usuario_pode_acessar_digitalizacao(user, paciente):
+    """Leitura e processamento da ficha. Exige prontuário; secretária fica de fora."""
     if not usuario_pode_digitalizar(user):
         return False
     if usuario_e_administrador(user):

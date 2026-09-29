@@ -42,12 +42,13 @@ class DigitalizacaoTests(TestCase):
         self.consulta = Consulta.objects.create(paciente=self.paciente, dentista=self.dentista,
             data=date(2026, 9, 21), hora_inicio=time(10), hora_fim=time(11))
         self.admin = User.objects.create_superuser('admin_digitalizacao', password='teste')
+        self.secretaria = User.objects.create_user('secretaria_digitalizacao', password='teste')
+        PerfilUsuario.objects.create(usuario=self.secretaria, papel='secretaria')
         self.negados = []
-        for papel in ('secretaria', 'auxiliar'):
-            usuario = User.objects.create_user(papel + '_digitalizacao', password='teste')
-            PerfilUsuario.objects.create(usuario=usuario, papel=papel,
-                dentista=self.dentista if papel == 'auxiliar' else None)
-            self.negados.append(usuario)
+        auxiliar = User.objects.create_user('auxiliar_digitalizacao', password='teste')
+        PerfilUsuario.objects.create(
+            usuario=auxiliar, papel='auxiliar', dentista=self.dentista)
+        self.negados.append(auxiliar)
         self.negados.append(User.objects.create_user('sem_perfil_digitalizacao', password='teste'))
         self.negados.append(User.objects.create_user('staff_digitalizacao', password='teste', is_staff=True))
         self.client.force_login(self.user)
@@ -77,6 +78,32 @@ class DigitalizacaoTests(TestCase):
                          [self.paciente])
         self.assertContains(resposta, 'data-remover-arquivo hidden')
         self.assertContains(resposta, 'type="file"')
+
+    def test_secretaria_envia_paciente_ativo_e_recebe_403_na_ia(self):
+        inativo = Paciente.objects.create(
+            nome_completo='Paciente inativo fictício', cpf=None,
+            data_nascimento=date(1992, 1, 1), telefone='123', ativo=False)
+        self.client.force_login(self.secretaria)
+        resposta = self.client.get('/digitalizacao/nova/')
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, self.paciente.nome_completo)
+        self.assertContains(resposta, self.outro.nome_completo)
+        self.assertNotContains(resposta, inativo.nome_completo)
+        self.assertNotContains(resposta, '<img')
+        self.assertEqual(self.enviar(paciente='').status_code, 200)
+        self.assertEqual(self.enviar(paciente=inativo.pk).status_code, 200)
+        self.assertFalse(DigitalizacaoFicha.objects.exists())
+        self.assertEqual(self.enviar(paciente=self.outro.pk).status_code, 302)
+        registro = DigitalizacaoFicha.objects.get()
+        self.assertEqual(registro.paciente, self.outro)
+        self.assertEqual(registro.digitalizado_por, self.secretaria)
+        self.scan.assert_called()
+        pagina = self.client.get('/digitalizacao/nova/')
+        self.assertNotContains(pagina, registro.imagem.name)
+        self.assertNotContains(pagina, '<img')
+        with patch('core.views.processar_digitalizacao_com_ia') as processar:
+            self.assertEqual(self.client.post(self.url_ia(registro)).status_code, 403)
+            processar.assert_not_called()
 
     def test_perfis_negados_get_post_sem_gravacao(self):
         for usuario in self.negados:
