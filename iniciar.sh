@@ -25,6 +25,15 @@ fi
     exit 0
   fi
 
+  if command -v runuser >/dev/null 2>&1; then
+    FERRAMENTA=runuser
+  elif command -v setpriv >/dev/null 2>&1; then
+    FERRAMENTA=setpriv
+  else
+    echo "ClamAV: nem runuser nem setpriv foram encontrados. O antivírus não será iniciado."
+    exit 0
+  fi
+
   DISCO="${RENDER_DISK_PATH:-}"
   if [ -z "$DISCO" ]; then
     echo "ClamAV: RENDER_DISK_PATH não está definido. O antivírus não será iniciado."
@@ -55,7 +64,54 @@ fi
     exit 0
   fi
 
-  {
+  linha_presente() {
+    grep -F -x -q -- "$2" "$1"
+  }
+
+  publicar() {
+    destino="$1"
+    shift
+    temporario="${destino}.tmp.$$"
+    umask 077
+    cat > "$temporario"
+    if [ $? -ne 0 ] || [ ! -s "$temporario" ]; then
+      echo "ClamAV: falha ao gravar a configuração temporária. O antivírus não será iniciado."
+      rm -f "$temporario"
+      return 1
+    fi
+    for linha in "$@"; do
+      if ! linha_presente "$temporario" "$linha"; then
+        echo "ClamAV: configuração incompleta; o antivírus não será iniciado. Falta: ${linha}."
+        rm -f "$temporario"
+        return 1
+      fi
+    done
+    if ! mv "$temporario" "$destino"; then
+      echo "ClamAV: não foi possível instalar a configuração. O antivírus não será iniciado."
+      rm -f "$temporario"
+      return 1
+    fi
+    for linha in "$@"; do
+      if ! linha_presente "$destino" "$linha"; then
+        echo "ClamAV: configuração incompleta; o antivírus não será iniciado. Falta: ${linha}."
+        rm -f "$destino"
+        return 1
+      fi
+    done
+    if ! chown clamav:clamav "$destino"; then
+      echo "ClamAV: não foi possível ajustar o dono da configuração. O antivírus não será iniciado."
+      rm -f "$destino"
+      return 1
+    fi
+    if ! chmod 640 "$destino"; then
+      echo "ClamAV: não foi possível ajustar a permissão da configuração. O antivírus não será iniciado."
+      rm -f "$destino"
+      return 1
+    fi
+    return 0
+  }
+
+  if ! {
     echo "DatabaseDirectory ${DIR}"
     echo "LogTime yes"
     echo "PidFile ${DIR}/clamd.pid"
@@ -65,42 +121,57 @@ fi
     echo "ConcurrentDatabaseReload no"
     echo "Foreground yes"
     echo "User clamav"
-  } > "$CLAMD_CONF"
+  } | publicar "$CLAMD_CONF" \
+    "DatabaseDirectory ${DIR}" \
+    "TCPSocket ${PORTA}" \
+    "TCPAddr 127.0.0.1" \
+    "User clamav"
+  then
+    exit 0
+  fi
 
-  escrever_fresh() {
-    arquivo="$1"
-    foreground="$2"
-    checks="$3"
-    notificar="$4"
-    {
-      echo "DatabaseDirectory ${DIR}"
-      echo "LogTime yes"
-      echo "Foreground ${foreground}"
-      echo "Checks ${checks}"
-      echo "DatabaseMirror database.clamav.net"
-      echo "ConnectTimeout 30"
-      echo "ReceiveTimeout 300"
-      echo "Bytecode yes"
-      echo "DatabaseOwner clamav"
-      if [ "$notificar" = "sim" ]; then
-        echo "NotifyClamd ${CLAMD_CONF}"
-      fi
-    } > "$arquivo"
+  if ! {
+    echo "DatabaseDirectory ${DIR}"
+    echo "LogTime yes"
+    echo "Foreground yes"
+    echo "Checks 1"
+    echo "DatabaseMirror database.clamav.net"
+    echo "ConnectTimeout 30"
+    echo "ReceiveTimeout 300"
+    echo "Bytecode yes"
+    echo "DatabaseOwner clamav"
+  } | publicar "$FRESH_UMA_VEZ" \
+    "DatabaseDirectory ${DIR}" \
+    "DatabaseOwner clamav"
+  then
+    exit 0
+  fi
+
+  if ! {
+    echo "DatabaseDirectory ${DIR}"
+    echo "LogTime yes"
+    echo "Foreground no"
+    echo "Checks 12"
+    echo "DatabaseMirror database.clamav.net"
+    echo "ConnectTimeout 30"
+    echo "ReceiveTimeout 300"
+    echo "Bytecode yes"
+    echo "DatabaseOwner clamav"
+    echo "NotifyClamd ${CLAMD_CONF}"
+  } | publicar "$FRESH_DAEMON" \
+    "DatabaseDirectory ${DIR}" \
+    "DatabaseOwner clamav"
+  then
+    exit 0
+  fi
+
+  como_clamav() {
+    if [ "$FERRAMENTA" = runuser ]; then
+      runuser -u clamav -- "$@"
+    else
+      setpriv --reuid=clamav --regid=clamav --init-groups --inh-caps=-all -- "$@"
+    fi
   }
-
-  escrever_fresh "$FRESH_UMA_VEZ" yes 1 nao
-  escrever_fresh "$FRESH_DAEMON" no 12 sim
-
-  for arquivo in "$CLAMD_CONF" "$FRESH_UMA_VEZ" "$FRESH_DAEMON"; do
-    if ! chown clamav:clamav "$arquivo"; then
-      echo "ClamAV: não foi possível ajustar o dono de ${arquivo}. O antivírus não será iniciado."
-      exit 0
-    fi
-    if ! chmod 640 "$arquivo"; then
-      echo "ClamAV: não foi possível ajustar a permissão de ${arquivo}. O antivírus não será iniciado."
-      exit 0
-    fi
-  done
 
   tem_assinatura() {
     find "$DIR" -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) 2>/dev/null | grep -q .
@@ -108,12 +179,17 @@ fi
 
   if ! command -v timeout >/dev/null 2>&1; then
     echo "ClamAV: comando timeout não encontrado. A atualização inicial foi pulada."
-  else
-    timeout --foreground 900 freshclam --config-file="$FRESH_UMA_VEZ" --foreground --stdout
+  elif [ "$FERRAMENTA" = runuser ]; then
+    timeout --kill-after=30 900 runuser -u clamav -- freshclam --config-file="$FRESH_UMA_VEZ" --foreground --stdout
     codigo=$?
+  else
+    timeout --kill-after=30 900 setpriv --reuid=clamav --regid=clamav --init-groups --inh-caps=-all -- freshclam --config-file="$FRESH_UMA_VEZ" --foreground --stdout
+    codigo=$?
+  fi
+  if command -v timeout >/dev/null 2>&1; then
     if [ "$codigo" -eq 0 ]; then
       echo "ClamAV: assinaturas atualizadas."
-    elif [ "$codigo" -eq 124 ]; then
+    elif [ "$codigo" -eq 124 ] || [ "$codigo" -eq 137 ]; then
       echo "ClamAV: a atualização inicial passou de 900 segundos e foi interrompida."
     elif tem_assinatura; then
       echo "ClamAV: a atualização falhou, mas já existem assinaturas no disco."
@@ -134,13 +210,13 @@ fi
       return 0
     fi
     echo "ClamAV: iniciando clamd."
-    clamd --config-file="$CLAMD_CONF" &
+    como_clamav clamd --config-file="$CLAMD_CONF" &
     CLAMD_PID=$!
   }
 
   iniciar_clamd
 
-  freshclam --config-file="$FRESH_DAEMON" --daemon --checks=12
+  como_clamav freshclam --config-file="$FRESH_DAEMON" --daemon --checks=12
   if [ $? -ne 0 ]; then
     echo "ClamAV: o freshclam em segundo plano não iniciou."
   fi
