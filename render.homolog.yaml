@@ -6,6 +6,7 @@
 # deploy ou hibernação; o banco continua. Aceito só porque os dados são
 # fictícios. A persistência de arquivos não é homologada neste ambiente.
 # Se SENHAS.txt sumir, use carregar_homolog_externa --regerar-senhas.
+# CLAMAV_ATIVO fica de fora: o plano Free tem 512 MB e não sobe o antivírus.
 services:
   - type: web
     name: consultorio-homolog

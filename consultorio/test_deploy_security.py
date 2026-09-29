@@ -39,8 +39,10 @@ class DockerDeploySecurityTests(SimpleTestCase):
             'plan: 0.5c-1g',
             'key: SECRET_KEY\n        sync: false',
             'key: SMTP_PASSWORD\n        sync: false',
+            'key: CLAMAV_ATIVO\n        value: "0"',
         ):
             self.assertIn(trecho, blueprint)
+        self.assertNotIn('key: CLAMAV_ATIVO\n        value: "1"', blueprint)
 
     def test_a7_dependencias_e_ffmpeg_ficam_fixados(self):
         requisitos = (self.raiz / 'requirements.txt').read_text(encoding='utf-8')
@@ -54,7 +56,19 @@ class DockerDeploySecurityTests(SimpleTestCase):
         dockerfile = (self.raiz / 'Dockerfile').read_text(encoding='utf-8')
         self.assertIn('python:3.12.14-slim-bookworm@sha256:', dockerfile)
         self.assertIn('ffmpeg=7:5.1.9-0+deb12u1', dockerfile)
-        self.assertIn('python manage.py migrate --noinput', dockerfile)
+        self.assertIn('clamav-daemon=1.4.3+dfsg-1~deb12u2', dockerfile)
+        self.assertIn('clamav-freshclam=1.4.3+dfsg-1~deb12u2', dockerfile)
+        self.assertIn('CMD ["/bin/sh", "/app/iniciar.sh"]', dockerfile)
+        self.assertNotIn('EXPOSE 3310', dockerfile)
+        script = (self.raiz / 'iniciar.sh').read_text(encoding='utf-8')
+        self.assertIn('python manage.py migrate --noinput', script)
+        self.assertIn('python manage.py collectstatic --noinput', script)
+        self.assertIn(
+            'gunicorn consultorio.wsgi:application --bind 0.0.0.0:${PORT:-8000}',
+            script,
+        )
+        self.assertIn('TCPAddr 127.0.0.1', script)
+        self.assertNotIn('TCPAddr 0.0.0.0', script)
 
 
 class HomologacaoExternaBlueprintTests(SimpleTestCase):
@@ -94,6 +108,7 @@ class HomologacaoExternaBlueprintTests(SimpleTestCase):
             'carregar_homolog',
         ):
             self.assertNotIn(proibido, conteudo)
+        self.assertNotIn('CLAMAV_ATIVO', conteudo)
         self.assertEqual(conteudo.count('plan: free'), 2)
 
 

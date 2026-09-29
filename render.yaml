@@ -18,6 +18,11 @@ services:
           property: connectionString
       - key: RENDER_DISK_PATH
         value: /var/data
+      # Antivírus no mesmo container, só em 127.0.0.1. Deixe 0 no plano de 512 MB.
+      # O valor 1 é para o plano Standard (2 GB): o clamd carrega cerca de 1 GB
+      # de assinaturas e não cabe no starter. O script de boot lê esta variável.
+      - key: CLAMAV_ATIVO
+        value: "0"
       - key: SECRET_KEY
         sync: false
       - key: DJANGO_ALLOWED_HOSTS
