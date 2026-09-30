@@ -390,7 +390,8 @@ class MatrizPermissoesTests(TestCase):
         self.assertContains(resposta, 'Administrador')
         self.assertContains(resposta, 'Financeiro atual')
         self.assertContains(resposta, 'Administração')
-        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
+        self.assertContains(resposta, 'Digitalizar ficha antiga')
+        self.assertContains(resposta, 'Fichas digitalizadas')
 
     def test_home_nao_oferece_digitalizacao_sem_permissao_backend(self):
         inicio = reverse('core:inicio')
@@ -440,7 +441,8 @@ class MatrizPermissoesTests(TestCase):
         self.assertContains(resposta, 'Consultas em andamento')
         self.assertContains(resposta, 'Gerenciar acesso e configurações')
         self.assertNotContains(resposta, 'Rotina clínica')
-        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
+        self.assertContains(resposta, 'Digitalizar ficha antiga')
+        self.assertContains(resposta, 'Fichas digitalizadas')
 
         resposta = self.client.get(administracao)
         self.assertContains(resposta, 'Administração da clínica')

@@ -165,8 +165,9 @@ class RevisaoDigitalizacaoTests(TestCase):
         self._entrar(self.admin)
         lista = self.client.get(reverse('core:inicio'))
         self.assertContains(lista, 'Fichas digitalizadas')
+        self.assertContains(lista, 'Digitalizar ficha antiga')
         self.assertContains(lista, reverse('core:listar_digitalizacoes'))
-        self.assertNotContains(lista, 'Digitalizar ficha antiga')
+        self.assertContains(lista, reverse('core:digitalizacao_upload'))
 
         lista = self.client.get(reverse('core:listar_digitalizacoes'))
         self.assertContains(lista, 'Fichas digitalizadas')
@@ -345,10 +346,14 @@ class RevisaoDigitalizacaoTests(TestCase):
             acesso = RegistroAcesso.objects.latest('pk')
             self.assertEqual(acesso.usuario, self.secretaria)
             self.assertEqual(acesso.tipo, RegistroAcesso.Tipo.ABRIU_FOTO)
+            self.assertEqual(acesso.ficha_id, registro.pk)
 
         self.client.get(reverse('core:foto_digitalizacao', args=[self.minha.pk]))
         textos = [evento['texto'] for evento in eventos_do_dia(self.secretaria, self.hoje)]
-        self.assertIn('Abriu foto de ficha digitalizada', textos)
+        self.assertIn(
+            f'Abriu foto da ficha {self.minha.pk} de {self.paciente_a.nome_completo}',
+            textos,
+        )
         self.assertNotIn('Senha incorreta', textos)
         linhas = [
             linha for linha in linhas_do_relatorio(self.hoje, self.hoje, usuaria=self.secretaria)

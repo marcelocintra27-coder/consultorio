@@ -215,6 +215,17 @@ def linhas_do_relatorio(data_inicial, data_final, usuaria=None):
     return linhas
 
 
+def _texto_foto(acesso):
+    ficha = acesso.ficha
+    if ficha is None:
+        return 'Abriu foto de ficha digitalizada'
+    if ficha.paciente_id:
+        paciente = ficha.paciente.nome_completo
+    else:
+        paciente = 'sem paciente'
+    return f'Abriu foto da ficha {ficha.pk} de {paciente}'
+
+
 def _texto_paciente(acao, nome):
     verbos = {
         AuditoriaPaciente.Acao.CRIADO: 'Cadastrou o paciente',
@@ -230,13 +241,13 @@ def eventos_do_dia(usuario, dia):
     eventos = []
     for acesso in RegistroAcesso.objects.filter(
         criado_em__gte=inicio, criado_em__lt=fim, usuario=usuario,
-    ):
+    ).select_related('ficha__paciente'):
         if acesso.tipo == RegistroAcesso.Tipo.ENTROU:
             texto = 'Entrou no sistema'
         elif acesso.tipo == RegistroAcesso.Tipo.SAIU:
             texto = 'Saiu do sistema'
         elif acesso.tipo == RegistroAcesso.Tipo.ABRIU_FOTO:
-            texto = 'Abriu foto de ficha digitalizada'
+            texto = _texto_foto(acesso)
         else:
             texto = 'Senha incorreta'
         eventos.append((acesso.criado_em, texto))

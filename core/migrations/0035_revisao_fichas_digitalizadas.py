@@ -55,6 +55,11 @@ class Migration(migrations.Migration):
                 'ordering': ['-trocado_em'],
             },
         ),
+        migrations.AddField(
+            model_name='registroacesso',
+            name='ficha',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='aberturas', to='core.digitalizacaoficha', verbose_name='ficha'),
+        ),
         migrations.AlterField(
             model_name='registroacesso',
             name='tipo',

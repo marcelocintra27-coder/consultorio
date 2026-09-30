@@ -148,6 +148,14 @@ class RegistroAcesso(models.Model):
         'usuário digitado', max_length=150, blank=True, default='',
     )
     tipo = models.CharField('tipo', max_length=20, choices=Tipo.choices)
+    ficha = models.ForeignKey(
+        'DigitalizacaoFicha',
+        verbose_name='ficha',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aberturas',
+    )
     criado_em = models.DateTimeField('data e hora', auto_now_add=True)
 
     class Meta:
