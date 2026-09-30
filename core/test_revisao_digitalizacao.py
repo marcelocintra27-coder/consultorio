@@ -346,12 +346,12 @@ class RevisaoDigitalizacaoTests(TestCase):
             acesso = RegistroAcesso.objects.latest('pk')
             self.assertEqual(acesso.usuario, self.secretaria)
             self.assertEqual(acesso.tipo, RegistroAcesso.Tipo.ABRIU_FOTO)
-            self.assertEqual(acesso.ficha_id, registro.pk)
+            self.assertEqual(acesso.digitalizacao, registro)
 
         self.client.get(reverse('core:foto_digitalizacao', args=[self.minha.pk]))
         textos = [evento['texto'] for evento in eventos_do_dia(self.secretaria, self.hoje)]
         self.assertIn(
-            f'Abriu foto da ficha {self.minha.pk} de {self.paciente_a.nome_completo}',
+            f'ficha nº {self.minha.pk} — {self.paciente_a.nome_completo} — {self.minha.get_tipo_display()}',
             textos,
         )
         self.assertNotIn('Senha incorreta', textos)

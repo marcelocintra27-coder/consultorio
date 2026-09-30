@@ -149,10 +149,10 @@ class _SomenteLeituraSuperusuarioAdmin(admin.ModelAdmin):
 
 @admin.register(RegistroAcesso)
 class RegistroAcessoAdmin(_SomenteLeituraSuperusuarioAdmin):
-    list_display = ('usuario', 'usuario_digitado', 'tipo', 'ficha', 'criado_em')
+    list_display = ('usuario', 'usuario_digitado', 'tipo', 'digitalizacao', 'criado_em')
     list_filter = ('tipo', 'criado_em')
-    search_fields = ('usuario__username', 'usuario_digitado')
-    readonly_fields = ('usuario', 'usuario_digitado', 'tipo', 'ficha', 'criado_em')
+    search_fields = ('usuario__username', 'usuario_digitado', 'digitalizacao__paciente__nome_completo')
+    readonly_fields = ('usuario', 'usuario_digitado', 'tipo', 'digitalizacao', 'criado_em')
 
 
 @admin.register(AtividadeDiaria)

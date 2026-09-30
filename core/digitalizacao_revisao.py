@@ -220,7 +220,7 @@ def foto_digitalizacao(request, pk):
         RegistroAcesso.objects.create(
             usuario=request.user,
             tipo=RegistroAcesso.Tipo.ABRIU_FOTO,
-            ficha=ficha,
+            digitalizacao=ficha,
         )
     except Exception:
         arquivo.close()

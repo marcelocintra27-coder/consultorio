@@ -57,8 +57,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name='registroacesso',
-            name='ficha',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='aberturas', to='core.digitalizacaoficha', verbose_name='ficha'),
+            name='digitalizacao',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='acessos', to='core.digitalizacaoficha', verbose_name='ficha digitalizada'),
         ),
         migrations.AlterField(
             model_name='registroacesso',

@@ -216,14 +216,14 @@ def linhas_do_relatorio(data_inicial, data_final, usuaria=None):
 
 
 def _texto_foto(acesso):
-    ficha = acesso.ficha
+    ficha = acesso.digitalizacao
     if ficha is None:
         return 'Abriu foto de ficha digitalizada'
     if ficha.paciente_id:
         paciente = ficha.paciente.nome_completo
     else:
         paciente = 'sem paciente'
-    return f'Abriu foto da ficha {ficha.pk} de {paciente}'
+    return f'ficha nº {ficha.pk} — {paciente} — {ficha.get_tipo_display()}'
 
 
 def _texto_paciente(acao, nome):
@@ -241,7 +241,7 @@ def eventos_do_dia(usuario, dia):
     eventos = []
     for acesso in RegistroAcesso.objects.filter(
         criado_em__gte=inicio, criado_em__lt=fim, usuario=usuario,
-    ).select_related('ficha__paciente'):
+    ).select_related('digitalizacao__paciente'):
         if acesso.tipo == RegistroAcesso.Tipo.ENTROU:
             texto = 'Entrou no sistema'
         elif acesso.tipo == RegistroAcesso.Tipo.SAIU:
