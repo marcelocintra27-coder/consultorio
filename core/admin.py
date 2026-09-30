@@ -475,12 +475,13 @@ class DigitalizacaoFichaAdmin(admin.ModelAdmin):
         'paciente',
         'tipo',
         'status',
+        'digitalizado_por',
         'criado_em',
     )
     list_filter = ('tipo', 'status')
     search_fields = ('paciente__nome_completo',)
     autocomplete_fields = ('paciente',)
-    readonly_fields = ('criado_em',)
+    readonly_fields = ('criado_em', 'revisado_em')
 
 
 class ItemConsentimentoInline(InlineClinicoProtegido, admin.TabularInline):

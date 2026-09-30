@@ -1,0 +1,56 @@
+{% extends "core/base.html" %}
+
+{% block title %}Ficha digitalizada{% endblock %}
+{% block titulo %}Ficha digitalizada{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_digitalizacoes' %}" class="botao secundario">Voltar</a>
+            {% if secretaria and ficha.status == 'refazer' and ficha.paciente_id %}
+            <a href="{% url 'core:digitalizacao_upload' %}?paciente={{ ficha.paciente_id }}&amp;tipo={{ ficha.tipo }}" class="botao">Enviar nova foto</a>
+            {% endif %}
+        </div>
+
+        <figure class="foto-ficha-quadro">
+            <img src="{% url 'core:foto_digitalizacao' ficha.pk %}" alt="Foto da ficha digitalizada" class="foto-ficha">
+            <a href="{% url 'core:foto_digitalizacao' ficha.pk %}" class="botao secundario">Abrir em tamanho real</a>
+        </figure>
+
+        <dl class="consulta-detalhes">
+            <div><dt>Paciente</dt><dd>{% if ficha.paciente %}{{ ficha.paciente.nome_completo }}{% else %}Sem paciente{% endif %}</dd></div>
+            <div><dt>Tipo</dt><dd>{{ ficha.get_tipo_display }}</dd></div>
+            <div><dt>Enviada em</dt><dd>{{ ficha.criado_em|date:"d/m/Y H:i" }}</dd></div>
+            <div><dt>Quem enviou</dt><dd>{% if ficha.digitalizado_por %}{{ ficha.digitalizado_por.get_full_name|default:ficha.digitalizado_por.username }}{% else %}—{% endif %}</dd></div>
+            <div><dt>Situação</dt><dd>{{ ficha.get_status_display }}</dd></div>
+        </dl>
+
+        <section aria-labelledby="titulo-revisao">
+            <h2 id="titulo-revisao" class="secao-pagina">Revisão</h2>
+            {% if ficha.revisado_em %}
+            <p>
+                {{ ficha.revisado_por.get_full_name|default:ficha.revisado_por.username }}
+                em {{ ficha.revisado_em|date:"d/m/Y H:i" }}.
+                {% if ficha.motivo_refazer %}Motivo: {{ ficha.motivo_refazer }}{% endif %}
+            </p>
+            {% else %}
+            <p class="vazio">Ainda não foi revisada.</p>
+            {% endif %}
+
+            {% if pode_revisar %}
+            <form method="post" action="{% url 'core:revisar_digitalizacao' ficha.pk %}" class="form-inline">
+                {% csrf_token %}
+                <input type="hidden" name="acao" value="conferida">
+                <button type="submit" class="botao">Conferida</button>
+            </form>
+            <form method="post" action="{% url 'core:revisar_digitalizacao' ficha.pk %}" class="form-cartao">
+                {% csrf_token %}
+                <input type="hidden" name="acao" value="refazer">
+                <div class="campo">
+                    <label for="motivo-refazer">Motivo para refazer a foto</label>
+                    <textarea id="motivo-refazer" name="motivo_refazer" rows="3" required>{{ ficha.motivo_refazer }}</textarea>
+                </div>
+                <button type="submit" class="botao secundario">Refazer foto</button>
+            </form>
+            {% endif %}
+        </section>
+{% endblock %}

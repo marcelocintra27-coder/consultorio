@@ -51,6 +51,23 @@
 
             <button type="submit" class="botao">Salvar</button>
         </form>
+
+        <section aria-labelledby="titulo-enviadas-hoje">
+            <h2 id="titulo-enviadas-hoje" class="secao-pagina">Enviadas hoje</h2>
+            {% if enviadas_hoje %}
+            <ul>
+                {% for ficha in enviadas_hoje %}
+                <li>
+                    {% if ficha.paciente %}{{ ficha.paciente.nome_completo }}{% else %}Sem paciente{% endif %}
+                    — {{ ficha.get_tipo_display }} — {{ ficha.criado_em|date:"H:i" }}
+                    <a href="{% url 'core:detalhe_digitalizacao' ficha.pk %}">Ver foto</a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="vazio">Nenhuma ficha enviada hoje.</p>
+            {% endif %}
+        </section>
 {% endblock %}
 {% block extra_js %}
 <script>

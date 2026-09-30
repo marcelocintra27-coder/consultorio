@@ -1,0 +1,91 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
+            <a href="{% url 'core:digitalizacao_upload' %}" class="botao">Enviar foto</a>
+        </div>
+
+        <p class="resumo">Pendentes: {{ pendentes }}. Para refazer: {{ refazer }}.</p>
+
+        <form method="get" class="busca-form" aria-label="Filtros das fichas">
+            <label for="filtro-situacao">Situação</label>
+            <select id="filtro-situacao" name="situacao">
+                <option value="">Todas</option>
+                {% for valor, rotulo in situacoes %}
+                <option value="{{ valor }}"{% if filtros.situacao == valor %} selected{% endif %}>{{ rotulo }}</option>
+                {% endfor %}
+            </select>
+            <label for="filtro-paciente">Paciente</label>
+            <input id="filtro-paciente" type="text" name="paciente" value="{{ filtros.paciente }}" placeholder="Nome do paciente">
+            <label for="filtro-enviado">Quem enviou</label>
+            <select id="filtro-enviado" name="enviado_por">
+                <option value="">Todas</option>
+                {% for pessoa in enviadores %}
+                <option value="{{ pessoa.pk }}"{% if filtros.enviado_por == pessoa.pk|stringformat:"s" %} selected{% endif %}>{{ pessoa.get_full_name|default:pessoa.username }}</option>
+                {% endfor %}
+            </select>
+            <label for="filtro-de">De</label>
+            <input id="filtro-de" type="date" name="de" value="{{ filtros.de }}">
+            <label for="filtro-ate">Até</label>
+            <input id="filtro-ate" type="date" name="ate" value="{{ filtros.ate }}">
+            <button type="submit" class="botao">Filtrar</button>
+        </form>
+        {% if filtros.aviso %}<p class="erro">{{ filtros.aviso }}</p>{% endif %}
+
+        <div class="tabela-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Paciente</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Envio</th>
+                    <th scope="col">Quem enviou</th>
+                    <th scope="col">Situação</th>
+                    <th scope="col"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ficha in pagina %}
+                <tr{% if ficha.status == 'refazer' %} class="ficha-refazer"{% endif %}>
+                    <td>{% if ficha.paciente %}{{ ficha.paciente.nome_completo }}{% else %}Sem paciente{% endif %}</td>
+                    <td>{{ ficha.get_tipo_display }}</td>
+                    <td>{{ ficha.criado_em|date:"d/m/Y H:i" }}</td>
+                    <td>{% if ficha.digitalizado_por %}{{ ficha.digitalizado_por.get_full_name|default:ficha.digitalizado_por.username }}{% else %}—{% endif %}</td>
+                    <td>
+                        {{ ficha.get_status_display }}
+                        {% if ficha.status == 'refazer' and ficha.motivo_refazer %}
+                        <p>{{ ficha.motivo_refazer }}</p>
+                        {% endif %}
+                    </td>
+                    <td class="acoes">
+                        <a href="{% url 'core:detalhe_digitalizacao' ficha.pk %}" class="botao">Ver foto</a>
+                        {% if secretaria and ficha.status == 'refazer' and ficha.paciente_id %}
+                        <a href="{% url 'core:digitalizacao_upload' %}?paciente={{ ficha.paciente_id }}&amp;tipo={{ ficha.tipo }}" class="botao secundario">Enviar nova foto</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="vazio">Nenhuma ficha encontrada.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+
+        {% if pagina.has_other_pages %}
+        <nav class="acoes" aria-label="Paginação">
+            {% if pagina.has_previous %}
+            <a href="?{{ query_anterior }}" class="botao secundario">Anterior</a>
+            {% endif %}
+            <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+            {% if pagina.has_next %}
+            <a href="?{{ query_proxima }}" class="botao secundario">Próxima</a>
+            {% endif %}
+        </nav>
+        {% endif %}
+{% endblock %}

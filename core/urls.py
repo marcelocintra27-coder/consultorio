@@ -87,6 +87,12 @@ from .views import (
 app_name = 'core'
 from django.urls import include
 
+from .digitalizacao_revisao import (
+    detalhe_digitalizacao,
+    foto_digitalizacao,
+    listar_digitalizacoes,
+    revisar_digitalizacao,
+)
 from .relatorio_atividade import (
     relatorio_atividade,
     relatorio_atividade_csv,
@@ -105,7 +111,11 @@ urlpatterns = [
     path('pacientes/<int:pk>/prescricoes/<int:ficha_pk>/pdf/', imprimir_prescricao, {'pdf': True}, name='pdf_prescricao'),
     path('documentos/<str:tipo>/<int:pk>/retificar/', retificar_documento, name='retificar_documento'),
     path('', inicio, name='inicio'),
+    path('digitalizacao/', listar_digitalizacoes, name='listar_digitalizacoes'),
     path('digitalizacao/nova/', digitalizacao_upload, name='digitalizacao_upload'),
+    path('digitalizacao/<int:pk>/', detalhe_digitalizacao, name='detalhe_digitalizacao'),
+    path('digitalizacao/<int:pk>/foto/', foto_digitalizacao, name='foto_digitalizacao'),
+    path('digitalizacao/<int:pk>/revisar/', revisar_digitalizacao, name='revisar_digitalizacao'),
     path(
         'digitalizacao/<int:pk>/processar-ia/',
         digitalizacao_processar_ia,

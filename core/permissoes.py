@@ -372,3 +372,49 @@ def usuario_pode_acessar_digitalizacao(user, paciente):
     if usuario_e_administrador(user):
         return True
     return paciente is not None and usuario_pode_acessar_prontuario(user, paciente)
+
+
+def _e_secretaria(user):
+    perfil = perfil_do_usuario(user)
+    return perfil is not None and perfil.papel == PerfilUsuario.Papel.SECRETARIA
+
+
+def usuario_pode_listar_digitalizacoes(user):
+    """Abre a lista. A secretária vê só as dela; o dentista, as do prontuário."""
+    if user is None or not user.is_authenticated or not user.is_active:
+        return False
+    if usuario_e_administrador(user) or _e_secretaria(user):
+        return True
+    return bool(usuario_pode_digitalizar(user) and dentista_do_usuario(user))
+
+
+def digitalizacoes_visiveis(user):
+    from core.models import Consulta, DigitalizacaoFicha
+
+    fichas = DigitalizacaoFicha.objects.select_related(
+        'paciente', 'digitalizado_por', 'revisado_por',
+    )
+    if not usuario_pode_listar_digitalizacoes(user):
+        return fichas.none()
+    if usuario_e_administrador(user):
+        return fichas
+    if _e_secretaria(user):
+        return fichas.filter(digitalizado_por=user)
+    dentista = dentista_do_usuario(user)
+    pacientes = Consulta.objects.filter(dentista=dentista).values('paciente_id')
+    return fichas.filter(paciente_id__in=pacientes)
+
+
+def usuario_pode_ver_digitalizacao(user, ficha):
+    if ficha is None or not usuario_pode_listar_digitalizacoes(user):
+        return False
+    return digitalizacoes_visiveis(user).filter(pk=ficha.pk).exists()
+
+
+def usuario_pode_revisar_digitalizacao(user, ficha):
+    """Secretária envia e consulta as próprias fotos; não marca conferida nem refazer."""
+    if ficha is None:
+        return False
+    if _e_secretaria(user) and not usuario_e_administrador(user):
+        return False
+    return usuario_pode_acessar_digitalizacao(user, ficha.paciente)

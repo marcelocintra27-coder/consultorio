@@ -134,6 +134,7 @@ class RegistroAcesso(models.Model):
         ENTROU = 'entrou', 'entrou'
         SAIU = 'saiu', 'saiu'
         TENTATIVA_FALHOU = 'tentativa_falhou', 'tentativa falhou'
+        ABRIU_FOTO = 'abriu_foto', 'abriu foto da ficha'
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -2153,8 +2154,9 @@ class DigitalizacaoFicha(models.Model):
         OUTRO = 'outro', 'Outro'
 
     class Status(models.TextChoices):
-        PENDENTE_REVISAO = 'pendente_revisao', 'Pendente de revisão'
-        CONFIRMADA = 'confirmada', 'Confirmada'
+        PENDENTE_REVISAO = 'pendente_revisao', 'Pendente'
+        CONFIRMADA = 'confirmada', 'Conferida'
+        REFAZER = 'refazer', 'Refazer foto'
 
     paciente = models.ForeignKey(
         Paciente,
@@ -2193,6 +2195,16 @@ class DigitalizacaoFicha(models.Model):
         blank=True,
         related_name='fichas_digitalizadas',
     )
+    revisado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='revisado por',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='fichas_revisadas',
+    )
+    revisado_em = models.DateTimeField('revisado em', null=True, blank=True)
+    motivo_refazer = models.TextField('motivo para refazer', blank=True, default='')
     criado_em = models.DateTimeField('criado em', auto_now_add=True)
 
     class Meta:

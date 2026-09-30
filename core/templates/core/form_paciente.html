@@ -32,6 +32,22 @@
             {% endfor %}
             <button type="submit" class="botao">Salvar</button>
         </form>
+
+        {% if paciente and pode_clinico %}
+        <section aria-labelledby="titulo-fichas-digitalizadas">
+            <h2 id="titulo-fichas-digitalizadas" class="secao-pagina">Fichas antigas digitalizadas</h2>
+            <ul>
+                {% for ficha in fichas_digitalizadas %}
+                <li>
+                    {{ ficha.get_tipo_display }} — {{ ficha.criado_em|date:"d/m/Y H:i" }} — {{ ficha.get_status_display }}
+                    <a href="{% url 'core:detalhe_digitalizacao' ficha.pk %}">Ver foto</a>
+                </li>
+                {% empty %}
+                <li class="vazio">Nenhuma ficha digitalizada.</li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
 {% endblock %}
 
 {% block extra_js %}

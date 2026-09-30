@@ -49,6 +49,7 @@ def navegacao_usuario(request):
                 _grupo('Operação', [
                     _item(request, 'Agenda', 'agenda', 'core:listar_consultas'),
                     _item(request, 'Pacientes', 'pacientes', 'core:listar_pacientes'),
+                    _item(request, 'Fichas digitalizadas', 'pacientes', 'core:listar_digitalizacoes'),
                 ]),
                 _grupo('Financeiro atual', [
                     _item(request, 'Contas a receber', 'pagamentos', 'core:listar_contas_receber'),
@@ -88,6 +89,7 @@ def navegacao_usuario(request):
                     _item(request, 'Agenda', 'agenda', 'core:listar_consultas'),
                     _item(request, 'Pacientes', 'pacientes', 'core:listar_pacientes'),
                     _item(request, 'Digitalizar ficha antiga', 'pacientes', 'core:digitalizacao_upload'),
+                    _item(request, 'Minhas fichas enviadas', 'pacientes', 'core:listar_digitalizacoes'),
                 ]),
             ],
         }
@@ -100,6 +102,7 @@ def navegacao_usuario(request):
                 _grupo('Minha rotina', [
                     _item(request, 'Minha agenda', 'agenda', 'core:listar_consultas'),
                     _item(request, 'Pacientes', 'pacientes', 'core:listar_pacientes'),
+                    _item(request, 'Fichas digitalizadas', 'pacientes', 'core:listar_digitalizacoes'),
                     _item(request, 'Materiais utilizados', 'materiais', 'core:listar_materiais_dia'),
                 ]),
             ],

@@ -55,6 +55,7 @@ from .auditoria_paciente import (
     snapshot,
     valores_iniciais,
 )
+from .digitalizacao_revisao import enviadas_hoje, inicial_envio
 from .ia_digitalizacao import processar_digitalizacao_com_ia
 from .tabela_uniodonto import FATOR_US_UNIODONTO
 from .models import (
@@ -319,11 +320,18 @@ def editar_paciente(request, pk):
             return redirect('core:listar_pacientes')
     else:
         form = PacienteForm(instance=paciente)
+    pode_clinico = usuario_pode_acessar_prontuario(request.user, paciente)
+    fichas_digitalizadas = ()
+    if pode_clinico:
+        fichas_digitalizadas = paciente.digitalizacoes.select_related(
+            'digitalizado_por',
+        ).order_by('-criado_em')
     return render(request, 'core/form_paciente.html', {
         'form': form,
         'titulo': 'Editar Paciente',
         'paciente': paciente,
-        'pode_clinico': usuario_pode_acessar_prontuario(request.user, paciente),
+        'pode_clinico': pode_clinico,
+        'fichas_digitalizadas': fichas_digitalizadas,
     })
 
 
@@ -351,7 +359,7 @@ def _digitalizacao_upload_protegido(request):
             form = DigitalizacaoFichaForm(request.POST, user=request.user)
             form.add_error(None, 'Envie somente uma imagem de até 20 MiB.')
             # Não validar nem inspecionar o primeiro arquivo de um envio rejeitado.
-            return render(request, 'core/digitalizacao_upload.html', {'form': form})
+            return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
         if form.is_valid():
             digitalizacao = form.save(commit=False)
             digitalizacao.digitalizado_por = request.user
@@ -371,11 +379,16 @@ def _digitalizacao_upload_protegido(request):
             request,
             'Não foi possível enviar. Confira os avisos no formulário.',
         )
+        return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
     else:
-        form = DigitalizacaoFichaForm(user=request.user)
-    return render(request, 'core/digitalizacao_upload.html', {
-        'form': form,
-    })
+        form = DigitalizacaoFichaForm(
+            user=request.user, initial=inicial_envio(request, request.user),
+        )
+    return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
+
+
+def _contexto_envio(request, form):
+    return {'form': form, 'enviadas_hoje': enviadas_hoje(request.user)}
 
 
 @login_required

@@ -235,6 +235,8 @@ def eventos_do_dia(usuario, dia):
             texto = 'Entrou no sistema'
         elif acesso.tipo == RegistroAcesso.Tipo.SAIU:
             texto = 'Saiu do sistema'
+        elif acesso.tipo == RegistroAcesso.Tipo.ABRIU_FOTO:
+            texto = 'Abriu foto de ficha digitalizada'
         else:
             texto = 'Senha incorreta'
         eventos.append((acesso.criado_em, texto))

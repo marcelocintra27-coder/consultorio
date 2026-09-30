@@ -817,3 +817,26 @@ h2.secao-pagina {
         grid-template-columns: 1fr;
     }
 }
+
+.ficha-refazer {
+    background: #fff6e8;
+}
+
+.foto-ficha-quadro {
+    margin: 0 0 20px;
+}
+
+.foto-ficha {
+    display: block;
+    max-width: 100%;
+    width: auto;
+    height: auto;
+    max-height: 70vh;
+    object-fit: contain;
+    border-radius: 8px;
+    background: #f4f7f8;
+}
+
+.foto-ficha-quadro .botao {
+    margin-top: 12px;
+}

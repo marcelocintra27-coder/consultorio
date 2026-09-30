@@ -43,6 +43,7 @@
             <a href="{% url 'core:listar_pagamentos_consulta' %}" class="botao secundario">Financeiro atual</a>
             <a href="{% url 'core:listar_tabela_uniodonto' %}" class="botao secundario">Tabela Uniodonto</a>
             <a href="{% url 'core:listar_repasses_uniodonto' %}" class="botao secundario">Repasse Uniodonto</a>
+            <a href="{% url 'core:listar_digitalizacoes' %}" class="botao secundario">Fichas digitalizadas</a>
         </div>
     </section>
     {% elif dashboard_secretaria %}
@@ -91,6 +92,11 @@
                 <h3>Digitalizar ficha antiga</h3>
                 <p>Envio de ficha física digitalizada para revisão.</p>
                 <a href="{% url 'core:digitalizacao_upload' %}" class="botao">Acessar</a>
+            </div>
+            <div class="card">
+                <h3>Minhas fichas enviadas</h3>
+                <p>Fotos que você enviou e o que foi pedido para refazer.</p>
+                <a href="{% url 'core:listar_digitalizacoes' %}" class="botao">Acessar</a>
             </div>
         </div>
     </section>
@@ -159,6 +165,7 @@
             <a href="{% url 'core:listar_consultas' %}" class="botao">Minha agenda</a>
             <a href="{% url 'core:listar_pacientes' %}" class="botao secundario">Buscar pacientes</a>
             <a href="{% url 'core:listar_materiais_dia' %}" class="botao secundario">Materiais utilizados</a>
+            <a href="{% url 'core:listar_digitalizacoes' %}" class="botao secundario">Fichas digitalizadas</a>
         </div>
     </section>
 

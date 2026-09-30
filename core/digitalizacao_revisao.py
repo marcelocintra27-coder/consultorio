@@ -1,0 +1,224 @@
+"""Lista, foto protegida e revisão das fichas digitalizadas."""
+from datetime import datetime, time, timedelta
+from pathlib import Path
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
+from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
+from django.http import FileResponse, Http404, HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_GET, require_POST
+
+from .models import DigitalizacaoFicha, Paciente, RegistroAcesso
+from .permissoes import (
+    digitalizacoes_visiveis,
+    usuario_e_administrador,
+    usuario_pode_enviar_digitalizacao,
+    usuario_pode_listar_digitalizacoes,
+    usuario_pode_revisar_digitalizacao,
+    _e_secretaria,
+)
+
+POR_PAGINA = 20
+TIPOS_FOTO = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+}
+
+
+def enviadas_hoje(user):
+    inicio, fim = _janela(timezone.localdate(), timezone.localdate())
+    return DigitalizacaoFicha.objects.filter(
+        digitalizado_por=user,
+        criado_em__gte=inicio,
+        criado_em__lt=fim,
+    ).select_related('paciente').order_by('-criado_em')
+
+
+def inicial_envio(request, user):
+    inicial = {}
+    bruto = (request.GET.get('paciente') or '').strip()
+    if bruto.isdigit():
+        paciente = Paciente.objects.filter(pk=int(bruto), ativo=True).first()
+        if paciente and usuario_pode_enviar_digitalizacao(user, paciente):
+            inicial['paciente'] = paciente.pk
+    tipo = (request.GET.get('tipo') or '').strip()
+    if tipo in DigitalizacaoFicha.Tipo.values:
+        inicial['tipo'] = tipo
+    return inicial
+
+
+def _janela(data_inicial, data_final):
+    fuso = timezone.get_current_timezone()
+    inicio = timezone.make_aware(datetime.combine(data_inicial, time.min), fuso)
+    fim = timezone.make_aware(
+        datetime.combine(data_final + timedelta(days=1), time.min), fuso,
+    )
+    return inicio, fim
+
+
+def _ficha_ou_404(user, pk):
+    if not usuario_pode_listar_digitalizacoes(user):
+        raise PermissionDenied
+    return get_object_or_404(digitalizacoes_visiveis(user), pk=pk)
+
+
+def _aplicar_filtros(request, fichas):
+    situacao = (request.GET.get('situacao') or '').strip()
+    if situacao in DigitalizacaoFicha.Status.values:
+        fichas = fichas.filter(status=situacao)
+    nome = (request.GET.get('paciente') or '').strip()
+    if nome:
+        fichas = fichas.filter(paciente__nome_completo__icontains=nome)
+    enviado = (request.GET.get('enviado_por') or '').strip()
+    if enviado.isdigit():
+        fichas = fichas.filter(digitalizado_por_id=int(enviado))
+    de = _data(request.GET.get('de'))
+    ate = _data(request.GET.get('ate'))
+    aviso = ''
+    if de and ate and ate < de:
+        aviso = 'A data final não pode ser anterior à inicial.'
+    else:
+        if de:
+            inicio, _fim = _janela(de, de)
+            fichas = fichas.filter(criado_em__gte=inicio)
+        if ate:
+            _inicio, fim = _janela(ate, ate)
+            fichas = fichas.filter(criado_em__lt=fim)
+    return fichas, {
+        'situacao': situacao,
+        'paciente': nome,
+        'enviado_por': enviado,
+        'de': request.GET.get('de') or '',
+        'ate': request.GET.get('ate') or '',
+        'aviso': aviso,
+    }
+
+
+def _data(valor):
+    if not valor:
+        return None
+    try:
+        return datetime.strptime(valor, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+
+
+def _query(request, pagina):
+    dados = request.GET.copy()
+    dados['pagina'] = str(pagina)
+    return dados.urlencode()
+
+
+@login_required
+@require_GET
+def listar_digitalizacoes(request):
+    if not usuario_pode_listar_digitalizacoes(request.user):
+        raise PermissionDenied
+    visiveis = digitalizacoes_visiveis(request.user)
+    fichas, filtros = _aplicar_filtros(request, visiveis)
+    fichas = fichas.order_by('-criado_em', '-pk')
+    paginas = Paginator(fichas, POR_PAGINA)
+    pagina = paginas.get_page(request.GET.get('pagina') or 1)
+    secretaria = (
+        _e_secretaria(request.user) and not usuario_e_administrador(request.user)
+    )
+    enviadores = User.objects.filter(
+        pk__in=visiveis.values('digitalizado_por_id'),
+    ).order_by('first_name', 'username')
+    return render(request, 'core/listar_digitalizacoes.html', {
+        'titulo': 'Minhas fichas enviadas' if secretaria else 'Fichas digitalizadas',
+        'pagina': pagina,
+        'filtros': filtros,
+        'situacoes': DigitalizacaoFicha.Status.choices,
+        'enviadores': enviadores,
+        'pendentes': visiveis.filter(
+            status=DigitalizacaoFicha.Status.PENDENTE_REVISAO,
+        ).count(),
+        'refazer': visiveis.filter(status=DigitalizacaoFicha.Status.REFAZER).count(),
+        'secretaria': secretaria,
+        'query_anterior': _query(request, pagina.previous_page_number()) if pagina.has_previous() else '',
+        'query_proxima': _query(request, pagina.next_page_number()) if pagina.has_next() else '',
+    })
+
+
+@login_required
+@require_GET
+def detalhe_digitalizacao(request, pk):
+    ficha = _ficha_ou_404(request.user, pk)
+    return render(request, 'core/detalhe_digitalizacao.html', {
+        'ficha': ficha,
+        'pode_revisar': usuario_pode_revisar_digitalizacao(request.user, ficha),
+        'secretaria': (
+            _e_secretaria(request.user) and not usuario_e_administrador(request.user)
+        ),
+    })
+
+
+@login_required
+@require_GET
+def foto_digitalizacao(request, pk):
+    ficha = _ficha_ou_404(request.user, pk)
+    nome = ficha.imagem.name or ''
+    extensao = Path(nome).suffix.lower()
+    tipo = TIPOS_FOTO.get(extensao)
+    if not tipo or not ficha.imagem:
+        raise Http404
+    try:
+        arquivo = ficha.imagem.open('rb')
+    except OSError as exc:
+        raise Http404 from exc
+    try:
+        RegistroAcesso.objects.create(
+            usuario=request.user,
+            tipo=RegistroAcesso.Tipo.ABRIU_FOTO,
+        )
+    except Exception:
+        arquivo.close()
+        raise
+    resposta = FileResponse(
+        arquivo,
+        content_type=tipo,
+        filename=f'ficha-{ficha.pk}{extensao}',
+    )
+    resposta['Content-Disposition'] = f'inline; filename="ficha-{ficha.pk}{extensao}"'
+    resposta['X-Content-Type-Options'] = 'nosniff'
+    resposta['Cache-Control'] = 'private, no-store'
+    return resposta
+
+
+@login_required
+@require_POST
+def revisar_digitalizacao(request, pk):
+    ficha = _ficha_ou_404(request.user, pk)
+    if not usuario_pode_revisar_digitalizacao(request.user, ficha):
+        raise PermissionDenied
+    acao = (request.POST.get('acao') or '').strip()
+    if acao == 'conferida':
+        ficha.status = DigitalizacaoFicha.Status.CONFIRMADA
+        ficha.motivo_refazer = ''
+    elif acao == 'refazer':
+        motivo = (request.POST.get('motivo_refazer') or '').strip()
+        if not motivo:
+            messages.error(request, 'Informe o motivo para refazer a foto.')
+            return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+        if len(motivo) > 2000:
+            messages.error(request, 'O motivo deve ter até 2000 caracteres.')
+            return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+        ficha.status = DigitalizacaoFicha.Status.REFAZER
+        ficha.motivo_refazer = motivo
+    else:
+        return HttpResponse('Ação de revisão inválida.', status=400)
+    ficha.revisado_por = request.user
+    ficha.revisado_em = timezone.now()
+    ficha.save(update_fields=[
+        'status', 'motivo_refazer', 'revisado_por', 'revisado_em',
+    ])
+    messages.success(request, f'Ficha marcada como {ficha.get_status_display()}.')
+    return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
