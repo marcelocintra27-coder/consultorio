@@ -435,9 +435,10 @@ Legenda:
 - [x] Locatária sem sala própria, com turnos, fora do acerto mensal.
   - Critérios: tipo titular por padrão; locatária sem sala e com turnos sem
     sobreposição na mesma sala e dia; agenda só dentro do turno e sem choque
-    com a titular; acerto idêntico depois de cadastrar a locatária; telas de
+    com a titular; turno ativo recusado se a sala já tem consulta futura nesse
+    horário; acerto idêntico depois de cadastrar a locatária; telas de
     turnos só do administrador; suíte completa sem falha nova.
-  - Validação: suíte completa com 416 testes; só as 3 falhas já conhecidas
+  - Validação: suíte completa com 419 testes; só as 3 falhas já conhecidas
     (`test_seeds_legitimos_nao_recusam`,
     `test_configuracao_ativa_usa_somente_homolog_local`,
     `test_recusa_banco_que_nao_e_consultorio_homolog`). Migração

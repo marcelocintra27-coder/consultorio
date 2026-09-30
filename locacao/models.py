@@ -3,6 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.utils import timezone
 
 
 def primeiro_dia_mes(data):
@@ -175,6 +176,53 @@ DIAS_CURTOS = {
 }
 
 
+def dia_semana_para_lookup(dia_semana):
+    """Converte date.weekday() (segunda=0) no lookup week_day do Django (domingo=1)."""
+    return (int(dia_semana) + 1) % 7 + 1
+
+
+def consultas_futuras_que_ocupam_turno(turno):
+    """Consultas futuras de outra dentista na sala do turno, no mesmo dia e horário.
+
+    Na prática são as consultas da titular, porque só ela tem ``dentista.sala``.
+    """
+    from core.models import Consulta
+
+    consultas = Consulta.objects.filter(
+        dentista__sala_id=turno.sala_id,
+        data__gte=timezone.localdate(),
+        data__week_day=dia_semana_para_lookup(turno.dia_semana),
+        hora_inicio__lt=turno.hora_fim,
+        hora_fim__gt=turno.hora_inicio,
+    ).exclude(status=Consulta.Status.CANCELADA)
+    if turno.dentista_id:
+        consultas = consultas.exclude(dentista_id=turno.dentista_id)
+    return consultas.select_related('dentista', 'paciente').order_by(
+        'data', 'hora_inicio', 'pk',
+    )
+
+
+def texto_turno_com_consultas(total, consultas):
+    if total == 1:
+        introducao = (
+            'Não é possível salvar o turno: a sala já tem 1 consulta marcada nesse horário. '
+            'Remarque-a antes: '
+        )
+    else:
+        introducao = (
+            f'Não é possível salvar o turno: a sala já tem {total} consultas marcadas nesse horário. '
+            'Remarque-as antes: '
+        )
+    partes = [
+        (
+            f'{consulta.data:%d/%m} {consulta.hora_inicio:%H:%M} '
+            f'{consulta.dentista.nome_completo} — {consulta.paciente.nome_completo}'
+        )
+        for consulta in consultas
+    ]
+    return introducao + '; '.join(partes)
+
+
 class TurnoLocacao(models.Model):
     class DiaSemana(models.IntegerChoices):
         SEGUNDA = 0, 'segunda-feira'
@@ -268,6 +316,10 @@ class TurnoLocacao(models.Model):
             raise ValidationError(
                 'A locatária já tem um turno ativo neste horário.'
             )
+        conflitos = consultas_futuras_que_ocupam_turno(self)
+        total = conflitos.count()
+        if total:
+            raise ValidationError(texto_turno_com_consultas(total, conflitos[:10]))
 
     def save(self, *args, **kwargs):
         with transaction.atomic():

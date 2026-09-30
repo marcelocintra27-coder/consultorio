@@ -1,5 +1,6 @@
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -352,3 +353,121 @@ class LocatariaTests(TestCase):
         agenda_secretaria = self.client.get(reverse('core:listar_consultas') + '?data=2026-09-28')
         self.assertContains(agenda_secretaria, 'Paciente da locatária')
         self.assertContains(agenda_secretaria, 'Paciente da titular')
+
+    def _consulta(self, dentista, dia, inicio, fim, paciente, status=Consulta.Status.AGENDADA):
+        return Consulta.objects.create(
+            paciente=paciente,
+            dentista=dentista,
+            data=dia,
+            hora_inicio=inicio,
+            hora_fim=fim,
+            status=status,
+        )
+
+    def test_turno_recusado_quando_titular_tem_consulta_futura(self):
+        hoje = date(2026, 10, 1)
+        terca = date(2026, 10, 6)
+        locataria = self.criar_locataria()
+        self._consulta(self.titular, terca, time(8, 30), time(9, 30), self.paciente_tit)
+        self._consulta(
+            self.titular, terca + timedelta(days=7), time(10), time(11), self.paciente_loc,
+        )
+        self._consulta(
+            self.titular, terca + timedelta(days=14), time(11, 30), time(12, 30), self.paciente_tit,
+        )
+        with patch('locacao.models.timezone.localdate', return_value=hoje):
+            with self.assertRaises(ValidationError) as erro:
+                self.turno(locataria, 1, time(8), time(12))
+            mensagem = erro.exception.messages[0]
+            self.assertIn(
+                'Não é possível salvar o turno: a sala já tem 3 consultas marcadas nesse horário.',
+                mensagem,
+            )
+            self.assertIn('Remarque-as antes: ', mensagem)
+            self.assertIn('06/10 08:30 Dra. Adriana — Paciente da titular', mensagem)
+            self.assertIn('13/10 10:00 Dra. Adriana — Paciente da locatária', mensagem)
+            self.assertIn('20/10 11:30 Dra. Adriana — Paciente da titular', mensagem)
+            self.client.force_login(self.admin)
+            resposta = self.client.post(
+                reverse('locacao:cadastrar_turno', args=[locataria.pk]),
+                {
+                    'sala': self.sala.pk,
+                    'dia_semana': 1,
+                    'hora_inicio': '08:00',
+                    'hora_fim': '12:00',
+                    'observacao': '',
+                },
+            )
+        self.assertContains(resposta, 'a sala já tem 3 consultas marcadas nesse horário')
+        self.assertContains(resposta, '06/10 08:30 Dra. Adriana — Paciente da titular')
+        self.assertFalse(locataria.turnos.exists())
+
+        turno = self.turno(locataria, 0, time(8), time(12))
+        turno.dia_semana = 1
+        with patch('locacao.models.timezone.localdate', return_value=hoje):
+            with self.assertRaises(ValidationError):
+                turno.save()
+        turno.refresh_from_db()
+        self.assertEqual(turno.dia_semana, 0)
+
+        inativo = TurnoLocacao(
+            dentista=locataria,
+            sala=self.sala,
+            dia_semana=1,
+            hora_inicio=time(8),
+            hora_fim=time(12),
+            ativo=False,
+        )
+        inativo.save()
+        inativo.ativo = True
+        with patch('locacao.models.timezone.localdate', return_value=hoje):
+            with self.assertRaises(ValidationError) as reativado:
+                inativo.save()
+        self.assertIn('3 consultas marcadas', reativado.exception.messages[0])
+        inativo.refresh_from_db()
+        self.assertFalse(inativo.ativo)
+
+    def test_turno_aceito_se_consulta_passada_cancelada_ou_fora(self):
+        hoje = date(2026, 10, 1)
+        terca = date(2026, 10, 6)
+        passada = date(2026, 9, 29)
+        locataria = self.criar_locataria()
+        self._consulta(self.titular, passada, time(8, 30), time(9, 30), self.paciente_tit)
+        self._consulta(
+            self.titular, terca, time(8, 30), time(9, 30), self.paciente_tit,
+            status=Consulta.Status.CANCELADA,
+        )
+        self._consulta(self.titular, terca, time(14), time(15), self.paciente_loc)
+        self._consulta(self.titular, date(2026, 10, 7), time(8, 30), time(9, 30), self.paciente_tit)
+        self._consulta(self.titular_b, terca, time(8, 30), time(9, 30), self.paciente_loc)
+        with patch('locacao.models.timezone.localdate', return_value=hoje):
+            self.turno(locataria, 1, time(8), time(12))
+        self.assertEqual(locataria.turnos.filter(ativo=True).count(), 1)
+
+    def test_mensagem_lista_no_maximo_dez_conflitos_e_o_total(self):
+        hoje = date(2026, 10, 1)
+        locataria = self.criar_locataria()
+        terca = date(2026, 10, 6)
+        for indice in range(11):
+            paciente = Paciente.objects.create(
+                nome_completo=f'Paciente {indice + 1:02d}',
+                cpf=f'705.222.000-{indice + 1:02d}',
+                data_nascimento=date(1992, 1, 1),
+                telefone=f'119100000{indice:02d}',
+            )
+            self._consulta(
+                self.titular,
+                terca + timedelta(days=7 * indice),
+                time(9),
+                time(10),
+                paciente,
+            )
+        with patch('locacao.models.timezone.localdate', return_value=hoje):
+            with self.assertRaises(ValidationError) as erro:
+                self.turno(locataria, 1, time(8), time(12))
+        mensagem = erro.exception.messages[0]
+        self.assertIn('a sala já tem 11 consultas marcadas nesse horário', mensagem)
+        self.assertIn('06/10 09:00 Dra. Adriana — Paciente 01', mensagem)
+        self.assertIn('08/12 09:00 Dra. Adriana — Paciente 10', mensagem)
+        self.assertNotIn('Paciente 11', mensagem)
+        self.assertEqual(mensagem.count('Dra. Adriana'), 10)

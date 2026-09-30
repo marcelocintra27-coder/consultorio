@@ -943,4 +943,6 @@ titular. Ela não tem sala própria, paga direto à titular e não entra no rate
 nem no acerto mensal — a divisão continua só entre as titulares, uma por sala.
 O login usa o papel já existente "dentista" e vê só a agenda e os pacientes
 das consultas dela. O administrador cadastra a pessoa e os turnos pelas telas;
-não há carga de dados reais por migração ou script.
+não há carga de dados reais por migração ou script. Criar, editar ou reativar
+um turno ativo é recusado se a titular da sala já tiver consulta futura, não
+cancelada, naquele dia da semana e horário.
