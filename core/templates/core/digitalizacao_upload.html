@@ -9,7 +9,22 @@
             <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
         </div>
 
-        <form method="post" class="form-cartao" enctype="multipart/form-data">
+        {% if ficha_enviada %}
+        <section class="form-cartao" aria-labelledby="titulo-envio-ok">
+            <h2 id="titulo-envio-ok" class="secao-pagina">Ficha enviada</h2>
+            <p>Enviada para <strong class="nome-paciente">{% if ficha_enviada.paciente %}{{ ficha_enviada.paciente.nome_completo }}{% else %}sem paciente{% endif %}</strong>.</p>
+            <p>{{ ficha_enviada.get_tipo_display }}</p>
+            <img src="{% url 'core:foto_digitalizacao' ficha_enviada.pk %}" alt="Foto gravada da ficha" class="foto-ficha">
+            <div class="acoes">
+                {% if ficha_enviada.paciente_id %}
+                <a href="{% url 'core:digitalizacao_upload' %}?paciente={{ ficha_enviada.paciente_id }}&amp;tipo={{ ficha_enviada.tipo }}" class="botao">Enviar outra folha deste paciente</a>
+                {% endif %}
+                <a href="{% url 'core:digitalizacao_upload' %}" class="botao secundario">Enviar ficha de outro paciente</a>
+            </div>
+        </section>
+        {% endif %}
+
+        <form method="post" id="form-digitalizacao" class="form-cartao" enctype="multipart/form-data">
             {% csrf_token %}
             {% if form.errors %}
             <div class="mensagem error">
@@ -49,7 +64,16 @@
                 {% endif %}
             </div>
 
-            <button type="submit" class="botao">Salvar</button>
+            <button type="submit" class="botao" data-salvar-envio>Salvar</button>
+            <div id="confirmacao-envio" class="confirmacao-envio" hidden>
+                <p data-tipo-escolhido></p>
+                <p>Enviar esta ficha para <strong class="nome-paciente" data-nome-paciente></strong>?</p>
+                <div data-previa-foto></div>
+                <div class="acoes">
+                    <button type="submit" class="botao" data-confirmar-envio>Confirmar envio</button>
+                    <button type="button" class="botao secundario" data-corrigir-envio>Corrigir</button>
+                </div>
+            </div>
         </form>
 
         <section aria-labelledby="titulo-enviadas-hoje">
@@ -100,6 +124,67 @@
             campo.value = '';
             atualizar();
         });
+    });
+})();
+(function () {
+    var form = document.getElementById('form-digitalizacao');
+    var painel = document.getElementById('confirmacao-envio');
+    if (!form || !painel) return;
+    var arquivo = form.querySelector('input[type="file"]');
+    var paciente = form.querySelector('[name="paciente"]');
+    var tipo = form.querySelector('[name="tipo"]');
+    var salvar = form.querySelector('[data-salvar-envio]');
+    var confirmar = form.querySelector('[data-confirmar-envio]');
+    var corrigir = form.querySelector('[data-corrigir-envio]');
+    var nome = painel.querySelector('[data-nome-paciente]');
+    var tipoEscolhido = painel.querySelector('[data-tipo-escolhido]');
+    var previa = painel.querySelector('[data-previa-foto]');
+    if (!arquivo || !salvar || !confirmar || !corrigir || !nome || !previa) return;
+    var confirmado = false;
+    var urlPrevia = '';
+    function textoSelecionado(campo) {
+        if (!campo || campo.selectedIndex < 0) return '';
+        return (campo.options[campo.selectedIndex].text || '').trim();
+    }
+    function limparPrevia() {
+        if (urlPrevia) {
+            URL.revokeObjectURL(urlPrevia);
+            urlPrevia = '';
+        }
+        previa.replaceChildren();
+    }
+    function mostrarConfirmacao() {
+        limparPrevia();
+        var escolhido = arquivo.files && arquivo.files[0];
+        if (!escolhido) return false;
+        nome.textContent = textoSelecionado(paciente) || 'sem paciente';
+        if (tipoEscolhido) tipoEscolhido.textContent = textoSelecionado(tipo);
+        var foto = document.createElement('img');
+        foto.className = 'foto-ficha';
+        foto.alt = 'Prévia da foto escolhida, ainda não enviada';
+        urlPrevia = URL.createObjectURL(escolhido);
+        foto.src = urlPrevia;
+        previa.appendChild(foto);
+        painel.hidden = false;
+        salvar.hidden = true;
+        salvar.disabled = true;
+        return true;
+    }
+    form.addEventListener('submit', function (event) {
+        if (confirmado || event.submitter === confirmar) return;
+        if (!arquivo.files || !arquivo.files[0]) return;
+        event.preventDefault();
+        mostrarConfirmacao();
+    });
+    confirmar.addEventListener('click', function () {
+        confirmado = true;
+    });
+    corrigir.addEventListener('click', function () {
+        confirmado = false;
+        painel.hidden = true;
+        salvar.hidden = false;
+        salvar.disabled = false;
+        limparPrevia();
     });
 })();
 </script>

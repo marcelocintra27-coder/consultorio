@@ -2157,6 +2157,7 @@ class DigitalizacaoFicha(models.Model):
         PENDENTE_REVISAO = 'pendente_revisao', 'Pendente'
         CONFIRMADA = 'confirmada', 'Conferida'
         REFAZER = 'refazer', 'Refazer foto'
+        ENGANO = 'engano', 'Enviada por engano'
 
     paciente = models.ForeignKey(
         Paciente,
@@ -2205,6 +2206,7 @@ class DigitalizacaoFicha(models.Model):
     )
     revisado_em = models.DateTimeField('revisado em', null=True, blank=True)
     motivo_refazer = models.TextField('motivo para refazer', blank=True, default='')
+    motivo_engano = models.TextField('motivo do engano', blank=True, default='')
     criado_em = models.DateTimeField('criado em', auto_now_add=True)
 
     class Meta:
@@ -2217,6 +2219,49 @@ class DigitalizacaoFicha(models.Model):
             self.paciente.nome_completo if self.paciente_id else 'sem paciente'
         )
         return f'{paciente} — {self.get_tipo_display()}'
+
+
+class TrocaPacienteDigitalizacao(models.Model):
+    ficha = models.ForeignKey(
+        DigitalizacaoFicha,
+        verbose_name='ficha',
+        on_delete=models.CASCADE,
+        related_name='trocas_paciente',
+    )
+    paciente_anterior = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente anterior',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    paciente_novo = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente novo',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    motivo = models.TextField('motivo')
+    trocado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='trocado por',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='trocas_digitalizacao',
+    )
+    trocado_em = models.DateTimeField('trocado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'troca de paciente da digitalização'
+        verbose_name_plural = 'trocas de paciente da digitalização'
+        ordering = ['-trocado_em']
+
+    def __str__(self):
+        return f'{self.ficha_id} — {self.trocado_em}'
 
 
 class RegistroEvolucaoClinica(ModeloClinicoProtegido):

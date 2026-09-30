@@ -91,7 +91,9 @@ from .digitalizacao_revisao import (
     detalhe_digitalizacao,
     foto_digitalizacao,
     listar_digitalizacoes,
+    marcar_engano_digitalizacao,
     revisar_digitalizacao,
+    trocar_paciente_digitalizacao,
 )
 from .relatorio_atividade import (
     relatorio_atividade,
@@ -116,6 +118,12 @@ urlpatterns = [
     path('digitalizacao/<int:pk>/', detalhe_digitalizacao, name='detalhe_digitalizacao'),
     path('digitalizacao/<int:pk>/foto/', foto_digitalizacao, name='foto_digitalizacao'),
     path('digitalizacao/<int:pk>/revisar/', revisar_digitalizacao, name='revisar_digitalizacao'),
+    path('digitalizacao/<int:pk>/engano/', marcar_engano_digitalizacao, name='marcar_engano_digitalizacao'),
+    path(
+        'digitalizacao/<int:pk>/trocar-paciente/',
+        trocar_paciente_digitalizacao,
+        name='trocar_paciente_digitalizacao',
+    ),
     path(
         'digitalizacao/<int:pk>/processar-ia/',
         digitalizacao_processar_ia,

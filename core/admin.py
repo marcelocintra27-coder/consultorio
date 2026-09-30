@@ -38,6 +38,7 @@ from .models import (
     AssinaturaEletronica,
     FichaCadastroAnamnese,
     DigitalizacaoFicha,
+    TrocaPacienteDigitalizacao,
     RegistroEvolucaoClinica,
     FichaPlanoTratamento,
     ItemConsentimentoProcedimento,
@@ -482,6 +483,30 @@ class DigitalizacaoFichaAdmin(admin.ModelAdmin):
     search_fields = ('paciente__nome_completo',)
     autocomplete_fields = ('paciente',)
     readonly_fields = ('criado_em', 'revisado_em')
+
+
+@admin.register(TrocaPacienteDigitalizacao)
+class TrocaPacienteDigitalizacaoAdmin(_SomenteLeituraSuperusuarioAdmin):
+    list_display = (
+        'ficha',
+        'paciente_anterior',
+        'paciente_novo',
+        'trocado_por',
+        'trocado_em',
+    )
+    search_fields = (
+        'paciente_anterior__nome_completo',
+        'paciente_novo__nome_completo',
+        'motivo',
+    )
+    readonly_fields = (
+        'ficha',
+        'paciente_anterior',
+        'paciente_novo',
+        'motivo',
+        'trocado_por',
+        'trocado_em',
+    )
 
 
 class ItemConsentimentoInline(InlineClinicoProtegido, admin.TabularInline):

@@ -7,18 +7,29 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
-from .models import DigitalizacaoFicha, Paciente, RegistroAcesso
+from .models import (
+    Consulta,
+    DigitalizacaoFicha,
+    Paciente,
+    RegistroAcesso,
+    TrocaPacienteDigitalizacao,
+)
 from .permissoes import (
     digitalizacoes_visiveis,
+    dentista_do_usuario,
     usuario_e_administrador,
     usuario_pode_enviar_digitalizacao,
     usuario_pode_listar_digitalizacoes,
+    usuario_pode_marcar_engano,
+    usuario_pode_receber_troca_digitalizacao,
     usuario_pode_revisar_digitalizacao,
+    usuario_pode_trocar_paciente_digitalizacao,
     _e_secretaria,
 )
 
@@ -39,6 +50,31 @@ def enviadas_hoje(user):
         criado_em__gte=inicio,
         criado_em__lt=fim,
     ).select_related('paciente').order_by('-criado_em')
+
+
+def ficha_recem_enviada(user, bruto):
+    bruto = (bruto or '').strip()
+    if not bruto.isdigit():
+        return None
+    return digitalizacoes_visiveis(user).filter(
+        pk=int(bruto),
+    ).select_related('paciente').first()
+
+
+def pacientes_para_troca(user, ficha):
+    if not usuario_pode_trocar_paciente_digitalizacao(user, ficha):
+        return Paciente.objects.none()
+    if usuario_e_administrador(user):
+        pacientes = Paciente.objects.filter(ativo=True)
+    else:
+        dentista = dentista_do_usuario(user)
+        if dentista is None:
+            return Paciente.objects.none()
+        vinculados = Consulta.objects.filter(dentista=dentista).values('paciente_id')
+        pacientes = Paciente.objects.filter(pk__in=vinculados, ativo=True)
+    if ficha.paciente_id:
+        pacientes = pacientes.exclude(pk=ficha.paciente_id)
+    return pacientes.order_by('nome_completo')
 
 
 def inicial_envio(request, user):
@@ -155,6 +191,12 @@ def detalhe_digitalizacao(request, pk):
     return render(request, 'core/detalhe_digitalizacao.html', {
         'ficha': ficha,
         'pode_revisar': usuario_pode_revisar_digitalizacao(request.user, ficha),
+        'pode_engano': usuario_pode_marcar_engano(request.user, ficha),
+        'pode_trocar': usuario_pode_trocar_paciente_digitalizacao(request.user, ficha),
+        'pacientes_troca': pacientes_para_troca(request.user, ficha),
+        'trocas': ficha.trocas_paciente.select_related(
+            'paciente_anterior', 'paciente_novo', 'trocado_por',
+        ),
         'secretaria': (
             _e_secretaria(request.user) and not usuario_e_administrador(request.user)
         ),
@@ -221,4 +263,56 @@ def revisar_digitalizacao(request, pk):
         'status', 'motivo_refazer', 'revisado_por', 'revisado_em',
     ])
     messages.success(request, f'Ficha marcada como {ficha.get_status_display()}.')
+    return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+
+
+@login_required
+@require_POST
+def marcar_engano_digitalizacao(request, pk):
+    ficha = _ficha_ou_404(request.user, pk)
+    if not usuario_pode_marcar_engano(request.user, ficha):
+        raise PermissionDenied
+    motivo = (request.POST.get('motivo_engano') or '').strip()
+    if len(motivo) > 2000:
+        messages.error(request, 'O motivo deve ter até 2000 caracteres.')
+        return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+    ficha.status = DigitalizacaoFicha.Status.ENGANO
+    ficha.motivo_engano = motivo
+    ficha.save(update_fields=['status', 'motivo_engano'])
+    messages.success(request, 'Ficha marcada como enviada por engano.')
+    return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+
+
+@login_required
+@require_POST
+def trocar_paciente_digitalizacao(request, pk):
+    ficha = _ficha_ou_404(request.user, pk)
+    if not usuario_pode_trocar_paciente_digitalizacao(request.user, ficha):
+        raise PermissionDenied
+    motivo = (request.POST.get('motivo') or '').strip()
+    if not motivo:
+        messages.error(request, 'Informe o motivo da troca de paciente.')
+        return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+    if len(motivo) > 2000:
+        messages.error(request, 'O motivo deve ter até 2000 caracteres.')
+        return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+    bruto = (request.POST.get('paciente') or '').strip()
+    novo = Paciente.objects.filter(pk=int(bruto), ativo=True).first() if bruto.isdigit() else None
+    if not usuario_pode_receber_troca_digitalizacao(request.user, novo):
+        raise PermissionDenied
+    if novo.pk == ficha.paciente_id:
+        messages.error(request, 'Escolha um paciente diferente.')
+        return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+    anterior_id = ficha.paciente_id
+    with transaction.atomic():
+        TrocaPacienteDigitalizacao.objects.create(
+            ficha=ficha,
+            paciente_anterior_id=anterior_id,
+            paciente_novo=novo,
+            motivo=motivo,
+            trocado_por=request.user,
+        )
+        ficha.paciente = novo
+        ficha.save(update_fields=['paciente'])
+    messages.success(request, f'Paciente alterado para {novo.nome_completo}.')
     return redirect('core:detalhe_digitalizacao', pk=ficha.pk)

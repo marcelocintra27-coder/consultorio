@@ -840,3 +840,14 @@ h2.secao-pagina {
 .foto-ficha-quadro .botao {
     margin-top: 12px;
 }
+
+.nome-paciente {
+    color: var(--cor-primaria);
+    font-size: 1.15rem;
+}
+
+.confirmacao-envio {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--cor-borda);
+}

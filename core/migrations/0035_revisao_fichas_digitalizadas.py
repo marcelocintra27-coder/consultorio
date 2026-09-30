@@ -28,10 +28,32 @@ class Migration(migrations.Migration):
             name='revisado_por',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='fichas_revisadas', to=settings.AUTH_USER_MODEL, verbose_name='revisado por'),
         ),
+        migrations.AddField(
+            model_name='digitalizacaoficha',
+            name='motivo_engano',
+            field=models.TextField(blank=True, default='', verbose_name='motivo do engano'),
+        ),
         migrations.AlterField(
             model_name='digitalizacaoficha',
             name='status',
-            field=models.CharField(choices=[('pendente_revisao', 'Pendente'), ('confirmada', 'Conferida'), ('refazer', 'Refazer foto')], default='pendente_revisao', max_length=30, verbose_name='status'),
+            field=models.CharField(choices=[('pendente_revisao', 'Pendente'), ('confirmada', 'Conferida'), ('refazer', 'Refazer foto'), ('engano', 'Enviada por engano')], default='pendente_revisao', max_length=30, verbose_name='status'),
+        ),
+        migrations.CreateModel(
+            name='TrocaPacienteDigitalizacao',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('motivo', models.TextField(verbose_name='motivo')),
+                ('trocado_em', models.DateTimeField(auto_now_add=True, verbose_name='trocado em')),
+                ('ficha', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='trocas_paciente', to='core.digitalizacaoficha', verbose_name='ficha')),
+                ('paciente_anterior', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='core.paciente', verbose_name='paciente anterior')),
+                ('paciente_novo', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='core.paciente', verbose_name='paciente novo')),
+                ('trocado_por', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='trocas_digitalizacao', to=settings.AUTH_USER_MODEL, verbose_name='trocado por')),
+            ],
+            options={
+                'verbose_name': 'troca de paciente da digitalização',
+                'verbose_name_plural': 'trocas de paciente da digitalização',
+                'ordering': ['-trocado_em'],
+            },
         ),
         migrations.AlterField(
             model_name='registroacesso',

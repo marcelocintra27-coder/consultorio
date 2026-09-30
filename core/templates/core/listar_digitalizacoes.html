@@ -60,6 +60,9 @@
                         {% if ficha.status == 'refazer' and ficha.motivo_refazer %}
                         <p>{{ ficha.motivo_refazer }}</p>
                         {% endif %}
+                        {% if ficha.status == 'engano' and ficha.motivo_engano %}
+                        <p>{{ ficha.motivo_engano }}</p>
+                        {% endif %}
                     </td>
                     <td class="acoes">
                         <a href="{% url 'core:detalhe_digitalizacao' ficha.pk %}" class="botao">Ver foto</a>

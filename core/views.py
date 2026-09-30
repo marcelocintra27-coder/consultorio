@@ -55,7 +55,7 @@ from .auditoria_paciente import (
     snapshot,
     valores_iniciais,
 )
-from .digitalizacao_revisao import enviadas_hoje, inicial_envio
+from .digitalizacao_revisao import enviadas_hoje, ficha_recem_enviada, inicial_envio
 from .ia_digitalizacao import processar_digitalizacao_com_ia
 from .tabela_uniodonto import FATOR_US_UNIODONTO
 from .models import (
@@ -323,9 +323,9 @@ def editar_paciente(request, pk):
     pode_clinico = usuario_pode_acessar_prontuario(request.user, paciente)
     fichas_digitalizadas = ()
     if pode_clinico:
-        fichas_digitalizadas = paciente.digitalizacoes.select_related(
-            'digitalizado_por',
-        ).order_by('-criado_em')
+        fichas_digitalizadas = paciente.digitalizacoes.exclude(
+            status=DigitalizacaoFicha.Status.ENGANO,
+        ).select_related('digitalizado_por').order_by('-criado_em')
     return render(request, 'core/form_paciente.html', {
         'form': form,
         'titulo': 'Editar Paciente',
@@ -370,11 +370,16 @@ def _digitalizacao_upload_protegido(request):
                 if digitalizacao.imagem and digitalizacao.imagem._committed:
                     digitalizacao.imagem.storage.delete(digitalizacao.imagem.name)
                 return HttpResponse('Não foi possível registrar a digitalização.', status=503)
+            nome = (
+                digitalizacao.paciente.nome_completo
+                if digitalizacao.paciente_id else 'sem paciente'
+            )
             messages.success(
                 request,
-                'Digitalização enviada. A ficha ficou pendente de revisão.',
+                f'Digitalização enviada para {nome}. A ficha ficou pendente de revisão.',
             )
-            return redirect('core:digitalizacao_upload')
+            destino = reverse('core:digitalizacao_upload')
+            return redirect(f'{destino}?enviada={digitalizacao.pk}')
         messages.error(
             request,
             'Não foi possível enviar. Confira os avisos no formulário.',
@@ -388,7 +393,14 @@ def _digitalizacao_upload_protegido(request):
 
 
 def _contexto_envio(request, form):
-    return {'form': form, 'enviadas_hoje': enviadas_hoje(request.user)}
+    enviada = None
+    if request.method == 'GET':
+        enviada = ficha_recem_enviada(request.user, request.GET.get('enviada'))
+    return {
+        'form': form,
+        'enviadas_hoje': enviadas_hoje(request.user),
+        'ficha_enviada': enviada,
+    }
 
 
 @login_required

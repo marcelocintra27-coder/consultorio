@@ -418,3 +418,42 @@ def usuario_pode_revisar_digitalizacao(user, ficha):
     if _e_secretaria(user) and not usuario_e_administrador(user):
         return False
     return usuario_pode_acessar_digitalizacao(user, ficha.paciente)
+
+
+def usuario_pode_marcar_engano(user, ficha):
+    """Quem enviou, o administrador ou a dentista com prontuário, só enquanto Pendente."""
+    from core.models import DigitalizacaoFicha
+
+    if ficha is None or ficha.status != DigitalizacaoFicha.Status.PENDENTE_REVISAO:
+        return False
+    if not usuario_pode_ver_digitalizacao(user, ficha):
+        return False
+    if usuario_e_administrador(user):
+        return True
+    if _e_secretaria(user):
+        return ficha.digitalizado_por_id == getattr(user, 'id', None)
+    return usuario_pode_acessar_digitalizacao(user, ficha.paciente)
+
+
+def usuario_pode_trocar_paciente_digitalizacao(user, ficha):
+    """Secretária não troca o paciente. Admin e dentista com acesso à ficha podem."""
+    if ficha is None or not usuario_pode_ver_digitalizacao(user, ficha):
+        return False
+    if _e_secretaria(user) and not usuario_e_administrador(user):
+        return False
+    if usuario_e_administrador(user):
+        return True
+    return usuario_pode_acessar_digitalizacao(user, ficha.paciente)
+
+
+def usuario_pode_receber_troca_digitalizacao(user, paciente):
+    """Destino da troca: paciente ativo a que admin ou dentista tenha acesso."""
+    if paciente is None or not getattr(paciente, 'ativo', False):
+        return False
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if _e_secretaria(user) and not usuario_e_administrador(user):
+        return False
+    if usuario_e_administrador(user):
+        return True
+    return usuario_pode_acessar_prontuario(user, paciente)
