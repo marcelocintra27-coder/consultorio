@@ -20,12 +20,15 @@ def calcular_acerto_mensal(mes):
     """Calcula o acerto financeiro entre dentistas para o mês (competência) informado.
 
     Débitos considerados: cota de despesas compartilhadas (rateada entre as
-    dentistas ativas) e dívidas avulsas do mês. Despesas individuais entram
-    só como informação, sem gerar débito entre dentistas.
+    dentistas titulares ativas) e dívidas avulsas do mês. Despesas individuais
+    entram só como informação, sem gerar débito entre dentistas. A locatária
+    de turnos não entra nesta divisão.
     """
     mes = primeiro_dia_mes(mes)
 
-    dentistas_ativas = list(Dentista.objects.filter(ativo=True).order_by('nome_completo'))
+    dentistas_ativas = list(
+        Dentista.objects.titulares_ativas().order_by('nome_completo')
+    )
     dentistas_por_id = {d.id: d for d in dentistas_ativas}
 
     despesas_compartilhadas = list(
@@ -59,6 +62,8 @@ def calcular_acerto_mensal(mes):
         saldo[(menor, maior)] += sinal * valor
 
     for despesa in despesas_compartilhadas:
+        if despesa.pago_por.tipo == Dentista.Tipo.LOCATARIA:
+            continue
         cota = despesa.valor_cota()
         for dentista in dentistas_ativas:
             registrar_debito(dentista.id, despesa.pago_por_id, cota)

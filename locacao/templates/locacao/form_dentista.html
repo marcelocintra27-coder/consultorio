@@ -2,7 +2,7 @@
 
 {% block title %}{{ titulo }}{% endblock %}
 {% block titulo %}{{ titulo }}{% endblock %}
-{% block container_class %}estreito{% endblock %}
+{% block container_class %}{% if eh_locataria %}largo{% else %}estreito{% endif %}{% endblock %}
 
 {% block content %}
         <div class="acoes">
@@ -11,10 +11,14 @@
 
         <form method="post" class="form-cartao">
             {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="erro">{{ form.non_field_errors }}</div>
+            {% endif %}
             {% for field in form %}
-            <div class="campo">
+            <div class="campo" id="bloco-{{ field.name }}">
                 <label for="{{ field.id_for_label }}">{{ field.label }}</label>
                 {{ field }}
+                {% if field.help_text %}<p class="resumo">{{ field.help_text }}</p>{% endif %}
                 {% if field.errors %}
                     <div class="erro">{{ field.errors }}</div>
                 {% endif %}
@@ -22,4 +26,75 @@
             {% endfor %}
             <button type="submit" class="botao">Salvar</button>
         </form>
+
+        {% if eh_locataria %}
+        <section class="contexto-consulta" aria-labelledby="titulo-turnos">
+            <h2 id="titulo-turnos" class="secao-pagina">Turnos</h2>
+            <p class="resumo">A locatária atende só nestes horários, na sala de cada turno. Desativar não apaga o histórico.</p>
+
+            {% for turno, turno_edicao in turnos_forms %}
+            <form method="post" action="{% url 'locacao:editar_turno' dentista.pk turno.pk %}" class="form-cartao">
+                {% csrf_token %}
+                <p>{% if turno.ativo %}Turno ativo{% else %}Turno inativo{% endif %}</p>
+                {% if turno_edicao.non_field_errors %}
+                <div class="erro">{{ turno_edicao.non_field_errors }}</div>
+                {% endif %}
+                {% if turno.ativo %}
+                {% for field in turno_edicao %}
+                <div class="campo">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="erro">{{ field.errors }}</div>{% endif %}
+                </div>
+                {% endfor %}
+                <button type="submit" class="botao">Salvar turno</button>
+                {% else %}
+                <p>{{ turno.get_dia_semana_display }} · {{ turno.hora_inicio|time:"H:i" }}–{{ turno.hora_fim|time:"H:i" }} · {{ turno.sala }}</p>
+                {% endif %}
+            </form>
+            {% if turno.ativo %}
+            <form method="post" action="{% url 'locacao:desativar_turno' dentista.pk turno.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="botao secundario">Desativar</button>
+            </form>
+            {% endif %}
+            {% empty %}
+            <p class="vazio">Nenhum turno cadastrado.</p>
+            {% endfor %}
+
+            <h3 class="secao-pagina">Adicionar turno</h3>
+            <form method="post" action="{% url 'locacao:cadastrar_turno' dentista.pk %}" class="form-cartao">
+                {% csrf_token %}
+                {% if turno_form.non_field_errors %}
+                <div class="erro">{{ turno_form.non_field_errors }}</div>
+                {% endif %}
+                {% for field in turno_form %}
+                <div class="campo">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}
+                        <div class="erro">{{ field.errors }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                <button type="submit" class="botao">Adicionar turno</button>
+            </form>
+        </section>
+        {% endif %}
+        <script>
+        (function () {
+            var tipo = document.getElementById('id_tipo');
+            var sala = document.getElementById('id_sala');
+            if (!tipo || !sala) return;
+            var bloco = document.getElementById('bloco-sala');
+            function atualizar() {
+                var locataria = tipo.value === 'locataria';
+                if (bloco) bloco.hidden = locataria;
+                sala.required = !locataria;
+                if (locataria) sala.value = '';
+            }
+            tipo.addEventListener('change', atualizar);
+            atualizar();
+        })();
+        </script>
 {% endblock %}

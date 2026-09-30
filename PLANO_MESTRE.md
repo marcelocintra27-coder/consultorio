@@ -935,3 +935,12 @@ local não conclui o provisionamento de produção nem autoriza deploy.
 - Não fazer commit, push ou deploy sem solicitação explícita do usuário.
 - Não criar/aplicar migration sem alteração real de modelo e validação.
 - Não declarar produção pronta sem PostgreSQL, mídia persistente, SMTP e backups.
+
+### Dentista locatária de turnos
+
+Decisão do dono: uma dentista pode ser locatária e alugar turnos na sala de uma
+titular. Ela não tem sala própria, paga direto à titular e não entra no rateio
+nem no acerto mensal — a divisão continua só entre as titulares, uma por sala.
+O login usa o papel já existente "dentista" e vê só a agenda e os pacientes
+das consultas dela. O administrador cadastra a pessoa e os turnos pelas telas;
+não há carga de dados reais por migração ou script.

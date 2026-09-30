@@ -18,20 +18,24 @@
         <table>
             <tr>
                 <th>Nome</th>
+                <th>Tipo</th>
                 <th>Sala</th>
+                <th>Turnos</th>
                 <th></th>
             </tr>
             {% for dentista in dentistas %}
             <tr>
                 <td>{{ dentista.nome_completo }}</td>
-                <td>{{ dentista.sala }}</td>
+                <td>{{ dentista.get_tipo_display }}</td>
+                <td>{% if dentista.sala %}{{ dentista.sala }}{% else %}—{% endif %}</td>
+                <td>{% if dentista.eh_locataria %}{{ dentista.resumo_turnos|default:"—" }}{% else %}—{% endif %}</td>
                 <td>
                     <a href="{% url 'locacao:editar_dentista' dentista.pk %}" class="botao">Editar</a>
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="3">Nenhum dentista encontrado.</td>
+                <td colspan="5">Nenhum dentista encontrado.</td>
             </tr>
             {% endfor %}
         </table>

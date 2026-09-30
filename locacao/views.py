@@ -1,6 +1,8 @@
 from datetime import date
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -8,15 +10,67 @@ from django.views.decorators.http import require_POST
 
 from core.permissoes import exige_financeiro
 
-from .forms import DentistaForm, DespesaForm, DividaAvulsaForm
-from .models import AuditoriaDespesa, Dentista, Despesa, DividaAvulsa, PagamentoPar
+from .forms import DentistaForm, DespesaForm, DividaAvulsaForm, TurnoLocacaoForm
+from .models import AuditoriaDespesa, Dentista, Despesa, DividaAvulsa, PagamentoPar, TurnoLocacao
 from .services import calcular_acerto_mensal, mes_anterior, mes_seguinte
+
+
+def _turnos_da_lista():
+    return Prefetch(
+        'turnos',
+        queryset=TurnoLocacao.objects.filter(ativo=True).select_related('sala'),
+    )
+
+
+def _formularios_turnos(dentista, bound_pk=None, data=None):
+    formularios = []
+    turnos = dentista.turnos.select_related('sala').order_by(
+        'dia_semana', 'hora_inicio', 'pk',
+    )
+    for turno in turnos:
+        auto_id = f'turno_{turno.pk}_%s'
+        if bound_pk == turno.pk:
+            formularios.append((
+                turno,
+                TurnoLocacaoForm(data, instance=turno, auto_id=auto_id),
+            ))
+        else:
+            formularios.append((
+                turno,
+                TurnoLocacaoForm(instance=turno, auto_id=auto_id),
+            ))
+    return formularios
+
+
+def _contexto_dentista(form, titulo, dentista=None, turno_form=None, turnos_forms=None):
+    eh_locataria = bool(
+        dentista and dentista.pk and dentista.tipo == Dentista.Tipo.LOCATARIA
+    )
+    if eh_locataria and turnos_forms is None:
+        turnos_forms = _formularios_turnos(dentista)
+    return {
+        'form': form,
+        'titulo': titulo,
+        'dentista': dentista if dentista and dentista.pk else None,
+        'eh_locataria': eh_locataria,
+        'turno_form': turno_form or TurnoLocacaoForm(),
+        'turnos_forms': turnos_forms or [],
+    }
+
+
+def _locataria_ou_recusar(pk):
+    dentista = get_object_or_404(Dentista, pk=pk, ativo=True)
+    if dentista.tipo != Dentista.Tipo.LOCATARIA:
+        raise PermissionDenied
+    return dentista
 
 
 @exige_financeiro
 def listar_dentistas(request):
     termo = request.GET.get('q', '').strip()
-    dentistas = Dentista.objects.filter(ativo=True).select_related('sala')
+    dentistas = Dentista.objects.filter(ativo=True).select_related('sala').prefetch_related(
+        _turnos_da_lista(),
+    )
     if termo:
         dentistas = dentistas.filter(nome_completo__icontains=termo)
     dentistas = dentistas.order_by('nome_completo')
@@ -31,14 +85,17 @@ def cadastrar_dentista(request):
     if request.method == 'POST':
         form = DentistaForm(request.POST)
         if form.is_valid():
-            form.save()
+            dentista = form.save()
+            if dentista.tipo == Dentista.Tipo.LOCATARIA:
+                return redirect('locacao:editar_dentista', pk=dentista.pk)
             return redirect('locacao:listar_dentistas')
     else:
         form = DentistaForm()
-    return render(request, 'locacao/form_dentista.html', {
-        'form': form,
-        'titulo': 'Cadastrar Dentista',
-    })
+    return render(
+        request,
+        'locacao/form_dentista.html',
+        _contexto_dentista(form, 'Cadastrar Dentista'),
+    )
 
 
 @exige_financeiro
@@ -47,14 +104,86 @@ def editar_dentista(request, pk):
     if request.method == 'POST':
         form = DentistaForm(request.POST, instance=dentista)
         if form.is_valid():
-            form.save()
+            dentista = form.save()
+            if dentista.tipo == Dentista.Tipo.LOCATARIA:
+                return redirect('locacao:editar_dentista', pk=dentista.pk)
             return redirect('locacao:listar_dentistas')
     else:
         form = DentistaForm(instance=dentista)
-    return render(request, 'locacao/form_dentista.html', {
-        'form': form,
-        'titulo': 'Editar Dentista',
-    })
+    return render(
+        request,
+        'locacao/form_dentista.html',
+        _contexto_dentista(form, 'Editar Dentista', dentista),
+    )
+
+
+@exige_financeiro
+@require_POST
+def cadastrar_turno(request, pk):
+    dentista = _locataria_ou_recusar(pk)
+    form = TurnoLocacaoForm(request.POST)
+    form.instance.dentista = dentista
+    form.instance.criado_por = request.user
+    form.instance.ativo = True
+    if form.is_valid():
+        try:
+            form.save()
+        except ValidationError as erro:
+            form.add_error(None, erro)
+        else:
+            return redirect('locacao:editar_dentista', pk=dentista.pk)
+    return render(
+        request,
+        'locacao/form_dentista.html',
+        _contexto_dentista(
+            DentistaForm(instance=dentista),
+            'Editar Dentista',
+            dentista,
+            turno_form=form,
+        ),
+    )
+
+
+@exige_financeiro
+@require_POST
+def editar_turno(request, pk, turno_pk):
+    dentista = _locataria_ou_recusar(pk)
+    turno = get_object_or_404(TurnoLocacao, pk=turno_pk, dentista=dentista)
+    form = TurnoLocacaoForm(request.POST, instance=turno, auto_id=f'turno_{turno.pk}_%s')
+    if form.is_valid():
+        editado = form.save(commit=False)
+        try:
+            editado.save()
+        except ValidationError as erro:
+            form.add_error(None, erro)
+        else:
+            return redirect('locacao:editar_dentista', pk=dentista.pk)
+    formularios = []
+    for item_turno, item_form in _formularios_turnos(dentista):
+        if item_turno.pk == turno.pk:
+            formularios.append((turno, form))
+        else:
+            formularios.append((item_turno, item_form))
+    return render(
+        request,
+        'locacao/form_dentista.html',
+        _contexto_dentista(
+            DentistaForm(instance=dentista),
+            'Editar Dentista',
+            dentista,
+            turnos_forms=formularios,
+        ),
+    )
+
+
+@exige_financeiro
+@require_POST
+def desativar_turno(request, pk, turno_pk):
+    dentista = _locataria_ou_recusar(pk)
+    turno = get_object_or_404(TurnoLocacao, pk=turno_pk, dentista=dentista)
+    turno.ativo = False
+    turno.save(update_fields=['ativo'])
+    return redirect('locacao:editar_dentista', pk=dentista.pk)
 
 
 @exige_financeiro

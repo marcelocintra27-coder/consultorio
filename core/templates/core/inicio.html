@@ -111,6 +111,7 @@
                         <th scope="col">Horário</th>
                         <th scope="col">Paciente</th>
                         <th scope="col">Dentista</th>
+                        <th scope="col">Sala</th>
                         <th scope="col">Status</th>
                     </tr>
                 </thead>
@@ -120,6 +121,7 @@
                         <td>{{ consulta.hora_inicio|time:"H:i" }}</td>
                         <td><a href="{% url 'core:ficha_consulta' consulta.pk %}">{{ consulta.paciente.nome_completo }}</a></td>
                         <td>{{ consulta.dentista|default:"Não informado" }}</td>
+                        <td>{% if consulta.sala_agenda %}{{ consulta.sala_agenda }}{% else %}—{% endif %}</td>
                         <td>{{ consulta.get_status_display }}</td>
                     </tr>
                     {% endfor %}
@@ -178,6 +180,7 @@
                     <tr>
                         <th scope="col">Horário</th>
                         <th scope="col">Paciente</th>
+                        <th scope="col">Sala</th>
                         <th scope="col">Status</th>
                         <th scope="col">Ação clínica</th>
                     </tr>
@@ -187,6 +190,7 @@
                     <tr>
                         <td>{{ consulta.hora_inicio|time:"H:i" }}</td>
                         <td>{{ consulta.paciente.nome_completo }}</td>
+                        <td>{% if consulta.sala_agenda %}{{ consulta.sala_agenda }}{% else %}—{% endif %}</td>
                         <td>{{ consulta.get_status_display }}</td>
                         <td><a href="{% url 'core:ficha_consulta' consulta.pk %}" class="botao secundario">Abrir ficha</a></td>
                     </tr>

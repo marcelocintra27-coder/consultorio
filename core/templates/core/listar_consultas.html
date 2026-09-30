@@ -28,6 +28,7 @@
             <tr>
                 <th>Paciente</th>
                 <th>Dentista</th>
+                <th>Sala</th>
                 <th>Data</th>
                 <th>Hora início</th>
                 <th>Hora fim</th>
@@ -46,6 +47,7 @@
                     {% if consulta.eh_legado %}<span class="pill-legado">legado</span>{% endif %}
                 </td>
                 <td>{% if consulta.dentista %}{{ consulta.dentista.nome_completo }}{% else %}—{% endif %}</td>
+                <td>{% if consulta.sala_agenda %}{{ consulta.sala_agenda }}{% else %}—{% endif %}</td>
                 <td>{{ consulta.data|date:"d/m/Y" }}</td>
                 <td>{{ consulta.hora_inicio|time:"H:i" }}</td>
                 <td>{{ consulta.hora_fim|time:"H:i" }}</td>
@@ -72,7 +74,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="{% if pode_visualizar_valores %}10{% else %}7{% endif %}">Nenhuma consulta encontrada.</td>
+                <td colspan="{% if pode_visualizar_valores %}11{% else %}8{% endif %}">Nenhuma consulta encontrada.</td>
             </tr>
             {% endfor %}
         </table>

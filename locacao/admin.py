@@ -8,6 +8,7 @@ from .models import (
     PagamentoPar,
     PerfilUsuario,
     Sala,
+    TurnoLocacao,
 )
 
 
@@ -27,11 +28,27 @@ class DisponibilidadeAdmin(admin.ModelAdmin):
 
 @admin.register(Dentista)
 class DentistaAdmin(admin.ModelAdmin):
-    list_display = ('nome_completo', 'sala', 'valor_hora', 'ativo')
-    list_filter = ('ativo',)
+    list_display = ('nome_completo', 'tipo', 'sala', 'valor_hora', 'ativo')
+    list_filter = ('ativo', 'tipo')
     search_fields = ('nome_completo',)
     autocomplete_fields = ('sala',)
     readonly_fields = ('cadastrado_em',)
+
+
+@admin.register(TurnoLocacao)
+class TurnoLocacaoAdmin(admin.ModelAdmin):
+    list_display = (
+        'dentista',
+        'sala',
+        'dia_semana',
+        'hora_inicio',
+        'hora_fim',
+        'ativo',
+    )
+    list_filter = ('ativo', 'dia_semana', 'sala')
+    search_fields = ('dentista__nome_completo', 'sala__nome', 'observacao')
+    autocomplete_fields = ('dentista', 'sala', 'criado_por')
+    readonly_fields = ('criado_em',)
 
 
 @admin.register(PerfilUsuario)

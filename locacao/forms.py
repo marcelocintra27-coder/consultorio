@@ -3,12 +3,12 @@ from datetime import date
 from django import forms
 from django.utils import timezone
 
-from .models import Dentista, Despesa, DividaAvulsa, Sala
+from .models import Dentista, Despesa, DividaAvulsa, Sala, TurnoLocacao
 from core.models import ContaPagar
 
 
 def _queryset_dentistas(*ids_extras):
-    dentistas = Dentista.objects.filter(ativo=True)
+    dentistas = Dentista.objects.titulares_ativas()
     extras = [pk for pk in ids_extras if pk]
     if extras:
         dentistas = Dentista.objects.filter(pk__in=extras) | dentistas
@@ -20,6 +20,7 @@ class DentistaForm(forms.ModelForm):
         model = Dentista
         fields = [
             'nome_completo',
+            'tipo',
             'sala',
             'valor_hora',
         ]
@@ -34,9 +35,63 @@ class DentistaForm(forms.ModelForm):
             ocupadas = Dentista.objects.exclude(
                 pk=self.instance.pk,
             ).values_list('sala_id', flat=True)
+        ocupadas = [pk for pk in ocupadas if pk]
+        self.fields['sala'].required = False
         self.fields['sala'].queryset = Sala.objects.filter(
             ativa=True,
         ).exclude(pk__in=ocupadas)
+
+    def clean(self):
+        dados = super().clean()
+        tipo = dados.get('tipo')
+        if tipo == Dentista.Tipo.LOCATARIA:
+            dados['sala'] = None
+            self._errors.pop('sala', None)
+        elif tipo == Dentista.Tipo.TITULAR and not dados.get('sala'):
+            self.add_error('sala', 'A dentista titular precisa de uma sala própria.')
+        if (
+            tipo == Dentista.Tipo.TITULAR
+            and self.instance.pk
+            and self.instance.turnos.filter(ativo=True).exists()
+        ):
+            self.add_error(
+                'tipo',
+                'Desative os turnos antes de marcar a dentista como titular.',
+            )
+        return dados
+
+
+class TurnoLocacaoForm(forms.ModelForm):
+    hora_inicio = forms.TimeField(
+        label='hora início',
+        widget=forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
+        input_formats=['%H:%M', '%H:%M:%S'],
+    )
+    hora_fim = forms.TimeField(
+        label='hora fim',
+        widget=forms.TimeInput(attrs={'type': 'time'}, format='%H:%M'),
+        input_formats=['%H:%M', '%H:%M:%S'],
+    )
+
+    class Meta:
+        model = TurnoLocacao
+        fields = [
+            'sala',
+            'dia_semana',
+            'hora_inicio',
+            'hora_fim',
+            'observacao',
+        ]
+        widgets = {
+            'observacao': forms.TextInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        salas = Sala.objects.filter(ativa=True)
+        if self.instance.pk and self.instance.sala_id:
+            salas = salas | Sala.objects.filter(pk=self.instance.sala_id)
+        self.fields['sala'].queryset = salas.distinct().order_by('nome')
 
 
 class DespesaForm(forms.ModelForm):

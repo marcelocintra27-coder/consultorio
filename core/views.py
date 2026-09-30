@@ -22,7 +22,7 @@ from .digitalizacao_uploads import UploadDigitalizacao
 
 from locacao.models import Dentista, Despesa, PerfilUsuario, Sala
 
-from .agenda import validar_horario_consulta
+from .agenda import com_sala_de_agenda, validar_horario_consulta
 from .assinatura import gravar_assinatura_manuscrita
 from .caixa import registrar_movimento_automatico
 from .conciliacao import sugerir_origens, valor_origem
@@ -181,12 +181,12 @@ def inicio(request):
         })
     if perfil and perfil.papel == perfil.Papel.SECRETARIA:
         hoje = timezone.localdate()
-        consultas_hoje = consultas_visiveis_para_usuario(
+        consultas_hoje = com_sala_de_agenda(consultas_visiveis_para_usuario(
             request.user,
             Consulta.objects.filter(data=hoje)
             .select_related('paciente', 'dentista')
             .order_by('hora_inicio'),
-        )
+        ))
         return render(request, 'core/inicio.html', {
             'dashboard_secretaria': True,
             'hoje': hoje,
@@ -208,12 +208,12 @@ def inicio(request):
         and perfil.dentista_id
     ):
         hoje = timezone.localdate()
-        consultas_hoje = consultas_visiveis_para_usuario(
+        consultas_hoje = com_sala_de_agenda(consultas_visiveis_para_usuario(
             request.user,
             Consulta.objects.filter(data=hoje)
             .select_related('paciente', 'dentista')
             .order_by('hora_inicio'),
-        )
+        ))
         anamneses_pendentes = FichaCadastroAnamnese.objects.filter(
             dentista_id=perfil.dentista_id,
             paciente__consultas__dentista_id=perfil.dentista_id,
@@ -646,12 +646,12 @@ def listar_consultas(request):
             data = hoje
     else:
         data = hoje
-    consultas = consultas_visiveis_para_usuario(
+    consultas = com_sala_de_agenda(consultas_visiveis_para_usuario(
         request.user,
         Consulta.objects.filter(data=data)
         .select_related('paciente__convenio', 'dentista')
         .order_by('hora_inicio'),
-    )
+    ))
     status_validos = {valor for valor, _ in Consulta.Status.choices}
     if status_selecionado in status_validos:
         consultas = consultas.filter(status=status_selecionado)
@@ -1935,11 +1935,11 @@ def _usa_lancamento_uniodonto(consulta):
 
 def ficha_consulta(request, pk):
     consulta = get_object_or_404(
-        Consulta.objects.select_related(
+        com_sala_de_agenda(Consulta.objects.select_related(
             'paciente__convenio',
             'dentista',
             'dentista_complementado_por',
-        ).prefetch_related('lancamentos__convenio', 'lancamentos__cadastrado_por'),
+        ).prefetch_related('lancamentos__convenio', 'lancamentos__cadastrado_por')),
         pk=pk,
     )
     if not usuario_pode_acessar_consulta(request.user, consulta):

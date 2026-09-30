@@ -430,6 +430,20 @@ Legenda:
     configurados; `check --deploy`, migrations, `collectstatic`, testes e teste
     de upload/assinatura concluídos; aprovação explícita antes de deploy.
 
+## Dentista locatária de turnos
+
+- [x] Locatária sem sala própria, com turnos, fora do acerto mensal.
+  - Critérios: tipo titular por padrão; locatária sem sala e com turnos sem
+    sobreposição na mesma sala e dia; agenda só dentro do turno e sem choque
+    com a titular; acerto idêntico depois de cadastrar a locatária; telas de
+    turnos só do administrador; suíte completa sem falha nova.
+  - Validação: suíte completa com 416 testes; só as 3 falhas já conhecidas
+    (`test_seeds_legitimos_nao_recusam`,
+    `test_configuracao_ativa_usa_somente_homolog_local`,
+    `test_recusa_banco_que_nao_e_consultorio_homolog`). Migração
+    `locacao.0010_dentista_locataria_turnos`. `check` e
+    `makemigrations --check --dry-run` sem pendência.
+
 ## Regras de execução contínua
 
 - [x] Sem commit, push ou deploy sem autorização explícita.

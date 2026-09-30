@@ -20,6 +20,7 @@
             <div><dt>Paciente</dt><dd>{{ consulta.paciente.nome_completo }}</dd></div>
             <div><dt>Data e horário</dt><dd>{{ consulta.data|date:"d/m/Y" }} · {{ consulta.hora_inicio|time:"H:i" }}–{{ consulta.hora_fim|time:"H:i" }}</dd></div>
             <div><dt>Dentista</dt><dd>{% if consulta.dentista %}{{ consulta.dentista.nome_completo }}{% else %}Não informado{% endif %}</dd></div>
+            <div><dt>Sala</dt><dd>{% if consulta.sala_agenda %}{{ consulta.sala_agenda }}{% else %}—{% endif %}</dd></div>
             <div><dt>Situação</dt><dd>{{ consulta.get_status_display }}</dd></div>
         </dl>
     </section>

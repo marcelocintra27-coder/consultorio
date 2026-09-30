@@ -287,6 +287,31 @@ class Consulta(models.Model):
         return f'{self.paciente.nome_completo} - {self.data} {self.hora_inicio}'
 
     @property
+    def sala_agenda(self):
+        """Sala exibida na agenda.
+
+        A titular usa a sala própria. A locatária usa a sala do turno ativo
+        que cobre o dia e o horário da consulta.
+        """
+        if not self.dentista_id:
+            return None
+        dentista = self.dentista
+        from locacao.models import Dentista
+
+        if dentista.tipo != Dentista.Tipo.LOCATARIA:
+            return dentista.sala
+        dia = self.data.weekday()
+        for turno in dentista.turnos.all():
+            if (
+                turno.ativo
+                and turno.dia_semana == dia
+                and turno.hora_inicio <= self.hora_inicio
+                and turno.hora_fim >= self.hora_fim
+            ):
+                return turno.sala
+        return None
+
+    @property
     def duracao_minutos(self):
         inicio = datetime.combine(self.data, self.hora_inicio)
         fim = datetime.combine(self.data, self.hora_fim)
