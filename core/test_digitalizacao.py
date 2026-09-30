@@ -767,6 +767,38 @@ class ExameSemAntivirusDigitalizacaoTests(TestCase):
 class WorkerMemoriaTests(SimpleTestCase):
     """O re-encode real precisa caber no teto de 512 MB do worker."""
 
+    def test_png_cinza_16_bits_nao_satura_em_branco(self):
+        import json
+        import subprocess
+        import sys
+        worker = Path(__file__).resolve().parent / 'digitalizacao_worker.py'
+        with tempfile.TemporaryDirectory() as pasta:
+            raiz = Path(pasta)
+            origem = raiz / 'cinza16.png'
+            destino = raiz / 'saida.png'
+            foto = Image.new('I;16', (3, 1))
+            foto.putdata([1000, 30000, 60000])
+            foto.save(origem, format='PNG')
+            foto.close()
+            with Image.open(origem) as aberta:
+                self.assertTrue(aberta.mode.startswith('I'), aberta.mode)
+                self.assertEqual(list(aberta.getdata()), [1000, 30000, 60000])
+            resultado = subprocess.run(
+                [sys.executable, '-B', str(worker), str(origem), '.png',
+                 '40000000', str(destino)],
+                capture_output=True, timeout=30)
+            self.assertEqual(resultado.returncode, 0, resultado.stderr[-800:])
+            self.assertEqual(json.loads(resultado.stdout)['tipo'], 'image/png')
+            with Image.open(destino) as aberta:
+                aberta.load()
+                pixels = list(aberta.getdata())
+            self.assertEqual(len(pixels), 3)
+            for pixel, esperado in zip(pixels, (3, 117, 234)):
+                canais = pixel[:3] if isinstance(pixel, tuple) else (pixel,)
+                for canal in canais:
+                    self.assertAlmostEqual(canal, esperado, delta=1)
+                    self.assertNotEqual(canal, 255)
+
     def test_worker_aceita_39_megapixels_sem_exif(self):
         import json
         import subprocess

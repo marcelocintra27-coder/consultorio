@@ -22,6 +22,11 @@ def _reencodar(imagem, extensao, destino):
         raise ValueError('Destino do re-encode ausente.')
     # in_place: gira sem criar uma segunda cópia da imagem na memória.
     ImageOps.exif_transpose(imagem, in_place=True)
+    if imagem.mode.startswith('I'):
+        # PNG de 16 bits (tons 0-65535): reduz para 8 bits sem saturar em branco.
+        reduzida = imagem.point(lambda v: v * (1 / 256)).convert('L')
+        imagem.im = None
+        imagem = reduzida
     if extensao in ('.jpg', '.jpeg'):
         modo = 'RGB'
     else:
