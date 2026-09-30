@@ -121,6 +121,8 @@ def validar_imagem(arquivo, nome):
         conteudo = reencodado.read_bytes()
         if not conteudo:
             raise ValidationError('Imagem inválida, animada ou acima dos limites.')
+        if len(conteudo) > MAX_BYTES:
+            raise ValidationError('A imagem deve ter até 20 MiB.')
         return conteudo, dados['tipo']
     except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
         raise ValidationError('Não foi possível validar a imagem com segurança.') from exc

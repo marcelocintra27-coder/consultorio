@@ -15,31 +15,25 @@ def _tem_transparencia(imagem):
     return 'transparency' in imagem.info
 
 
-def _pixels_sem_metadados(imagem, modo):
-    from PIL import Image
-    convertida = imagem.convert(modo)
-    return Image.frombytes(modo, convertida.size, convertida.tobytes())
-
-
 def _reencodar(imagem, extensao, destino):
     """Regrava JPEG ou PNG sem EXIF, perfil de cor, comentário ou texto."""
     from PIL import ImageOps
     if not destino:
         raise ValueError('Destino do re-encode ausente.')
-    transposta = ImageOps.exif_transpose(imagem)
-    if transposta is None:
-        transposta = imagem
-    try:
-        if extensao in ('.jpg', '.jpeg'):
-            limpa = _pixels_sem_metadados(transposta, 'RGB')
-            limpa.save(destino, format='JPEG', quality=90)
-        else:
-            modo = 'RGBA' if _tem_transparencia(transposta) else 'RGB'
-            limpa = _pixels_sem_metadados(transposta, modo)
-            limpa.save(destino, format='PNG')
-    finally:
-        if transposta is not imagem:
-            transposta.close()
+    # in_place: gira sem criar uma segunda cópia da imagem na memória.
+    ImageOps.exif_transpose(imagem, in_place=True)
+    if extensao in ('.jpg', '.jpeg'):
+        modo = 'RGB'
+    else:
+        modo = 'RGBA' if _tem_transparencia(imagem) else 'RGB'
+    limpa = imagem if imagem.mode == modo else imagem.convert(modo)
+    if limpa is not imagem:
+        imagem.im = None  # libera os pixels originais antes de gravar
+    limpa.info = {}
+    if extensao in ('.jpg', '.jpeg'):
+        limpa.save(destino, format='JPEG', quality=90, exif=b'', icc_profile=None)
+    else:
+        limpa.save(destino, format='PNG', exif=b'', icc_profile=None)
 
 
 def validar(caminho, extensao, pixels, destino=None):

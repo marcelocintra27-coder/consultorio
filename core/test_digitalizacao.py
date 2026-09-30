@@ -13,7 +13,7 @@ from PIL.TiffImagePlugin import IFDRational
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, Client, override_settings
+from django.test import TestCase, SimpleTestCase, Client, override_settings
 from core.models import Paciente, Consulta, DigitalizacaoFicha
 from locacao.models import Dentista, PerfilUsuario, Sala
 
@@ -484,6 +484,20 @@ class DigitalizacaoTests(TestCase):
         self.assertEqual(registro.texto_bruto_ia['nome_paciente']['valor'], 'Fictício')
         self.assertEqual(self.arquivos(), antes)
 
+    def test_reencode_acima_de_20_mib_recusado(self):
+        from .digitalizacao_uploads import MAX_BYTES, validar_imagem
+
+        def gravar(comando, **kwargs):
+            Path(comando[-1]).write_bytes(b'0' * (MAX_BYTES + 1))
+            return MagicMock(returncode=0, stdout=b'{"tipo":"image/jpeg"}')
+
+        with patch('core.digitalizacao_uploads.subprocess.run', side_effect=gravar):
+            with self.assertRaises(ValidationError) as ctx:
+                validar_imagem(imagem('ficha.jpg', 'JPEG'), 'ficha.jpg')
+        self.assertEqual(ctx.exception.messages, ['A imagem deve ter até 20 MiB.'])
+        self.assertEqual(self.temporarios(), [])
+        self.assertFalse(DigitalizacaoFicha.objects.exists())
+
     def test_antivirus_ligado_somente_com_valor_1(self):
         from .digitalizacao_uploads import antivirus_ligado
         with clamav(None):
@@ -748,3 +762,73 @@ class ExameSemAntivirusDigitalizacaoTests(TestCase):
         self.assertEqual(
             list(exame.eventos.order_by('id').values_list('acao', flat=True)),
             ['incluido', 'quarentena'])
+
+
+class WorkerMemoriaTests(SimpleTestCase):
+    """O re-encode real precisa caber no teto de 512 MB do worker."""
+
+    def test_worker_aceita_39_megapixels_sem_exif(self):
+        import json
+        import subprocess
+        import sys
+        largura, altura = 7200, 5400
+        self.assertGreater(largura * altura, 38_000_000)
+        self.assertLess(largura * altura, 40_000_000)
+        worker = Path(__file__).resolve().parent / 'digitalizacao_worker.py'
+        with tempfile.TemporaryDirectory() as pasta:
+            raiz = Path(pasta)
+            for extensao, formato, tipo in (
+                    ('.jpg', 'JPEG', 'image/jpeg'),
+                    ('.png', 'PNG', 'image/png')):
+                with self.subTest(formato=formato):
+                    origem = raiz / f'grande{extensao}'
+                    destino = raiz / f'saida{extensao}'
+                    self._gravar_grande(origem, formato, (largura, altura))
+                    with Image.open(origem) as origem_img:
+                        self.assertTrue(origem_img.getexif().get_ifd(IFD.GPSInfo))
+                    resultado = subprocess.run(
+                        [sys.executable, '-B', str(worker), str(origem), extensao,
+                         '40000000', str(destino)],
+                        capture_output=True, timeout=90)
+                    self.assertEqual(resultado.returncode, 0, resultado.stderr[-800:])
+                    self.assertEqual(json.loads(resultado.stdout)['tipo'], tipo)
+                    salvo = destino.read_bytes()
+                    self.assertFalse(b'Exif\x00\x00' in salvo, 'EXIF permaneceu na saída')
+                    if formato == 'PNG':
+                        self.assertFalse(b'eXIf' in salvo, 'chunk eXIf permaneceu na saída')
+                    self.assertFalse(b'perfil-icc-secreto' in salvo, 'perfil de cor permaneceu')
+                    self.assertFalse(b'comentario-secreto' in salvo, 'comentário permaneceu')
+                    self.assertFalse(b'segredo-texto-ficha' in salvo, 'texto PNG permaneceu')
+                    with Image.open(destino) as aberta:
+                        aberta.load()
+                        self.assertEqual(aberta.size, (largura, altura))
+                        self.assertEqual(len(aberta.getexif()), 0)
+                        self.assertFalse(aberta.getexif().get_ifd(IFD.GPSInfo))
+                    origem.unlink()
+                    destino.unlink()
+
+    def _gravar_grande(self, caminho, formato, tamanho):
+        base = Image.linear_gradient('L').resize(tamanho)
+        foto = Image.merge('RGB', (base, base, base))
+        base.close()
+        try:
+            exif = foto.getexif()
+            exif[Base.Orientation] = 1
+            gps = exif.get_ifd(IFD.GPSInfo)
+            gps[GPS.GPSLatitudeRef] = 'S'
+            gps[GPS.GPSLatitude] = (
+                IFDRational(23, 1), IFDRational(33, 1), IFDRational(0, 1))
+            gps[GPS.GPSLongitudeRef] = 'W'
+            gps[GPS.GPSLongitude] = (
+                IFDRational(46, 1), IFDRational(38, 1), IFDRational(0, 1))
+            bruto = exif.tobytes()
+            if formato == 'JPEG':
+                foto.save(caminho, format='JPEG', quality=50, exif=bruto,
+                          icc_profile=b'perfil-icc-secreto', comment=b'comentario-secreto')
+            else:
+                meta = PngInfo()
+                meta.add_text('Comment', 'segredo-texto-ficha')
+                foto.save(caminho, format='PNG', pnginfo=meta, exif=bruto,
+                          icc_profile=b'perfil-icc-png')
+        finally:
+            foto.close()
