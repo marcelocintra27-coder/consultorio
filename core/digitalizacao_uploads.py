@@ -18,6 +18,12 @@ MAX_PIXELS = 40_000_000
 VALIDATION_TIMEOUT = 15
 TIPOS = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
          '.gif': 'image/gif', '.webp': 'image/webp'}
+REENCODE = {'.jpg', '.jpeg', '.png'}
+
+
+def antivirus_ligado():
+    """Ligado somente quando CLAMAV_ATIVO é exatamente 1, como no iniciar.sh."""
+    return os.environ.get('CLAMAV_ATIVO') == '1'
 
 
 class UploadDigitalizacao(FileUploadHandler):
@@ -61,11 +67,12 @@ class UploadDigitalizacao(FileUploadHandler):
 
 
 def validar_imagem(arquivo, nome):
-    """Valida uma cópia limitada e retorna exatamente os bytes inspecionados."""
+    """Valida uma cópia limitada. JPEG e PNG voltam regravados, sem metadados."""
     extensao = Path(nome).suffix.lower()
     if extensao not in TIPOS:
         raise ValidationError('Envie uma imagem JPEG, PNG, GIF ou WebP estática.')
     temporario = None
+    reencodado = None
     try:
         with tempfile.NamedTemporaryFile(
                 mode='w+b', prefix='validacao-digitalizacao-',
@@ -81,21 +88,43 @@ def validar_imagem(arquivo, nome):
             if not total:
                 raise ValidationError('A imagem está vazia.')
             copia.flush()
+        if extensao in REENCODE:
+            destino = tempfile.NamedTemporaryFile(
+                mode='w+b', prefix='reencode-digitalizacao-',
+                dir=settings.FILE_UPLOAD_TEMP_DIR, delete=False)
+            reencodado = Path(destino.name)
+            destino.close()
+        comando = [sys.executable, '-B',
+                   str(Path(__file__).with_name('digitalizacao_worker.py')),
+                   str(temporario), extensao, str(MAX_PIXELS)]
+        if reencodado is not None:
+            comando.append(str(reencodado))
         resultado = subprocess.run(
-            [sys.executable, '-B', str(Path(__file__).with_name('digitalizacao_worker.py')),
-             str(temporario), extensao, str(MAX_PIXELS)],
-            capture_output=True, timeout=VALIDATION_TIMEOUT,
+            comando, capture_output=True, timeout=VALIDATION_TIMEOUT,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         dados = json.loads(resultado.stdout)
         if resultado.returncode or dados.get('tipo') != TIPOS[extensao]:
             raise ValidationError('Imagem inválida, animada ou acima dos limites.')
-        with temporario.open('rb') as copia:
-            if antivirus.inspecionar(copia) != 'liberado':
-                raise ValidationError('Imagem não liberada pela inspeção de segurança.')
-            copia.seek(0)
-            return copia.read(), dados['tipo']
+        if reencodado is None:
+            if not antivirus_ligado():
+                raise ValidationError(
+                    'Com o antivírus desligado, envie a foto da ficha em JPG ou PNG.')
+            with temporario.open('rb') as copia:
+                if antivirus.inspecionar(copia) != 'liberado':
+                    raise ValidationError('Imagem não liberada pela inspeção de segurança.')
+                copia.seek(0)
+                return copia.read(), dados['tipo']
+        if antivirus_ligado():
+            with temporario.open('rb') as copia:
+                if antivirus.inspecionar(copia) != 'liberado':
+                    raise ValidationError('Imagem não liberada pela inspeção de segurança.')
+        conteudo = reencodado.read_bytes()
+        if not conteudo:
+            raise ValidationError('Imagem inválida, animada ou acima dos limites.')
+        return conteudo, dados['tipo']
     except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
         raise ValidationError('Não foi possível validar a imagem com segurança.') from exc
     finally:
-        if temporario is not None:
-            temporario.unlink(missing_ok=True)
+        for caminho in (temporario, reencodado):
+            if caminho is not None:
+                caminho.unlink(missing_ok=True)

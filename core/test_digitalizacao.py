@@ -1,11 +1,17 @@
 """Regressões de digitalização: banco de testes e mídia descartável."""
+from contextlib import contextmanager
 from datetime import date, time
 from io import BytesIO
 from pathlib import Path
+import os
 import tempfile
 from unittest.mock import patch, MagicMock
 from PIL import Image
+from PIL.ExifTags import Base, GPS, IFD
+from PIL.PngImagePlugin import PngInfo
+from PIL.TiffImagePlugin import IFDRational
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client, override_settings
 from core.models import Paciente, Consulta, DigitalizacaoFicha
@@ -16,6 +22,62 @@ def imagem(nome='ficha.png', formato='PNG', tamanho=(20, 20)):
     saida = BytesIO()
     Image.new('RGB', tamanho, 'white').save(saida, format=formato)
     return SimpleUploadedFile(nome, saida.getvalue(), 'image/png')
+
+
+@contextmanager
+def clamav(valor):
+    with patch.dict(os.environ) as ambiente:
+        if valor is None:
+            ambiente.pop('CLAMAV_ATIVO', None)
+        else:
+            ambiente['CLAMAV_ATIVO'] = valor
+        yield
+
+
+def jpeg_com_exif():
+    """JPEG deitado, com GPS, comentário e perfil de cor."""
+    foto = Image.new('RGB', (48, 16), (255, 0, 0))
+    for x in range(24, 48):
+        for y in range(16):
+            foto.putpixel((x, y), (0, 0, 255))
+    exif = foto.getexif()
+    exif[Base.Orientation] = 6
+    gps = exif.get_ifd(IFD.GPSInfo)
+    gps[GPS.GPSLatitudeRef] = 'S'
+    gps[GPS.GPSLatitude] = (IFDRational(23, 1), IFDRational(33, 1), IFDRational(45, 100))
+    gps[GPS.GPSLongitudeRef] = 'W'
+    gps[GPS.GPSLongitude] = (IFDRational(46, 1), IFDRational(38, 1), IFDRational(12, 100))
+    saida = BytesIO()
+    foto.save(saida, format='JPEG', quality=95, exif=exif.tobytes(),
+              icc_profile=b'perfil-icc-secreto', comment=b'comentario-secreto')
+    dados = saida.getvalue()
+    return SimpleUploadedFile('ficha.jpg', dados, 'image/jpeg'), dados
+
+
+def png_com_texto(modo='RGBA'):
+    if modo == 'RGBA':
+        foto = Image.new('RGBA', (6, 4), (0, 0, 0, 0))
+        foto.putpixel((1, 2), (9, 8, 7, 64))
+    elif modo == 'LA':
+        foto = Image.new('LA', (8, 5), (10, 255))
+        foto.putpixel((2, 3), (10, 0))
+    elif modo == 'L':
+        foto = Image.new('L', (8, 5), 40)
+        foto.putpixel((1, 1), 200)
+    elif modo == 'P':
+        foto = Image.new('P', (5, 5), 1)
+        foto.putpalette([255, 0, 0, 0, 255, 0] + [0] * (256 * 3 - 6))
+        foto.putpixel((0, 0), 0)
+        foto.info['transparency'] = 0
+    else:
+        foto = Image.new(modo, (6, 4), 'white')
+    meta = PngInfo()
+    meta.add_text('Comment', 'segredo-texto-ficha')
+    meta.add_itxt('Description', 'segredo-itxt-ficha', zip=False)
+    saida = BytesIO()
+    foto.save(saida, format='PNG', pnginfo=meta, icc_profile=b'perfil-icc-png')
+    dados = saida.getvalue()
+    return SimpleUploadedFile('ficha.png', dados, 'image/png'), dados, foto
 
 
 @override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
@@ -31,6 +93,9 @@ class DigitalizacaoTests(TestCase):
         scanner = patch('exames.antivirus.inspecionar', return_value='liberado')
         self.scan = scanner.start()
         self.addCleanup(scanner.stop)
+        ambiente = patch.dict(os.environ, {'CLAMAV_ATIVO': '1'})
+        ambiente.start()
+        self.addCleanup(ambiente.stop)
         self.paciente = Paciente.objects.create(nome_completo='Paciente vinculado fictício',
             cpf=None, data_nascimento=date(1990, 1, 1), telefone='123')
         self.outro = Paciente.objects.create(nome_completo='Paciente alheio fictício',
@@ -69,6 +134,10 @@ class DigitalizacaoTests(TestCase):
 
     def arquivos(self):
         return {p for p in self.raiz.rglob('*') if p.is_file()}
+
+    def temporarios(self):
+        prefixos = ('validacao-digitalizacao-', 'reencode-digitalizacao-', 'digitalizacao-')
+        return [p for p in self.arquivos() if p.name.startswith(prefixos)]
 
     def test_formulario_exclui_paciente_sem_vinculo(self):
         resposta = self.client.get('/digitalizacao/nova/')
@@ -252,7 +321,10 @@ class DigitalizacaoTests(TestCase):
         limite = original + b'0' * (MAX_BYTES - len(original))
         self.assertEqual(self.enviar(SimpleUploadedFile('limite.png', limite)).status_code, 302)
         registro = DigitalizacaoFicha.objects.get()
-        self.assertEqual(registro.imagem.size, MAX_BYTES)
+        self.assertLess(registro.imagem.size, MAX_BYTES)
+        with Image.open(registro.imagem.path) as aberta:
+            aberta.load()
+            self.assertEqual((aberta.format, aberta.size), ('PNG', (20, 20)))
         antes = self.arquivos()
         self.scan.reset_mock()
         self.assertEqual(self.enviar(SimpleUploadedFile('excesso.png', limite + b'0')).status_code, 200)
@@ -403,7 +475,276 @@ class DigitalizacaoTests(TestCase):
             self.scan.assert_called_once()
             origem = cliente.return_value.messages.create.call_args.kwargs['messages'][0]['content'][0]['source']
             self.assertEqual(origem['media_type'], 'image/jpeg')
-            self.assertEqual(base64.b64decode(origem['data']), original)
+            recebido = base64.b64decode(origem['data'])
+            self.assertNotEqual(recebido, original)
+            with Image.open(BytesIO(recebido)) as aberta:
+                aberta.load()
+                self.assertEqual((aberta.format, aberta.size), ('JPEG', (20, 20)))
         registro.refresh_from_db()
         self.assertEqual(registro.texto_bruto_ia['nome_paciente']['valor'], 'Fictício')
         self.assertEqual(self.arquivos(), antes)
+
+    def test_antivirus_ligado_somente_com_valor_1(self):
+        from .digitalizacao_uploads import antivirus_ligado
+        with clamav(None):
+            self.assertFalse(antivirus_ligado())
+        for valor in ('0', '', 'true', 'True', 'yes'):
+            with clamav(valor):
+                self.assertFalse(antivirus_ligado(), valor)
+        with clamav('1'):
+            self.assertTrue(antivirus_ligado())
+
+    def test_jpg_png_sem_antivirus_nao_chamam_inspecionar(self):
+        from .digitalizacao_uploads import validar_imagem
+        for valor in (None, '0', '', 'true'):
+            for nome, formato, media in (
+                    ('ficha.jpg', 'JPEG', 'image/jpeg'),
+                    ('ficha.jpeg', 'JPEG', 'image/jpeg'),
+                    ('ficha.png', 'PNG', 'image/png')):
+                with self.subTest(valor=valor, nome=nome):
+                    self.scan.reset_mock()
+                    if formato == 'JPEG':
+                        arquivo = imagem(nome, 'JPEG')
+                        original = arquivo.read()
+                        arquivo.seek(0)
+                    else:
+                        arquivo, original, _foto = png_com_texto()
+                        arquivo.name = nome
+                    with clamav(valor):
+                        dados, tipo = validar_imagem(arquivo, nome)
+                    self.scan.assert_not_called()
+                    self.assertEqual(tipo, media)
+                    self.assertNotEqual(dados, original)
+                    with Image.open(BytesIO(dados)) as aberta:
+                        aberta.load()
+                        self.assertEqual(aberta.format, 'JPEG' if formato == 'JPEG' else 'PNG')
+                    self.assertEqual(self.temporarios(), [])
+
+    def test_antivirus_ligado_inspeciona_original_e_recusa_sem_liberacao(self):
+        from .digitalizacao_uploads import validar_imagem
+        arquivo, original = jpeg_com_exif()
+        capturado = {}
+
+        def inspecionar(enviado):
+            enviado.seek(0)
+            capturado['dados'] = enviado.read()
+            return 'liberado'
+
+        self.scan.side_effect = inspecionar
+        with clamav('1'):
+            dados, tipo = validar_imagem(arquivo, 'ficha.jpg')
+        self.assertEqual(capturado['dados'], original)
+        self.assertEqual(tipo, 'image/jpeg')
+        self.assertNotEqual(dados, original)
+        with Image.open(BytesIO(dados)) as aberta:
+            aberta.load()
+        self.assertEqual(self.temporarios(), [])
+        for estado in ('rejeitado', 'quarentena'):
+            with self.subTest(estado=estado):
+                self.scan.side_effect = None
+                self.scan.return_value = estado
+                recusado, _bruto = jpeg_com_exif()
+                with clamav('1'):
+                    with self.assertRaises(ValidationError) as ctx:
+                        validar_imagem(recusado, 'ficha.jpg')
+                self.assertIn('Imagem não liberada pela inspeção de segurança.',
+                              ctx.exception.messages)
+                self.assertEqual(self.temporarios(), [])
+
+    def test_jpeg_salvo_sem_exif_gps_e_com_orientacao_aplicada(self):
+        arquivo, original = jpeg_com_exif()
+        with clamav(None):
+            self.scan.reset_mock()
+            self.assertEqual(self.enviar(arquivo).status_code, 302)
+        self.scan.assert_not_called()
+        registro = DigitalizacaoFicha.objects.get()
+        salvo = Path(registro.imagem.path).read_bytes()
+        self.assertNotEqual(salvo, original)
+        self.assertNotIn(b'Exif\x00\x00', salvo)
+        self.assertNotIn(b'comentario-secreto', salvo)
+        self.assertNotIn(b'perfil-icc-secreto', salvo)
+        with Image.open(BytesIO(salvo)) as aberta:
+            aberta.load()
+            self.assertEqual(aberta.format, 'JPEG')
+            self.assertEqual(aberta.size, (16, 48))
+            self.assertEqual(len(aberta.getexif()), 0)
+            self.assertEqual(aberta.getexif().get_ifd(IFD.GPSInfo), {})
+            self.assertNotIn('icc_profile', aberta.info)
+            self.assertNotIn('comment', aberta.info)
+            canto = aberta.getpixel((0, 0))
+            self.assertGreater(canto[0], 200)
+            self.assertLess(canto[2], 40)
+        self.assertEqual(self.temporarios(), [])
+
+    def test_png_salvo_sem_texto_e_transparencia_preservada(self):
+        from .digitalizacao_uploads import validar_imagem
+        arquivo, original, _foto = png_com_texto('RGBA')
+        self.assertIn(b'segredo-texto-ficha', original)
+        self.assertIn(b'segredo-itxt-ficha', original)
+        with clamav('0'):
+            self.scan.reset_mock()
+            dados, tipo = validar_imagem(arquivo, 'ficha.png')
+        self.scan.assert_not_called()
+        self.assertEqual(tipo, 'image/png')
+        self.assertNotEqual(dados, original)
+        self.assertNotIn(b'segredo-texto-ficha', dados)
+        self.assertNotIn(b'segredo-itxt-ficha', dados)
+        with Image.open(BytesIO(dados)) as aberta:
+            aberta.load()
+            self.assertEqual(aberta.format, 'PNG')
+            self.assertEqual(aberta.mode, 'RGBA')
+            self.assertEqual(aberta.getpixel((1, 2)), (9, 8, 7, 64))
+            self.assertFalse(aberta.text)
+            self.assertNotIn('icc_profile', aberta.info)
+        self.assertEqual(self.temporarios(), [])
+
+    def test_png_p_l_la_convertidos_sem_texto(self):
+        from .digitalizacao_uploads import validar_imagem
+        esperados = {
+            'P': 'RGBA',
+            'L': 'RGB',
+            'LA': 'RGBA',
+        }
+        for modo, saida in esperados.items():
+            with self.subTest(modo=modo):
+                arquivo, original, _foto = png_com_texto(modo)
+                with clamav(''):
+                    dados, _tipo = validar_imagem(arquivo, 'ficha.png')
+                self.scan.assert_not_called()
+                self.scan.reset_mock()
+                self.assertNotEqual(dados, original)
+                self.assertNotIn(b'segredo-texto-ficha', dados)
+                self.assertNotIn(b'segredo-itxt-ficha', dados)
+                with Image.open(BytesIO(dados)) as aberta:
+                    aberta.load()
+                    self.assertEqual(aberta.mode, saida)
+                    self.assertFalse(getattr(aberta, 'text', {}))
+                with Image.open(BytesIO(original)) as origem:
+                    convertido = origem.convert(saida)
+                    with Image.open(BytesIO(dados)) as aberta:
+                        self.assertEqual(list(aberta.getdata()), list(convertido.getdata()))
+                self.assertEqual(self.temporarios(), [])
+
+    def test_gif_webp_sem_antivirus_recusados(self):
+        from .digitalizacao_uploads import validar_imagem
+        mensagem = 'Com o antivírus desligado, envie a foto da ficha em JPG ou PNG.'
+        for valor in (None, '0', '', 'true'):
+            for formato, extensao in (('GIF', 'gif'), ('WEBP', 'webp')):
+                with self.subTest(valor=valor, formato=formato):
+                    self.scan.reset_mock()
+                    arquivo = imagem(f'ficha.{extensao}', formato)
+                    with clamav(valor):
+                        with self.assertRaises(ValidationError) as ctx:
+                            validar_imagem(arquivo, arquivo.name)
+                    self.assertIn(mensagem, ctx.exception.messages)
+                    self.scan.assert_not_called()
+                    self.assertEqual(self.temporarios(), [])
+        with clamav(None):
+            resposta = self.enviar(imagem('ficha.gif', 'GIF'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, mensagem)
+        self.assertFalse(DigitalizacaoFicha.objects.exists())
+        self.assertEqual(self.temporarios(), [])
+
+    def test_nao_imagem_renomeada_para_jpg_recusada_sem_temporario(self):
+        from .digitalizacao_uploads import validar_imagem
+        arquivo = SimpleUploadedFile('foto.jpg', b'isto nao e uma imagem')
+        with self.assertRaises(ValidationError) as ctx:
+            validar_imagem(arquivo, 'foto.jpg')
+        self.assertIn('Imagem inválida', ctx.exception.messages[0])
+        self.scan.assert_not_called()
+        self.assertEqual(self.temporarios(), [])
+        resposta = self.enviar(SimpleUploadedFile('foto.jpg', b'isto nao e uma imagem'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(DigitalizacaoFicha.objects.exists())
+        self.assertEqual(self.temporarios(), [])
+        self.assertEqual(self.arquivos(), set())
+
+    def test_secretaria_envia_jpg_sem_antivirus_e_continua_sem_prontuario(self):
+        self.client.force_login(self.secretaria)
+        with clamav('0'):
+            self.scan.reset_mock()
+            self.assertEqual(self.enviar(
+                imagem('ficha.jpg', 'JPEG'), paciente=self.outro.pk).status_code, 302)
+        self.scan.assert_not_called()
+        registro = DigitalizacaoFicha.objects.get()
+        self.assertEqual(registro.digitalizado_por, self.secretaria)
+        pagina = self.client.get('/digitalizacao/nova/')
+        self.assertNotContains(pagina, registro.imagem.name)
+        self.assertNotContains(pagina, '<img')
+        with patch('core.views.processar_digitalizacao_com_ia') as processar:
+            self.assertEqual(self.client.post(self.url_ia(registro)).status_code, 403)
+            processar.assert_not_called()
+        self.assertEqual(self.temporarios(), [])
+
+    def test_ia_funciona_com_antivirus_desligado(self):
+        import base64
+        from .ia_digitalizacao import processar_digitalizacao_com_ia
+        arquivo = imagem('legado.png', 'PNG')
+        registro = self.registro(self.paciente, arquivo)
+        with patch.dict(os.environ, {
+                'ANTHROPIC_API_KEY': 'chave-ficticia-teste', 'CLAMAV_ATIVO': '0'}), patch(
+                'core.ia_digitalizacao.Anthropic') as cliente:
+            cliente.return_value.messages.create.return_value = MagicMock(
+                content=[MagicMock(type='text', text='{"nome_paciente":{"valor":"Fictício"}}')])
+            self.scan.reset_mock()
+            self.assertTrue(processar_digitalizacao_com_ia(registro))
+            self.scan.assert_not_called()
+            cliente.assert_called_once()
+            origem = cliente.return_value.messages.create.call_args.kwargs[
+                'messages'][0]['content'][0]['source']
+            self.assertEqual(origem['media_type'], 'image/png')
+            recebido = base64.b64decode(origem['data'])
+            with Image.open(BytesIO(recebido)) as aberta:
+                aberta.load()
+                self.assertEqual(aberta.format, 'PNG')
+        registro.refresh_from_db()
+        self.assertEqual(registro.texto_bruto_ia['nome_paciente']['valor'], 'Fictício')
+        self.assertEqual(self.temporarios(), [])
+
+
+@override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
+class ExameSemAntivirusDigitalizacaoTests(TestCase):
+    """O envio de exame continua indo para quarentena sem o clamd."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        raiz = Path(self.tmp.name)
+        cfg = override_settings(
+            EXAMES_ROOT=raiz / 'privado', MEDIA_ROOT=raiz / 'media',
+            FILE_UPLOAD_TEMP_DIR=raiz / 'tmp', EXAMES_RESERVA_BYTES=1)
+        cfg.enable()
+        self.addCleanup(cfg.disable)
+        (raiz / 'tmp').mkdir()
+        self.paciente = Paciente.objects.create(
+            nome_completo='Paciente exame fictício', cpf=None,
+            data_nascimento=date(1990, 1, 1), telefone='123')
+        dentista = Dentista.objects.create(
+            nome_completo='Dentista exame fictício',
+            sala=Sala.objects.create(nome='Sala exame fictícia'))
+        self.user = User.objects.create_user('dentista_exame_ficha', password='teste')
+        PerfilUsuario.objects.create(usuario=self.user, papel='dentista', dentista=dentista)
+        Consulta.objects.create(
+            paciente=self.paciente, dentista=dentista, data=date(2026, 9, 21),
+            hora_inicio=time(10), hora_fim=time(11))
+        self.client.force_login(self.user)
+
+    def test_exame_vai_para_quarentena_quando_antivirus_indisponivel(self):
+        from django.urls import reverse
+        from exames.models import Exame
+        from .digitalizacao_uploads import antivirus_ligado
+        url = reverse('core:exames:novo', kwargs={'paciente_pk': self.paciente.pk})
+        with clamav(''), patch(
+                'exames.antivirus.socket.create_connection',
+                side_effect=OSError('clamd ausente')) as conexao:
+            self.assertFalse(antivirus_ligado())
+            resposta = self.client.post(url, {
+                'categoria': 'foto', 'titulo': 'Exame fictício', 'arquivo': imagem()})
+        self.assertEqual(resposta.status_code, 302, resposta.content[:500])
+        self.assertTrue(conexao.called)
+        exame = Exame.objects.get()
+        self.assertEqual(exame.seguranca, 'quarentena')
+        self.assertEqual(
+            list(exame.eventos.order_by('id').values_list('acao', flat=True)),
+            ['incluido', 'quarentena'])
