@@ -4,6 +4,7 @@ from decimal import Decimal
 from itertools import groupby
 
 from django import forms
+from django.utils.html import format_html
 from django.utils import timezone
 from django.forms.formsets import formset_factory
 from django.forms.models import ModelChoiceField, ModelChoiceIterator, inlineformset_factory
@@ -139,6 +140,44 @@ class PacienteForm(forms.ModelForm):
         }
 
 
+class PacienteSelect(forms.Select):
+    """Select de paciente com busca por nome, CPF ou telefone no navegador."""
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(
+            name, value, label, selected, index, subindex=subindex, attrs=attrs,
+        )
+        chave = getattr(value, 'value', value)
+        paciente = getattr(self, 'pacientes_por_id', {}).get(str(chave or ''))
+        if paciente is not None:
+            from .busca_paciente import texto_para_busca
+            option['attrs']['data-busca'] = texto_para_busca(paciente)
+        return option
+
+    def render(self, name, value, attrs=None, renderer=None):
+        attrs = attrs or {}
+        select_html = super().render(name, value, attrs, renderer)
+        select_id = attrs.get('id') or f'id_{name}'
+        busca = format_html(
+            '<input type="search" id="{}" class="busca-paciente" data-filtra="{}" '
+            'placeholder="Buscar por nome, CPF ou telefone" autocomplete="off" '
+            'aria-label="Buscar paciente">',
+            f'{select_id}_busca',
+            select_id,
+        )
+        return format_html(
+            '<div class="busca-paciente-bloco">{}{}</div>', busca, select_html,
+        )
+
+
+def usar_busca_paciente(field):
+    field.widget = PacienteSelect()
+    field.widget.choices = field.choices
+    field.widget.pacientes_por_id = {
+        str(paciente.pk): paciente for paciente in field.queryset
+    }
+
+
 class DigitalizacaoFichaForm(forms.ModelForm):
     paciente = forms.ModelChoiceField(
         label='paciente',
@@ -159,6 +198,7 @@ class DigitalizacaoFichaForm(forms.ModelForm):
             self.fields['paciente'].queryset = pacientes_visiveis_para_usuario(
                 user, Paciente.objects.filter(ativo=True).order_by('nome_completo'))
         self.fields['paciente'].required = True
+        usar_busca_paciente(self.fields['paciente'])
         if not self.initial.get('tipo'):
             self.fields['tipo'].initial = DigitalizacaoFicha.Tipo.CADASTRO
 
@@ -248,6 +288,7 @@ class ConsultaForm(HorarioConsultaMixin, forms.ModelForm):
             user,
             Paciente.objects.filter(ativo=True).order_by('nome_completo'),
         )
+        usar_busca_paciente(self.fields['paciente'])
 
     class Meta:
         model = Consulta
@@ -291,6 +332,7 @@ class ContaReceberForm(forms.ModelForm):
         self.fields['paciente'].queryset = Paciente.objects.filter(ativo=True).order_by(
             'nome_completo'
         )
+        usar_busca_paciente(self.fields['paciente'])
         self.fields['consulta'].queryset = Consulta.objects.select_related(
             'paciente'
         ).order_by('-data', '-hora_inicio')
@@ -829,6 +871,11 @@ class AssinaturaTesteForm(forms.Form):
         queryset=Paciente.objects.filter(ativo=True).order_by('nome_completo'),
         required=False,
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        usar_busca_paciente(self.fields['paciente'])
+
     papel = forms.ChoiceField(
         label='quem assina',
         choices=AssinaturaEletronica.Papel.choices,

@@ -31,7 +31,37 @@
                 {% endif %}
             </div>
             {% endfor %}
+            {% if duplicados %}
+            <section class="form-cartao" aria-labelledby="titulo-duplicado">
+                <h2 id="titulo-duplicado" class="secao-pagina">Já existe paciente parecido</h2>
+                {% if bloqueio_cpf %}
+                <p>Já existe paciente com este CPF. O cadastro não foi gravado.</p>
+                {% endif %}
+                {% if aviso_confirmacao %}<p class="erro">{{ aviso_confirmacao }}</p>{% endif %}
+                {% for existente in duplicados %}
+                <article>
+                    <p><strong>{{ existente.nome_completo }}</strong></p>
+                    <p>Nascimento: {{ existente.data_nascimento|date:"d/m/Y" }}</p>
+                    <p>Telefone: {{ existente.telefone }}</p>
+                    {% if existente.ativo %}
+                    <a href="{% url 'core:editar_paciente' existente.pk %}" class="botao secundario">É este — abrir cadastro existente</a>
+                    {% endif %}
+                </article>
+                {% endfor %}
+                {% if not bloqueio_cpf %}
+                <div class="campo aceite">
+                    <label for="confirmar-duplicado">
+                        <input type="checkbox" id="confirmar-duplicado" name="confirmar_duplicado">
+                        Confirmo que é outra pessoa
+                    </label>
+                </div>
+                <button type="submit" class="botao secundario" name="cadastrar_mesmo_assim" value="1">Não, é outra pessoa — cadastrar mesmo assim</button>
+                {% endif %}
+            </section>
+            {% endif %}
+            {% if not bloqueio_cpf %}
             <button type="submit" class="botao">Salvar</button>
+            {% endif %}
         </form>
         {% if paciente and paciente.aceita_lembretes_whatsapp_em %}
         <p class="resumo">Autorizou lembretes por WhatsApp em {{ paciente.aceita_lembretes_whatsapp_em|date:"d/m/Y H:i" }}.</p>

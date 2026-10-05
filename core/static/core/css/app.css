@@ -473,6 +473,10 @@ th.valor {
     margin-bottom: 6px;
 }
 
+.campo .busca-paciente {
+    margin-bottom: 8px;
+}
+
 .campo input,
 .campo select,
 .campo textarea {

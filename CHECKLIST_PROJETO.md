@@ -470,14 +470,20 @@ Legenda:
     se uma foto falha, nenhuma é gravada; a ordem e o lote ficam na ficha;
     a lista agrupa por paciente e ignora “enviada por engano” nos totais;
     “marcar todas como conferidas” só nas pendentes e só para quem revisa;
-    secretária continua vendo só o que ela enviou. Permissões, re-encode,
-    antivírus, exames e o registro de cada foto aberta permanecem.
-  - Validação: suíte completa com 438 testes; só as 3 falhas já conhecidas
+    secretária continua vendo só o que ela enviou. A busca de paciente
+    (lista e campos de escolha) acha todas as palavras, sem acento e em
+    qualquer ordem, e também CPF ou telefone só pelos dígitos. O cadastro
+    avisa paciente parecido por data+nome ou telefone+nome e só grava outra
+    pessoa com a confirmação marcada; CPF igual continua bloqueado. O aviso
+    não mostra dado clínico. Permissões, re-encode, antivírus, exames e o
+    registro de cada foto aberta permanecem.
+  - Validação: suíte completa com 446 testes; só as 3 falhas já conhecidas
     (`test_seeds_legitimos_nao_recusam`,
     `test_configuracao_ativa_usa_somente_homolog_local`,
-    `test_recusa_banco_que_nao_e_consultorio_homolog`). Os 63 testes de
-    digitalização também passaram no PostgreSQL 16 local. Migração
-    `core.0037_ordem_lote_digitalizacao`.
+    `test_recusa_banco_que_nao_e_consultorio_homolog`). Os testes de
+    digitalização e de busca de paciente também passaram no PostgreSQL 16
+    local. Migrações `core.0037_ordem_lote_digitalizacao` e
+    `core.0038_busca_paciente`.
 
 ## Regras de execução contínua
 

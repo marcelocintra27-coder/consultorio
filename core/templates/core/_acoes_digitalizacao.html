@@ -14,10 +14,11 @@
                 {% csrf_token %}
                 <div class="campo">
                     <label for="paciente-novo-{{ ficha.pk }}">Novo paciente</label>
+                    <input type="search" id="busca-paciente-{{ ficha.pk }}" class="busca-paciente" data-filtra="paciente-novo-{{ ficha.pk }}" placeholder="Buscar por nome, CPF ou telefone" autocomplete="off" aria-label="Buscar paciente">
                     <select id="paciente-novo-{{ ficha.pk }}" name="paciente" required>
                         <option value="">Selecione</option>
                         {% for candidato in ficha.lista_troca %}
-                        <option value="{{ candidato.pk }}">{{ candidato.nome_completo }}</option>
+                        <option value="{{ candidato.pk }}" data-busca="{{ candidato.nome_busca }} {{ candidato.cpf_busca }} {{ candidato.telefone_busca }} {{ candidato.whatsapp_busca }}">{{ candidato.nome_completo }}</option>
                         {% endfor %}
                     </select>
                 </div>

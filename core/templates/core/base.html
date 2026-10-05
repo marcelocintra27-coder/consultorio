@@ -71,6 +71,41 @@
     {% if user.is_authenticated %}
     <script>
     (function () {
+        function normalizar(texto) {
+            return (texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        }
+        document.querySelectorAll('.busca-paciente').forEach(function (campo) {
+            var select = document.getElementById(campo.getAttribute('data-filtra'));
+            if (!select) return;
+            var opcoes = Array.prototype.map.call(select.options, function (opcao) {
+                return {
+                    el: opcao,
+                    busca: normalizar(opcao.getAttribute('data-busca') || opcao.textContent || ''),
+                };
+            });
+            campo.addEventListener('input', function () {
+                var bruto = campo.value.trim();
+                var digitos = bruto.replace(/\D/g, '');
+                var numerico = digitos && /^[\d\s.\-()/+]+$/.test(bruto);
+                var palavras = normalizar(bruto).split(/\s+/).filter(Boolean);
+                opcoes.forEach(function (item) {
+                    if (!item.el.value) {
+                        item.el.hidden = false;
+                        item.el.disabled = false;
+                        return;
+                    }
+                    var ok = !bruto || (numerico
+                        ? item.busca.indexOf(digitos) !== -1
+                        : palavras.every(function (palavra) { return item.busca.indexOf(palavra) !== -1; }));
+                    item.el.hidden = !ok;
+                    item.el.disabled = !ok;
+                });
+            });
+        });
+    }());
+    </script>
+    <script>
+    (function () {
         var botao = document.querySelector('.menu-toggle');
         var menu = document.getElementById('menu-lateral');
         if (!botao || !menu) return;

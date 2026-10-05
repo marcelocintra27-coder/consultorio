@@ -968,3 +968,9 @@ atuais. O envio é tudo ou nada, guarda a ordem da folha e um lote comum, e a
 lista de fichas digitalizadas agrupa por paciente. “Enviada por engano” não
 entra nos totais, mas aparece no filtro. Quem revisa pode marcar as pendentes
 daquele paciente de uma vez. Secretária continua vendo só as próprias folhas.
+A busca de paciente (lista e campos de escolha, inclusive na digitalização)
+exige todas as palavras do nome, em qualquer ordem, sem acento. Se o texto for
+numérico, procura CPF, telefone e WhatsApp só pelos dígitos. No cadastro, um
+paciente ativo parecido (mesma data e ao menos duas palavras do nome, ou mesmo
+telefone/WhatsApp e ao menos uma palavra) não é gravado até a pessoa confirmar
+que é outra. CPF igual continua impedindo o novo cadastro.

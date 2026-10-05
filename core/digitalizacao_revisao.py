@@ -205,7 +205,10 @@ def _aplicar_filtros(request, fichas):
         fichas = fichas.filter(status=situacao)
     nome = (request.GET.get('paciente') or '').strip()
     if nome:
-        fichas = fichas.filter(paciente__nome_completo__icontains=nome)
+        from .busca_paciente import filtrar_pacientes
+        fichas = fichas.filter(
+            paciente_id__in=filtrar_pacientes(Paciente.objects.all(), nome).values('pk'),
+        )
     enviado = (request.GET.get('enviado_por') or '').strip()
     if enviado.isdigit():
         fichas = fichas.filter(digitalizado_por_id=int(enviado))

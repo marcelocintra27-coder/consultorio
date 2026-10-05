@@ -268,7 +268,8 @@ def listar_pacientes(request):
         Paciente.objects.filter(ativo=True),
     )
     if termo:
-        pacientes = pacientes.filter(nome_completo__icontains=termo)
+        from .busca_paciente import filtrar_pacientes
+        pacientes = filtrar_pacientes(pacientes, termo)
     pacientes = pacientes.order_by('nome_completo')
     perfil = getattr(request.user, 'perfil', None)
     pode_clinico = bool(
@@ -285,24 +286,50 @@ def listar_pacientes(request):
 def cadastrar_paciente(request):
     if not usuario_pode_cadastrar_paciente(request.user):
         raise PermissionDenied
+    duplicados = []
+    bloqueio_cpf = False
+    aviso_confirmacao = ''
     if request.method == 'POST':
         form = PacienteForm(request.POST, user=request.user)
         if form.is_valid():
-            with transaction.atomic():
-                paciente = form.save()
-                registrar_auditoria_paciente(
-                    paciente=paciente,
-                    usuario=request.user,
-                    acao=AuditoriaPaciente.Acao.CRIADO,
-                    origem=AuditoriaPaciente.Origem.TELA,
-                    alteracoes=valores_iniciais(paciente),
-                )
-            return redirect('core:listar_pacientes')
+            from .busca_paciente import possiveis_duplicados
+            dados = form.cleaned_data
+            bloqueio, parecidos = possiveis_duplicados(
+                nome=dados.get('nome_completo'),
+                nascimento=dados.get('data_nascimento'),
+                telefone=dados.get('telefone'),
+                whatsapp=dados.get('whatsapp'),
+                cpf=dados.get('cpf'),
+            )
+            confirmou = request.POST.get('confirmar_duplicado') == 'on'
+            if bloqueio:
+                duplicados = bloqueio
+                bloqueio_cpf = True
+            elif parecidos and not confirmou:
+                duplicados = parecidos
+                if request.POST.get('cadastrar_mesmo_assim'):
+                    aviso_confirmacao = (
+                        'Marque a confirmação para cadastrar mesmo assim.'
+                    )
+            else:
+                with transaction.atomic():
+                    paciente = form.save()
+                    registrar_auditoria_paciente(
+                        paciente=paciente,
+                        usuario=request.user,
+                        acao=AuditoriaPaciente.Acao.CRIADO,
+                        origem=AuditoriaPaciente.Origem.TELA,
+                        alteracoes=valores_iniciais(paciente),
+                    )
+                return redirect('core:listar_pacientes')
     else:
         form = PacienteForm(user=request.user)
     return render(request, 'core/form_paciente.html', {
         'form': form,
         'titulo': 'Cadastrar Paciente',
+        'duplicados': duplicados,
+        'bloqueio_cpf': bloqueio_cpf,
+        'aviso_confirmacao': aviso_confirmacao,
     })
 
 

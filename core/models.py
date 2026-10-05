@@ -90,6 +90,18 @@ class Paciente(models.Model):
         null=True,
         blank=True,
     )
+    nome_busca = models.CharField(
+        'nome para busca', max_length=200, blank=True, default='', db_index=True,
+    )
+    cpf_busca = models.CharField(
+        'CPF para busca', max_length=20, blank=True, default='', db_index=True,
+    )
+    telefone_busca = models.CharField(
+        'telefone para busca', max_length=20, blank=True, default='', db_index=True,
+    )
+    whatsapp_busca = models.CharField(
+        'WhatsApp para busca', max_length=20, blank=True, default='', db_index=True,
+    )
     cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
     ativo = models.BooleanField('ativo', default=True)
 
@@ -102,6 +114,13 @@ class Paciente(models.Model):
         return self.nome_completo
 
     def save(self, *args, **kwargs):
+        from .busca_paciente import normalizar_nome, somente_digitos
+
+        self.nome_busca = normalizar_nome(self.nome_completo)
+        self.cpf_busca = somente_digitos(self.cpf)
+        self.telefone_busca = somente_digitos(self.telefone)
+        self.whatsapp_busca = somente_digitos(self.whatsapp)
+        extras = {'nome_busca', 'cpf_busca', 'telefone_busca', 'whatsapp_busca'}
         anterior = False
         if self.pk:
             anterior = type(self).objects.filter(pk=self.pk).values_list(
@@ -110,9 +129,10 @@ class Paciente(models.Model):
         if self.aceita_lembretes_whatsapp and not anterior:
             if self.aceita_lembretes_whatsapp_em is None:
                 self.aceita_lembretes_whatsapp_em = timezone.now()
-            campos = kwargs.get('update_fields')
-            if campos is not None:
-                kwargs['update_fields'] = set(campos) | {'aceita_lembretes_whatsapp_em'}
+            extras.add('aceita_lembretes_whatsapp_em')
+        campos = kwargs.get('update_fields')
+        if campos is not None:
+            kwargs['update_fields'] = set(campos) | extras
         super().save(*args, **kwargs)
 
 

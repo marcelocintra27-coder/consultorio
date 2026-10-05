@@ -82,6 +82,7 @@ class PacienteAdmin(admin.ModelAdmin):
         'carteirinha',
     )
     autocomplete_fields = ('convenio',)
+    exclude = ('nome_busca', 'cpf_busca', 'telefone_busca', 'whatsapp_busca')
     readonly_fields = ('cadastrado_em', 'aceita_lembretes_whatsapp_em')
     list_per_page = 25
 
