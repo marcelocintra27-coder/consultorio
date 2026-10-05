@@ -51,6 +51,7 @@ def navegacao_usuario(request):
                     _item(request, 'Pacientes', 'pacientes', 'core:listar_pacientes'),
                     _item(request, 'Digitalizar ficha antiga', 'pacientes', 'core:digitalizacao_upload'),
                     _item(request, 'Fichas digitalizadas', 'pacientes', 'core:listar_digitalizacoes'),
+                    _item(request, 'Lembretes WhatsApp', 'agenda', 'core:listar_lembretes_whatsapp'),
                 ]),
                 _grupo('Financeiro atual', [
                     _item(request, 'Contas a receber', 'pagamentos', 'core:listar_contas_receber'),
@@ -91,6 +92,7 @@ def navegacao_usuario(request):
                     _item(request, 'Pacientes', 'pacientes', 'core:listar_pacientes'),
                     _item(request, 'Digitalizar ficha antiga', 'pacientes', 'core:digitalizacao_upload'),
                     _item(request, 'Minhas fichas enviadas', 'pacientes', 'core:listar_digitalizacoes'),
+                    _item(request, 'Lembretes WhatsApp', 'agenda', 'core:listar_lembretes_whatsapp'),
                 ]),
             ],
         }

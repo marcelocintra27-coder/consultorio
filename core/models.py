@@ -80,6 +80,16 @@ class Paciente(models.Model):
         max_length=200,
         blank=True,
     )
+    aceita_lembretes_whatsapp = models.BooleanField(
+        'aceita lembretes por WhatsApp',
+        default=False,
+        help_text='Só recebe lembrete quem autorizou. O texto leva data, hora e dentista, sem conteúdo clínico.',
+    )
+    aceita_lembretes_whatsapp_em = models.DateTimeField(
+        'autorizou lembretes em',
+        null=True,
+        blank=True,
+    )
     cadastrado_em = models.DateTimeField('data de cadastro', auto_now_add=True)
     ativo = models.BooleanField('ativo', default=True)
 
@@ -90,6 +100,20 @@ class Paciente(models.Model):
 
     def __str__(self):
         return self.nome_completo
+
+    def save(self, *args, **kwargs):
+        anterior = False
+        if self.pk:
+            anterior = type(self).objects.filter(pk=self.pk).values_list(
+                'aceita_lembretes_whatsapp', flat=True,
+            ).first()
+        if self.aceita_lembretes_whatsapp and not anterior:
+            if self.aceita_lembretes_whatsapp_em is None:
+                self.aceita_lembretes_whatsapp_em = timezone.now()
+            campos = kwargs.get('update_fields')
+            if campos is not None:
+                kwargs['update_fields'] = set(campos) | {'aceita_lembretes_whatsapp_em'}
+        super().save(*args, **kwargs)
 
 
 class AuditoriaPaciente(models.Model):
@@ -611,6 +635,8 @@ class AuditoriaConsulta(models.Model):
         verbose_name='usuário',
         on_delete=models.PROTECT,
         related_name='auditorias_consulta',
+        null=True,
+        blank=True,
     )
     descricao = models.CharField('descrição', max_length=300)
     cadastrado_em = models.DateTimeField('data e hora', auto_now_add=True)
@@ -622,6 +648,84 @@ class AuditoriaConsulta(models.Model):
 
     def __str__(self):
         return f'{self.consulta_id} — {self.descricao}'
+
+
+class MensagemWhatsApp(models.Model):
+    class Direcao(models.TextChoices):
+        ENVIADA = 'enviada', 'enviada'
+        RECEBIDA = 'recebida', 'recebida'
+
+    class Status(models.TextChoices):
+        SIMULADA = 'simulada', 'simulada'
+        ENVIADA = 'enviada', 'enviada'
+        FALHOU = 'falhou', 'falhou'
+        RECEBIDA = 'recebida', 'recebida'
+
+    class Acao(models.TextChoices):
+        CONFIRMOU = 'confirmou', 'confirmou'
+        DESMARCOU = 'desmarcou', 'desmarcou'
+        PRECISA_ATENCAO = 'precisa_atencao', 'precisa de atenção'
+
+    consulta = models.ForeignKey(
+        Consulta,
+        verbose_name='consulta',
+        on_delete=models.PROTECT,
+        related_name='mensagens_whatsapp',
+        null=True,
+        blank=True,
+    )
+    paciente = models.ForeignKey(
+        Paciente,
+        verbose_name='paciente',
+        on_delete=models.PROTECT,
+        related_name='mensagens_whatsapp',
+        null=True,
+        blank=True,
+    )
+    lembrete = models.ForeignKey(
+        'self',
+        verbose_name='lembrete',
+        on_delete=models.PROTECT,
+        related_name='respostas',
+        null=True,
+        blank=True,
+    )
+    telefone = models.CharField('telefone', max_length=20)
+    direcao = models.CharField('direção', max_length=20, choices=Direcao.choices)
+    texto = models.TextField('texto')
+    status = models.CharField('status', max_length=20, choices=Status.choices)
+    id_externo = models.CharField('id externo', max_length=255, blank=True, default='')
+    acao = models.CharField(
+        'ação',
+        max_length=20,
+        choices=Acao.choices,
+        blank=True,
+        default='',
+    )
+    criado_em = models.DateTimeField('data e hora', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'mensagem de WhatsApp'
+        verbose_name_plural = 'mensagens de WhatsApp'
+        ordering = ['-criado_em']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['consulta'],
+                condition=models.Q(direcao='enviada'),
+                name='lembrete_whatsapp_unico_por_consulta',
+            ),
+            models.UniqueConstraint(
+                fields=['id_externo'],
+                condition=~models.Q(id_externo=''),
+                name='mensagem_whatsapp_id_externo_unico',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['telefone', 'direcao', 'criado_em'], name='whatsapp_telefone_direcao'),
+        ]
+
+    def __str__(self):
+        return f'{self.get_direcao_display()} — {self.telefone}'
 
 
 class ProcedimentoUniodonto(models.Model):

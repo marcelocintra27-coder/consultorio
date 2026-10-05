@@ -101,6 +101,12 @@ from .relatorio_atividade import (
     relatorio_atividade_dia,
 )
 from .retificacoes import retificar_documento
+from .views_whatsapp import (
+    listar_lembretes_whatsapp,
+    preparar_lembretes_amanha,
+    simular_resposta_whatsapp,
+    whatsapp_webhook,
+)
 from .prescricoes import listar_prescricoes, editar_prescricao, ver_prescricao, imprimir_prescricao
 
 urlpatterns = [
@@ -264,6 +270,14 @@ urlpatterns = [
         name='editar_repasse_uniodonto',
     ),
     path('consultas/', listar_consultas, name='listar_consultas'),
+    path('consultas/lembretes/', listar_lembretes_whatsapp, name='listar_lembretes_whatsapp'),
+    path('consultas/lembretes/preparar/', preparar_lembretes_amanha, name='preparar_lembretes_amanha'),
+    path(
+        'consultas/lembretes/<int:pk>/simular/',
+        simular_resposta_whatsapp,
+        name='simular_resposta_whatsapp',
+    ),
+    path('whatsapp/webhook/', whatsapp_webhook, name='whatsapp_webhook'),
     path('consultas/agendar/', agendar_consulta, name='agendar_consulta'),
     path('consultas/<int:pk>/remarcar/', remarcar_consulta, name='remarcar_consulta'),
     path('consultas/<int:pk>/', ficha_consulta, name='ficha_consulta'),

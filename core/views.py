@@ -154,6 +154,7 @@ from .permissoes import (
     usuario_pode_acessar_consulta,
     consultas_visiveis_para_usuario,
     usuario_pode_agendar_consulta,
+    usuario_pode_preparar_lembretes,
     usuario_pode_acessar_cadastro_paciente,
     pacientes_visiveis_para_usuario,
     usuario_pode_cadastrar_paciente,
@@ -278,7 +279,7 @@ def cadastrar_paciente(request):
     if not usuario_pode_cadastrar_paciente(request.user):
         raise PermissionDenied
     if request.method == 'POST':
-        form = PacienteForm(request.POST)
+        form = PacienteForm(request.POST, user=request.user)
         if form.is_valid():
             with transaction.atomic():
                 paciente = form.save()
@@ -291,7 +292,7 @@ def cadastrar_paciente(request):
                 )
             return redirect('core:listar_pacientes')
     else:
-        form = PacienteForm()
+        form = PacienteForm(user=request.user)
     return render(request, 'core/form_paciente.html', {
         'form': form,
         'titulo': 'Cadastrar Paciente',
@@ -304,7 +305,7 @@ def editar_paciente(request, pk):
         raise PermissionDenied
     if request.method == 'POST':
         anteriores = snapshot(paciente)
-        form = PacienteForm(request.POST, instance=paciente)
+        form = PacienteForm(request.POST, instance=paciente, user=request.user)
         if form.is_valid():
             alteracoes = diferencas(anteriores, paciente)
             with transaction.atomic():
@@ -319,7 +320,7 @@ def editar_paciente(request, pk):
                     )
             return redirect('core:listar_pacientes')
     else:
-        form = PacienteForm(instance=paciente)
+        form = PacienteForm(instance=paciente, user=request.user)
     pode_clinico = usuario_pode_acessar_prontuario(request.user, paciente)
     fichas_digitalizadas = ()
     if pode_clinico:
@@ -663,6 +664,7 @@ def listar_consultas(request):
         'status_selecionado': status_selecionado,
         'status_choices': Consulta.Status.choices,
         'pode_agendar': usuario_pode_agendar_consulta(request.user),
+        'pode_preparar_lembretes': usuario_pode_preparar_lembretes(request.user),
         'pode_financeiro': usuario_pode_financeiro(request.user),
         'pode_visualizar_valores': usuario_pode_financeiro(request.user) or bool(
             dentista_do_usuario(request.user)

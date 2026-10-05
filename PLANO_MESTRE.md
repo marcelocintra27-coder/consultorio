@@ -946,3 +946,11 @@ das consultas dela. O administrador cadastra a pessoa e os turnos pelas telas;
 não há carga de dados reais por migração ou script. Criar, editar ou reativar
 um turno ativo é recusado se a titular da sala já tiver consulta futura, não
 cancelada, naquele dia da semana e horário.
+
+### Lembretes de WhatsApp — etapa 1
+
+O lembrete da véspera sai só para consulta de amanhã com status agendada ou
+confirmada, paciente com WhatsApp e autorização registrada. O texto leva data,
+hora e nome da dentista, sem conteúdo clínico. A resposta 1 confirma, a 2
+cancela e avisa a secretária, e qualquer outra fica para a secretária. Nesta
+etapa o envio é simulado (`WHATSAPP_MODO=simulado`); a API da Meta não é chamada.

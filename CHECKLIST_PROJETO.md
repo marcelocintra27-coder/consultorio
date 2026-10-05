@@ -445,6 +445,21 @@ Legenda:
     `locacao.0010_dentista_locataria_turnos`. `check` e
     `makemigrations --check --dry-run` sem pendência.
 
+## Lembretes de WhatsApp — etapa 1
+
+- [x] Lembrete simulado da véspera, com confirmação e desmarcação.
+  - Critérios: só consulta de amanhã, agendada ou confirmada, com WhatsApp e
+    autorização; sem duplicar; texto sem conteúdo clínico; resposta 1 confirma,
+    2 cancela e destaca para a secretária, outra resposta pede atenção; webhook
+    recusa assinatura inválida; modo meta sem variáveis não envia; dentista não
+    vê a tela; simular resposta só o administrador.
+  - Validação: suíte completa com 430 testes; só as 3 falhas já conhecidas
+    (`test_seeds_legitimos_nao_recusam`,
+    `test_configuracao_ativa_usa_somente_homolog_local`,
+    `test_recusa_banco_que_nao_e_consultorio_homolog`). Migração
+    `core.0036_lembrete_whatsapp_simulado`. `check` e
+    `makemigrations --check --dry-run` sem pendência.
+
 ## Regras de execução contínua
 
 - [x] Sem commit, push ou deploy sem autorização explícita.

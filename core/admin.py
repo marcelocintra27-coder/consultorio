@@ -22,6 +22,7 @@ from .models import (
     LancamentoAtendimento,
     AuditoriaConsulta,
     AuditoriaPaciente,
+    MensagemWhatsApp,
     AtividadeDiaria,
     RegistroAcesso,
     ContaReceber,
@@ -81,7 +82,7 @@ class PacienteAdmin(admin.ModelAdmin):
         'carteirinha',
     )
     autocomplete_fields = ('convenio',)
-    readonly_fields = ('cadastrado_em',)
+    readonly_fields = ('cadastrado_em', 'aceita_lembretes_whatsapp_em')
     list_per_page = 25
 
     def save_model(self, request, obj, form, change):
@@ -252,6 +253,23 @@ class LancamentoAtendimentoAdmin(admin.ModelAdmin):
         'cadastrado_em',
         'cadastrado_por',
     )
+
+
+@admin.register(MensagemWhatsApp)
+class MensagemWhatsAppAdmin(admin.ModelAdmin):
+    list_display = ('criado_em', 'direcao', 'telefone', 'status', 'acao', 'paciente')
+    list_filter = ('direcao', 'status', 'acao')
+    search_fields = ('telefone', 'texto', 'paciente__nome_completo', 'id_externo')
+    readonly_fields = (
+        'consulta', 'paciente', 'lembrete', 'telefone', 'direcao', 'texto',
+        'status', 'id_externo', 'acao', 'criado_em',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(AuditoriaConsulta)

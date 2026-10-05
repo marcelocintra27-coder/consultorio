@@ -1,0 +1,71 @@
+{% extends "core/base.html" %}
+
+{% block title %}Lembretes WhatsApp{% endblock %}
+{% block titulo %}Lembretes WhatsApp{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_consultas' %}?data={{ data|date:'Y-m-d' }}" class="botao secundario">Voltar</a>
+        </div>
+
+        <form method="get" class="busca-form">
+            <label for="filtro-data">Dia das consultas</label>
+            <input id="filtro-data" type="date" name="data" value="{{ data|date:'Y-m-d' }}">
+            <button type="submit" class="botao">Filtrar</button>
+        </form>
+
+        {% if total_atencao %}
+        <p class="pill-atencao">A secretária precisa ver {{ total_atencao }} resposta{{ total_atencao|pluralize:"s" }}: desmarcou ou precisa de atenção.</p>
+        {% endif %}
+
+        <div class="tabela-wrap">
+        <table>
+            <tr>
+                <th>Paciente</th>
+                <th>Consulta</th>
+                <th>Lembrete</th>
+                <th>Resposta</th>
+                <th>Ação</th>
+                {% if pode_simular %}<th>Simular</th>{% endif %}
+            </tr>
+            {% for lembrete in lembretes %}
+            <tr>
+                <td>{{ lembrete.paciente.nome_completo }}</td>
+                <td>
+                    {{ lembrete.consulta.data|date:"d/m/Y" }}
+                    {{ lembrete.consulta.hora_inicio|time:"H:i" }}
+                    — {{ lembrete.consulta.dentista|default:"não informada" }}
+                </td>
+                <td>{{ lembrete.get_status_display }}</td>
+                <td>{% if lembrete.resposta_exibida %}{{ lembrete.resposta_exibida.texto }}{% else %}—{% endif %}</td>
+                <td>
+                    {% if lembrete.resposta_exibida.acao == 'desmarcou' %}
+                    <span class="pill-atencao">Desmarcou</span>
+                    {% elif lembrete.resposta_exibida.acao == 'precisa_atencao' %}
+                    <span class="pill-atencao">Precisa de atenção</span>
+                    {% elif lembrete.resposta_exibida %}
+                    {{ lembrete.resposta_exibida.get_acao_display }}
+                    {% else %}—{% endif %}
+                </td>
+                {% if pode_simular %}
+                <td>
+                    <form method="post" action="{% url 'core:simular_resposta_whatsapp' lembrete.pk %}">
+                        {% csrf_token %}
+                        <div class="campo">
+                            <label for="resposta-{{ lembrete.pk }}">resposta do paciente</label>
+                            <input id="resposta-{{ lembrete.pk }}" type="text" name="texto" maxlength="500">
+                        </div>
+                        <button type="submit" class="botao secundario">Simular resposta do paciente</button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="{% if pode_simular %}6{% else %}5{% endif %}">Nenhum lembrete neste dia.</td>
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+{% endblock %}

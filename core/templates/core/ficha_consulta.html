@@ -267,7 +267,7 @@
                 {% for item in auditorias %}
                 <tr>
                     <td>{{ item.cadastrado_em|date:"d/m/Y H:i" }}</td>
-                    <td>{{ item.usuario.get_full_name|default:item.usuario.username }}</td>
+                    <td>{% if item.usuario %}{{ item.usuario.get_full_name|default:item.usuario.username }}{% else %}resposta WhatsApp{% endif %}</td>
                     <td>{{ item.descricao }}</td>
                 </tr>
                 {% endfor %}

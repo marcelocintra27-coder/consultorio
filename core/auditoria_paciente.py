@@ -19,6 +19,8 @@ CAMPOS_AUDITADOS = (
     'instagram',
     'facebook',
     'outra_rede_social',
+    'aceita_lembretes_whatsapp',
+    'aceita_lembretes_whatsapp_em',
     'ativo',
 )
 

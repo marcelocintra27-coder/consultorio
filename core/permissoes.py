@@ -102,6 +102,28 @@ def consultas_visiveis_para_usuario(user, queryset):
     return queryset.none()
 
 
+def usuario_pode_ver_lembretes_whatsapp(user):
+    """Agenda de lembretes: secretária e administrador."""
+    if user is None or not user.is_authenticated:
+        return False
+    if usuario_e_administrador(user):
+        return True
+    perfil = perfil_do_usuario(user)
+    return bool(perfil and perfil.papel == PerfilUsuario.Papel.SECRETARIA)
+
+
+def usuario_pode_editar_lembretes_whatsapp(user):
+    return usuario_pode_ver_lembretes_whatsapp(user)
+
+
+def usuario_pode_preparar_lembretes(user):
+    return usuario_pode_ver_lembretes_whatsapp(user)
+
+
+def usuario_pode_simular_resposta_whatsapp(user):
+    return usuario_e_administrador(user)
+
+
 def usuario_pode_agendar_consulta(user):
     if user is None or not user.is_authenticated:
         return False

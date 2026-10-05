@@ -586,6 +586,17 @@ h2.secao-pagina {
     margin: 32px 0 12px;
 }
 
+.pill-atencao {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--cor-erro);
+    background: #fde8ec;
+    border-radius: 8px;
+    vertical-align: middle;
+}
+
 .pill-legado {
     display: inline-block;
     padding: 2px 8px;

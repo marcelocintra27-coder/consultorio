@@ -22,9 +22,10 @@
         <form method="post" class="form-cartao">
             {% csrf_token %}
             {% for field in form %}
-            <div class="campo">
+            <div class="campo{% if field.field.widget.input_type == 'checkbox' %} aceite{% endif %}">
                 <label for="{{ field.id_for_label }}">{{ field.label }}</label>
                 {{ field }}
+                {% if field.help_text %}<p class="resumo">{{ field.help_text }}</p>{% endif %}
                 {% if field.errors %}
                     <div class="erro">{{ field.errors }}</div>
                 {% endif %}
@@ -32,6 +33,9 @@
             {% endfor %}
             <button type="submit" class="botao">Salvar</button>
         </form>
+        {% if paciente and paciente.aceita_lembretes_whatsapp_em %}
+        <p class="resumo">Autorizou lembretes por WhatsApp em {{ paciente.aceita_lembretes_whatsapp_em|date:"d/m/Y H:i" }}.</p>
+        {% endif %}
 
         {% if paciente and pode_clinico %}
         <section aria-labelledby="titulo-fichas-digitalizadas">

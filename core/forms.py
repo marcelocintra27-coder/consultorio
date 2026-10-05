@@ -95,6 +95,25 @@ class PacienteForm(forms.ModelForm):
             )
         return valor
 
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .permissoes import usuario_pode_editar_lembretes_whatsapp
+
+        if user is not None and not usuario_pode_editar_lembretes_whatsapp(user):
+            self.fields.pop('aceita_lembretes_whatsapp', None)
+
+    def clean(self):
+        dados = super().clean()
+        if 'aceita_lembretes_whatsapp' not in self.fields:
+            return dados
+        aceita = bool(dados.get('aceita_lembretes_whatsapp'))
+        ja_aceitava = bool(
+            self.instance.pk and self.instance.aceita_lembretes_whatsapp
+        )
+        if aceita and not ja_aceitava:
+            self.instance.aceita_lembretes_whatsapp_em = timezone.now()
+        return dados
+
     class Meta:
         model = Paciente
         fields = [
@@ -111,6 +130,7 @@ class PacienteForm(forms.ModelForm):
             'instagram',
             'facebook',
             'outra_rede_social',
+            'aceita_lembretes_whatsapp',
         ]
         widgets = {
             'cpf': forms.TextInput(attrs={'autocomplete': 'off'}),

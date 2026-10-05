@@ -8,6 +8,12 @@
         <div class="acoes">
             <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
             {% if pode_agendar %}<a href="{% url 'core:agendar_consulta' %}" class="botao">Agendar</a>{% endif %}
+            {% if pode_preparar_lembretes %}
+            <form method="post" action="{% url 'core:preparar_lembretes_amanha' %}">
+                {% csrf_token %}
+                <button type="submit" class="botao">Preparar lembretes de amanhã</button>
+            </form>
+            {% endif %}
         </div>
 
         <form method="get" class="busca-form">
