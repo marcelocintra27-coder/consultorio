@@ -58,6 +58,22 @@ def enviadas_hoje(user):
     return agrupar_fichas(fichas)
 
 
+def contagens_recebidas_hoje(user):
+    """Quantas folhas cada paciente recebeu hoje, só as que este usuário pode ver."""
+    inicio, fim = _janela(timezone.localdate(), timezone.localdate())
+    totais = {}
+    pacientes = digitalizacoes_visiveis(user).filter(
+        criado_em__gte=inicio,
+        criado_em__lt=fim,
+        paciente_id__isnull=False,
+    ).exclude(
+        status=DigitalizacaoFicha.Status.ENGANO,
+    ).values_list('paciente_id', flat=True)
+    for paciente_id in pacientes:
+        totais[paciente_id] = totais.get(paciente_id, 0) + 1
+    return totais
+
+
 def ficha_recem_enviada(user, bruto):
     bruto = (bruto or '').strip()
     if not bruto.isdigit():

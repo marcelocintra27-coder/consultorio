@@ -982,11 +982,16 @@ isolado da imagem mantém o teto de memória.
 
 No celular, a mesma tela tem “Tirar foto” (câmera, uma folha por vez) e
 “Escolher da galeria”. As fotos entram na mesma lista, até 6, com miniatura,
-tipo, ordem e “Remover”. A escolha do paciente é uma caixa só: enquanto a
-pessoa digita, aparecem até 10 nomes com a data de nascimento; depois o nome
-fica em destaque, com “Trocar”. Sem JavaScript, vale o select e uma foto.
-O texto vazio do paciente é “Escolha o paciente”. O nome gravado tira espaços
-sobrando e deixa preposições de/da/do/dos/das/e em minúsculo, salvo no começo.
+tipo e “Remover”. A ordem segue os botões Subir e Descer. O botão único diz
+“Enviar N folhas para o paciente” e, ao tocar, mostra “Enviando...”. Depois do
+envio aparece só “Pronto!”, com as miniaturas, “Enviar mais folhas deste
+paciente” e “Próximo paciente”. Se o paciente já recebeu folhas hoje, um aviso
+amarelo avisa e leva às folhas dele, sem impedir o envio. A escolha do paciente
+é uma caixa só: enquanto a pessoa digita, aparecem até 10 nomes com a data de
+nascimento; depois o nome fica em destaque, com “Trocar”. Sem JavaScript, vale
+o select e uma foto. O texto vazio do paciente é “Escolha o paciente”. O nome
+gravado tira espaços sobrando e deixa preposições de/da/do/dos/das/e em
+minúsculo, salvo no começo.
 O prefixo fictício HOMOLOG- permanece em maiúsculas. A trava da carga de treino
 compara paciente, dentista e sala sem distinguir maiúsculas.
 

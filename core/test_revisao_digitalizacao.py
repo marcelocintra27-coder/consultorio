@@ -633,14 +633,17 @@ class RevisaoDigitalizacaoTests(TestCase):
     def test_confirmacao_no_html_e_sucesso_mostra_a_foto_gravada(self):
         self._entrar(self.secretaria)
         formulario = self.client.get(reverse('core:digitalizacao_upload'))
-        self.assertContains(formulario, 'id="confirmacao-envio" class="confirmacao-envio" hidden')
-        self.assertContains(formulario, 'Confirmar envio')
-        self.assertContains(formulario, 'Corrigir')
-        self.assertContains(formulario, 'data-salvar-envio')
+        self.assertContains(formulario, 'Escolha o paciente e as fotos')
+        self.assertContains(formulario, 'id="botao-enviar"')
         self.assertContains(formulario, 'Enviando...')
         self.assertContains(formulario, 'imageOrientation')
         self.assertContains(formulario, '3000')
         self.assertContains(formulario, '0.85')
+        self.assertContains(formulario, 'Tire uma foto de cada folha (até 6).')
+        self.assertContains(formulario, 'name="ordem" type="hidden"')
+        self.assertNotContains(formulario, 'Confirmar envio')
+        self.assertNotContains(formulario, 'Ordem da folha')
+        self.assertNotContains(formulario, 'data-salvar-envio')
         self.assertNotContains(formulario, '<img')
 
         resposta = self.client.post(reverse('core:digitalizacao_upload'), {
@@ -657,8 +660,11 @@ class RevisaoDigitalizacaoTests(TestCase):
         pagina = self.client.get(resposta['Location'])
         self.assertContains(
             pagina,
-            f'<strong class="nome-paciente">{self.paciente_a.nome_completo}</strong>',
+            f'Pronto! 1 folha enviada para {self.paciente_a.nome_completo}',
         )
+        self.assertNotContains(pagina, 'id="form-digitalizacao"')
+        self.assertNotContains(pagina, 'Enviadas hoje')
+        self.assertNotContains(pagina, 'Ficou pendente de revisão')
         self.assertContains(pagina, reverse('core:foto_digitalizacao', args=[nova.pk]))
         self.assertContains(pagina, 'Enviar mais folhas deste paciente')
         self.assertContains(
@@ -669,7 +675,8 @@ class RevisaoDigitalizacaoTests(TestCase):
             reverse('core:digitalizacao_upload'), {'enviada': nova.pk},
         )
         self.assertEqual(legado.context['ficha_enviada'].pk, nova.pk)
-        self.assertContains(pagina, 'Enviar ficha de outro paciente')
+        self.assertContains(pagina, 'Próximo paciente')
+        self.assertNotContains(pagina, 'Enviar ficha de outro paciente')
         self.assertNotContains(pagina, nova.imagem.name)
         self.assertNotContains(pagina, '/media/')
         self.assertTrue(nova.imagem.storage.exists(nova.imagem.name))
@@ -680,6 +687,89 @@ class RevisaoDigitalizacaoTests(TestCase):
         )
         self.assertIsNone(alheia.context['ficha_enviada'])
         self.assertNotContains(alheia, '<img')
+
+    def test_sucesso_mostra_so_a_caixa(self):
+        self._entrar(self.secretaria)
+        resposta = self.client.post(reverse('core:digitalizacao_upload'), {
+            'paciente': self.paciente_a.pk,
+            'imagens': [_png('uma.png'), _png('duas.png')],
+            'tipo': ['cadastro', 'evolucao'],
+            'ordem': ['1', '2'],
+        })
+        self.assertEqual(resposta.status_code, 302)
+        pagina = self.client.get(resposta['Location'])
+        self.assertContains(
+            pagina,
+            f'Pronto! 2 folhas enviadas para {self.paciente_a.nome_completo}',
+        )
+        self.assertContains(pagina, 'class="foto-mini"')
+        self.assertContains(pagina, 'Enviar mais folhas deste paciente')
+        self.assertContains(pagina, 'Próximo paciente')
+        self.assertNotContains(pagina, 'id="form-digitalizacao"')
+        self.assertNotContains(pagina, 'id="botao-enviar"')
+        self.assertNotContains(pagina, 'Enviadas hoje')
+        self.assertEqual(pagina.content.decode().count('<img'), 2)
+
+    def test_botao_unico_mostra_quantidade_e_paciente(self):
+        self._entrar(self.secretaria)
+        html = self.client.get(reverse('core:digitalizacao_upload')).content.decode()
+        self.assertIn('>Escolha o paciente e as fotos<', html)
+        self.assertIn(
+            "botao.textContent = 'Enviar ' + quantidade + ' ' + palavra + ' para ' + nomePaciente",
+            html,
+        )
+        self.assertIn('botao.disabled = true', html)
+        self.assertIn("botao.textContent = 'Enviando...'", html)
+        self.assertIn("var palavra = quantidade === 1 ? 'folha' : 'folhas'", html)
+        self.assertIn('imageOrientation', html)
+        self.assertIn('3000', html)
+        self.assertIn('0.85', html)
+        self.assertNotIn('Confirmar envio', html)
+        self.assertNotIn('Corrigir', html)
+        self.assertNotIn('Salvar', html)
+        self.assertNotIn('Ordem da folha', html)
+        self.assertIn('name="ordem" type="hidden"', html)
+        self.assertIn('Tire uma foto de cada folha (até 6).', html)
+
+    def test_aviso_de_folhas_hoje_nao_bloqueia_o_envio(self):
+        self._entrar(self.secretaria)
+        url = reverse('core:digitalizacao_upload')
+        self._ficha(
+            self.paciente_a, self.secretaria, tipo='evolucao', nome='segunda-hoje.png',
+        )
+        self._ficha(
+            self.paciente_a, self.secretaria, tipo='cadastro', nome='engano-aviso.png',
+            status=DigitalizacaoFicha.Status.ENGANO,
+        )
+        aviso = self.client.get(url, {'paciente': self.paciente_a.pk})
+        self.assertContains(aviso, 'Atenção: este paciente já recebeu 2 folhas hoje.')
+        self.assertContains(aviso, 'Veja antes de enviar de novo.')
+        self.assertContains(
+            aviso,
+            reverse('core:folhas_digitalizacao_paciente', args=[self.paciente_a.pk]),
+        )
+        self.assertContains(aviso, 'aviso-folhas-hoje')
+        limpa = self.client.get(url)
+        self.assertNotContains(limpa, 'já recebeu 2 folhas hoje')
+        self.assertContains(limpa, 'id="aviso-folhas-hoje"')
+        alheio = self.client.get(url, {'paciente': self.paciente_solto.pk})
+        self.assertNotContains(alheio, 'já recebeu 1 folha hoje')
+
+        self._entrar(self.admin)
+        do_admin = self.client.get(url, {'paciente': self.paciente_solto.pk})
+        self.assertContains(do_admin, 'Atenção: este paciente já recebeu 1 folha hoje.')
+        self.assertContains(
+            do_admin,
+            reverse('core:folhas_digitalizacao_paciente', args=[self.paciente_solto.pk]),
+        )
+
+        self._entrar(self.secretaria)
+        resposta = self.client.post(url, {
+            'paciente': self.paciente_a.pk,
+            'imagens': _png('mesmo-assim.png'),
+            'tipo': 'anamnese',
+        })
+        self.assertEqual(resposta.status_code, 302)
 
     def test_secretaria_marca_engano_so_na_propria_e_so_pendente(self):
         arquivo = self.minha.imagem.name

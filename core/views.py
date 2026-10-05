@@ -62,7 +62,12 @@ from .auditoria_paciente import (
     snapshot,
     valores_iniciais,
 )
-from .digitalizacao_revisao import enviadas_hoje, fichas_recem_enviadas, inicial_envio
+from .digitalizacao_revisao import (
+    contagens_recebidas_hoje,
+    enviadas_hoje,
+    fichas_recem_enviadas,
+    inicial_envio,
+)
 from .ia_digitalizacao import processar_digitalizacao_com_ia
 from .tabela_uniodonto import FATOR_US_UNIODONTO
 from .models import (
@@ -514,14 +519,6 @@ def _digitalizacao_upload_protegido(request):
                 pendentes.append(atual)
             _apagar_imagens(pendentes)
             return HttpResponse('Não foi possível registrar a digitalização.', status=503)
-        if len(criadas) == 1:
-            texto = f'1 folha enviada para {paciente.nome_completo}. Ficou pendente de revisão.'
-        else:
-            texto = (
-                f'{len(criadas)} folhas enviadas para {paciente.nome_completo}. '
-                'Ficaram pendentes de revisão.'
-            )
-        messages.success(request, texto)
         destino = reverse('core:digitalizacao_upload')
         return redirect(f'{destino}?lote={lote}')
     form = DigitalizacaoFichaForm(
@@ -530,15 +527,36 @@ def _digitalizacao_upload_protegido(request):
     return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
 
 
+def _paciente_id_do_form(form):
+    bruto = form['paciente'].value()
+    if bruto in (None, ''):
+        return None
+    try:
+        return int(bruto)
+    except (TypeError, ValueError):
+        return None
+
+
 def _contexto_envio(request, form):
     enviadas = []
     if request.method == 'GET':
         enviadas = fichas_recem_enviadas(request.user, request)
+    contagens = contagens_recebidas_hoje(request.user)
+    paciente_id = _paciente_id_do_form(form)
+    total = contagens.get(paciente_id)
+    aviso = None
+    if total:
+        aviso = {
+            'total': total,
+            'url': reverse('core:folhas_digitalizacao_paciente', args=[paciente_id]),
+        }
     return {
         'form': form,
         'enviadas_hoje': enviadas_hoje(request.user),
         'fichas_enviadas': enviadas,
         'ficha_enviada': enviadas[0] if enviadas else None,
+        'contagens_hoje': {str(chave): valor for chave, valor in contagens.items()},
+        'aviso_hoje': aviso,
     }
 
 

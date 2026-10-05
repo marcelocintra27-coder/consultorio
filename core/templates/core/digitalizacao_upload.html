@@ -10,9 +10,8 @@
         </div>
 
         {% if fichas_enviadas %}
-        <section class="form-cartao" aria-labelledby="titulo-envio-ok">
-            <h2 id="titulo-envio-ok" class="secao-pagina">Folhas enviadas</h2>
-            <p>Enviadas para <strong class="nome-paciente">{% if fichas_enviadas.0.paciente %}{{ fichas_enviadas.0.paciente.nome_completo }}{% else %}sem paciente{% endif %}</strong>.</p>
+        <section class="form-cartao envio-pronto" aria-labelledby="titulo-envio-ok">
+            <h2 id="titulo-envio-ok" class="envio-pronto-titulo">Pronto! {{ fichas_enviadas|length }} folha{{ fichas_enviadas|length|pluralize:"s" }} enviada{{ fichas_enviadas|length|pluralize }} para {% if fichas_enviadas.0.paciente %}{{ fichas_enviadas.0.paciente.nome_completo }}{% else %}sem paciente{% endif %}</h2>
             <div class="fotos-gravadas">
                 {% for ficha in fichas_enviadas %}
                 <figure>
@@ -25,11 +24,10 @@
                 {% if fichas_enviadas.0.paciente_id %}
                 <a href="{% url 'core:digitalizacao_upload' %}?paciente={{ fichas_enviadas.0.paciente_id }}&amp;tipo={{ fichas_enviadas.0.tipo }}" class="botao">Enviar mais folhas deste paciente</a>
                 {% endif %}
-                <a href="{% url 'core:digitalizacao_upload' %}" class="botao secundario">Enviar ficha de outro paciente</a>
+                <a href="{% url 'core:digitalizacao_upload' %}" class="botao secundario">Próximo paciente</a>
             </div>
         </section>
-        {% endif %}
-
+        {% else %}
         <form method="post" id="form-digitalizacao" class="form-cartao" enctype="multipart/form-data">
             {% csrf_token %}
             {% if form.errors %}
@@ -42,6 +40,10 @@
             <div class="campo">
                 <label for="{{ form.paciente.id_for_label }}">Paciente</label>
                 {{ form.paciente }}
+                <p id="aviso-folhas-hoje" class="aviso-folhas-hoje" role="status" {% if not aviso_hoje %}hidden{% endif %} data-modelo="{% url 'core:folhas_digitalizacao_paciente' 0 %}">
+                    {% if aviso_hoje %}Atenção: este paciente já recebeu {{ aviso_hoje.total }} folha{{ aviso_hoje.total|pluralize:"s" }} hoje. <a href="{{ aviso_hoje.url }}">Veja antes de enviar de novo.</a>{% endif %}
+                </p>
+                {{ contagens_hoje|json_script:"contagens-folhas-hoje" }}
                 {% if form.paciente.errors %}
                 <div class="erro">{{ form.paciente.errors }}</div>
                 {% endif %}
@@ -58,7 +60,7 @@
                 <input id="id_imagens" type="file" name="imagens" accept="image/*" multiple>
                 <button type="button" class="botao secundario" data-remover-arquivo hidden>Remover arquivo</button>
                 <p data-arquivo-escolhido hidden></p>
-                <p>Até 6 fotos e 60 MiB no total. Toque em Tirar foto para cada folha, ou escolha várias na galeria. Sem a prévia, envie uma foto por vez.</p>
+                <p>Tire uma foto de cada folha (até 6).</p>
                 {% if form.tipo.errors %}
                 <div class="erro">{{ form.tipo.errors }}</div>
                 {% endif %}
@@ -71,18 +73,11 @@
 
             <div id="folhas-selecionadas" class="folhas-envio"></div>
 
-            <button type="submit" class="botao" data-salvar-envio>Salvar</button>
-            <div id="confirmacao-envio" class="confirmacao-envio" hidden>
-                <p data-frase-envio>Enviar estas folhas para <strong class="nome-paciente" data-nome-paciente></strong>?</p>
-                <div class="acoes">
-                    <button type="submit" class="botao" data-confirmar-envio>Confirmar envio</button>
-                    <button type="button" class="botao secundario" data-corrigir-envio>Corrigir</button>
-                </div>
-                <p id="enviando-digitalizacao" class="enviando-digitalizacao" hidden role="status">
-                    <span>Enviando...</span>
-                    <progress aria-label="Enviando..."></progress>
-                </p>
-            </div>
+            <button type="submit" class="botao botao-enviar" id="botao-enviar" data-enviar-folhas>Escolha o paciente e as fotos</button>
+            <p id="enviando-digitalizacao" class="enviando-digitalizacao" hidden role="status">
+                <span>Enviando...</span>
+                <progress aria-label="Enviando..."></progress>
+            </p>
         </form>
 
         <section aria-labelledby="titulo-enviadas-hoje">
@@ -104,6 +99,7 @@
             <p class="vazio">Nenhuma ficha enviada hoje.</p>
             {% endif %}
         </section>
+        {% endif %}
 {% endblock %}
 {% block extra_js %}
 <script>
@@ -217,8 +213,7 @@
                 'beforeend',
                 '<div class="campo"><label for="tipo-folha-' + indice + '">Tipo</label>' +
                 '<select id="tipo-folha-' + indice + '" name="tipo">' + opcoesTipo(tipos[indice] || 'evolucao') + '</select></div>' +
-                '<div class="campo"><label for="ordem-folha-' + indice + '">Ordem da folha</label>' +
-                '<input id="ordem-folha-' + indice + '" name="ordem" type="number" min="1" value="' + (indice + 1) + '" required></div>'
+                '<input id="ordem-folha-' + indice + '" name="ordem" type="hidden" value="' + (indice + 1) + '">'
             );
             var acoes = document.createElement('div');
             acoes.className = 'acoes folha-acoes';
@@ -253,6 +248,7 @@
             linha.appendChild(campos);
             lista.appendChild(linha);
         });
+        if (window.atualizarEnvioDigitalizacao) window.atualizarEnvioDigitalizacao();
     }
     camera.addEventListener('change', function () {
         adicionarFolhas(camera.files);
@@ -265,32 +261,68 @@
 })();
 (function () {
     var form = document.getElementById('form-digitalizacao');
-    var painel = document.getElementById('confirmacao-envio');
-    if (!form || !painel) return;
+    if (!form) return;
     var arquivo = document.getElementById('id_imagens');
     var paciente = form.querySelector('[name="paciente"]');
-    var salvar = form.querySelector('[data-salvar-envio]');
-    var confirmar = form.querySelector('[data-confirmar-envio]');
-    var corrigir = form.querySelector('[data-corrigir-envio]');
-    var frase = painel.querySelector('[data-frase-envio]');
-    var nome = painel.querySelector('[data-nome-paciente]');
-    if (!arquivo || !salvar || !confirmar || !corrigir || !frase || !nome) return;
-    var confirmado = false;
+    var botao = document.getElementById('botao-enviar');
+    var aviso = document.getElementById('aviso-folhas-hoje');
+    var contagensEl = document.getElementById('contagens-folhas-hoje');
+    if (!arquivo || !botao) return;
     var preparando = false;
     var pronto = false;
     var ladoMaximo = 3000;
     var qualidadeJpeg = 0.85;
     var enviando = document.getElementById('enviando-digitalizacao');
+    var contagens = {};
+    if (contagensEl) {
+        try { contagens = JSON.parse(contagensEl.textContent || '{}'); } catch (erro) { contagens = {}; }
+    }
     function textoSelecionado(campo) {
         if (!campo || !campo.value || campo.selectedIndex < 0) return '';
         return (campo.options[campo.selectedIndex].text || '').trim();
     }
+    function atualizarAviso() {
+        if (!aviso) return;
+        var id = paciente && paciente.value;
+        var total = id ? contagens[id] : 0;
+        if (!total) {
+            aviso.hidden = true;
+            return;
+        }
+        var palavra = total === 1 ? 'folha' : 'folhas';
+        var modelo = aviso.getAttribute('data-modelo') || '';
+        aviso.replaceChildren();
+        aviso.appendChild(document.createTextNode(
+            'Atenção: este paciente já recebeu ' + total + ' ' + palavra + ' hoje. '
+        ));
+        var link = document.createElement('a');
+        link.href = modelo.replace(/\/0\/$/, '/' + id + '/');
+        link.textContent = 'Veja antes de enviar de novo.';
+        aviso.appendChild(link);
+        aviso.hidden = false;
+    }
+    function atualizarBotao() {
+        if (pronto || preparando) return;
+        var quantidade = arquivo.files ? arquivo.files.length : 0;
+        var nomePaciente = textoSelecionado(paciente);
+        if (!quantidade || !nomePaciente) {
+            botao.disabled = true;
+            botao.textContent = 'Escolha o paciente e as fotos';
+            return;
+        }
+        var palavra = quantidade === 1 ? 'folha' : 'folhas';
+        botao.disabled = false;
+        botao.textContent = 'Enviar ' + quantidade + ' ' + palavra + ' para ' + nomePaciente;
+    }
     function mostrarEnviando() {
         if (enviando) enviando.hidden = false;
-        salvar.disabled = true;
-        confirmar.disabled = true;
-        corrigir.disabled = true;
+        botao.disabled = true;
+        botao.textContent = 'Enviando...';
     }
+    window.atualizarEnvioDigitalizacao = function () {
+        atualizarBotao();
+        atualizarAviso();
+    };
     function reduzirFoto(foto) {
         if (typeof createImageBitmap !== 'function') return Promise.resolve(foto);
         var canvas = document.createElement('canvas');
@@ -346,41 +378,21 @@
     }
     form.addEventListener('submit', function (event) {
         if (pronto) return;
-        var vaiEnviar = confirmado || event.submitter === confirmar;
-        if (vaiEnviar) {
-            event.preventDefault();
-            if (preparando) return;
-            preparando = true;
-            mostrarEnviando();
-            reduzirTodas(arquivo.files).then(function (reduzidas) {
-                aplicarArquivos(reduzidas);
-                concluirEnvio();
-            }).catch(function () { concluirEnvio(); });
-            return;
-        }
-        var quantidade = arquivo.files ? arquivo.files.length : 0;
-        if (!quantidade) return;
         event.preventDefault();
-        var pacienteNome = textoSelecionado(paciente) || 'sem paciente';
-        nome.textContent = pacienteNome;
-        if (quantidade === 1) {
-            frase.firstChild.textContent = 'Enviar esta folha para ';
-        } else {
-            frase.firstChild.textContent = 'Enviar estas ' + quantidade + ' folhas para ';
-        }
-        painel.hidden = false;
-        salvar.hidden = true;
-        salvar.disabled = true;
+        if (preparando) return;
+        var quantidade = arquivo.files ? arquivo.files.length : 0;
+        if (!quantidade || !textoSelecionado(paciente)) return;
+        preparando = true;
+        mostrarEnviando();
+        reduzirTodas(arquivo.files).then(function (reduzidas) {
+            aplicarArquivos(reduzidas);
+            concluirEnvio();
+        }).catch(function () { concluirEnvio(); });
     });
-    confirmar.addEventListener('click', function () {
-        confirmado = true;
-    });
-    corrigir.addEventListener('click', function () {
-        confirmado = false;
-        painel.hidden = true;
-        salvar.hidden = false;
-        salvar.disabled = false;
-    });
+    if (paciente) paciente.addEventListener('change', window.atualizarEnvioDigitalizacao);
+    arquivo.addEventListener('change', atualizarBotao);
+    document.addEventListener('click', window.atualizarEnvioDigitalizacao);
+    setTimeout(window.atualizarEnvioDigitalizacao, 0);
 })();
 </script>
 {% endblock %}
