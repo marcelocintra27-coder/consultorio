@@ -507,6 +507,29 @@ Legenda:
     no PostgreSQL 16 local (83 testes). Migração
     `core.0039_nome_paciente_arrumado`.
 
+## Prefixo HOMOLOG, enviadas hoje e tipos de folha
+
+- [x] Prefixo HOMOLOG- preservado, uma linha por paciente e tipos novos.
+  - Critérios: “HOMOLOG-Ana” e “homolog-ana” continuam “HOMOLOG-Ana”. A trava
+    de `carregar_homolog_externa` reconhece o banco depois da migração do
+    nome, também se a grafia já estiver “Homolog-Ana”. “Enviadas hoje” mostra
+    uma linha por paciente, com o total, a contagem por tipo e o último envio;
+    a linha abre as folhas daquele paciente; engano e folha de outra pessoa
+    não entram. Os selects e as contagens incluem Encaminhamento, Guia do
+    convênio e Exame. Quem revisa troca o tipo com registro de quem, quando,
+    tipo anterior e novo; a secretária recebe 403 e nada é apagado.
+  - Validação: suíte completa com 457 testes; só as 3 falhas já conhecidas
+    (`test_seeds_legitimos_nao_recusam`,
+    `test_configuracao_ativa_usa_somente_homolog_local`,
+    `test_recusa_banco_que_nao_e_consultorio_homolog`). Os testes de
+    digitalização, revisão, busca, auditoria de paciente e das cargas de
+    homologação também passaram no PostgreSQL 16 local (133 testes), com as
+    2 falhas já conhecidas que entram nesses módulos
+    (`test_seeds_legitimos_nao_recusam` e
+    `test_recusa_banco_que_nao_e_consultorio_homolog`). Migrações
+    `core.0040_reaplicar_nome_homolog` e
+    `core.0041_tipos_folha_e_troca_tipo`.
+
 ## Regras de execução contínua
 
 - [x] Sem commit, push ou deploy sem autorização explícita.

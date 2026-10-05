@@ -20,8 +20,10 @@ from consultorio.settings import (
     nome_banco_homolog_externa_valido,
     resolver_disco_homolog_externa,
 )
-from core.busca_paciente import formatar_nome
-from core.management.commands.carregar_homolog_local import gerar_senha_homolog
+from core.management.commands.carregar_homolog_local import (
+    gerar_senha_homolog,
+    obter_ou_criar_paciente_ficticio,
+)
 from core.models import (
     CategoriaContaPagar,
     ContaPagar,
@@ -98,11 +100,11 @@ def recusar_dados_incompativeis():
     """
     if User.objects.exclude(username__startswith='homolog.').exists():
         raise CommandError('Carga recusada: usuário fora do namespace homolog.')
-    if Paciente.objects.exclude(nome_completo__startswith=PREFIXO).exists():
+    if Paciente.objects.exclude(nome_completo__istartswith=PREFIXO).exists():
         raise CommandError('Carga recusada: paciente fora do prefixo HOMOLOG-.')
-    if Dentista.objects.exclude(nome_completo__startswith=PREFIXO).exists():
+    if Dentista.objects.exclude(nome_completo__istartswith=PREFIXO).exists():
         raise CommandError('Carga recusada: dentista fora do prefixo HOMOLOG-.')
-    if Sala.objects.exclude(nome__startswith=PREFIXO).exists():
+    if Sala.objects.exclude(nome__istartswith=PREFIXO).exists():
         raise CommandError('Carga recusada: sala fora do prefixo HOMOLOG-.')
 
 
@@ -326,16 +328,13 @@ class Command(BaseCommand):
             'HOMOLOG-Diego',
             'HOMOLOG-Elena',
         ):
-            paciente, _ = Paciente.objects.get_or_create(
-                nome_completo=formatar_nome(nome),
-                defaults={
-                    'data_nascimento': nascimento,
-                    'telefone': '61900000000',
-                    'convenio': particular,
-                    'observacoes': 'Dado fictício de homologação externa.',
-                },
+            pacientes[nome] = obter_ou_criar_paciente_ficticio(
+                nome,
+                data_nascimento=nascimento,
+                telefone='61900000000',
+                convenio=particular,
+                observacoes='Dado fictício de homologação externa.',
             )
-            pacientes[nome] = paciente
 
         dent_a = dentistas['HOMOLOG-Dentista A']
         dent_b = dentistas['HOMOLOG-Dentista B']
@@ -446,10 +445,10 @@ class Command(BaseCommand):
         )
 
         contagens = {
-            'salas': Sala.objects.filter(nome__startswith=PREFIXO).count(),
-            'dentistas': Dentista.objects.filter(nome_completo__startswith=PREFIXO).count(),
+            'salas': Sala.objects.filter(nome__istartswith=PREFIXO).count(),
+            'dentistas': Dentista.objects.filter(nome_completo__istartswith=PREFIXO).count(),
             'usuarios': User.objects.filter(username__startswith='homolog.').count(),
-            'pacientes': Paciente.objects.filter(nome_completo__startswith=PREFIXO).count(),
+            'pacientes': Paciente.objects.filter(nome_completo__istartswith=PREFIXO).count(),
             'consultas': Consulta.objects.filter(
                 observacoes__startswith='Consulta fictícia HOMOLOG'
             ).count(),

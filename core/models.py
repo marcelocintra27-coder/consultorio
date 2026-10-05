@@ -2311,6 +2311,9 @@ class DigitalizacaoFicha(models.Model):
         CADASTRO = 'cadastro', 'Cadastro'
         ANAMNESE = 'anamnese', 'Anamnese'
         EVOLUCAO = 'evolucao', 'Evolução'
+        ENCAMINHAMENTO = 'encaminhamento', 'Encaminhamento / carta de indicação'
+        CONVENIO = 'convenio', 'Guia / ficha do convênio'
+        EXAME = 'exame', 'Exame / raio-X em papel'
         OUTRO = 'outro', 'Outro'
 
     class Status(models.TextChoices):
@@ -2424,6 +2427,46 @@ class TrocaPacienteDigitalizacao(models.Model):
 
     def __str__(self):
         return f'{self.ficha_id} — {self.trocado_em}'
+
+
+class TrocaTipoDigitalizacao(models.Model):
+    ficha = models.ForeignKey(
+        DigitalizacaoFicha,
+        verbose_name='ficha',
+        on_delete=models.CASCADE,
+        related_name='trocas_tipo',
+    )
+    tipo_anterior = models.CharField('tipo anterior', max_length=20)
+    tipo_novo = models.CharField('tipo novo', max_length=20)
+    trocado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='trocado por',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='trocas_tipo_digitalizacao',
+    )
+    trocado_em = models.DateTimeField('trocado em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'troca de tipo da digitalização'
+        verbose_name_plural = 'trocas de tipo da digitalização'
+        ordering = ['-trocado_em']
+
+    def __str__(self):
+        return f'{self.ficha_id} — {self.tipo_anterior} → {self.tipo_novo}'
+
+    @staticmethod
+    def rotulo(valor):
+        return dict(DigitalizacaoFicha.Tipo.choices).get(valor, valor)
+
+    @property
+    def rotulo_anterior(self):
+        return self.rotulo(self.tipo_anterior)
+
+    @property
+    def rotulo_novo(self):
+        return self.rotulo(self.tipo_novo)
 
 
 class RegistroEvolucaoClinica(ModeloClinicoProtegido):

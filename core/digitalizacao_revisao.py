@@ -20,6 +20,7 @@ from .models import (
     Paciente,
     RegistroAcesso,
     TrocaPacienteDigitalizacao,
+    TrocaTipoDigitalizacao,
 )
 from .permissoes import (
     digitalizacoes_visiveis,
@@ -45,12 +46,16 @@ TIPOS_FOTO = {
 
 
 def enviadas_hoje(user):
+    """Uma linha por paciente, só o que este usuário enviou hoje, sem engano."""
     inicio, fim = _janela(timezone.localdate(), timezone.localdate())
-    return DigitalizacaoFicha.objects.filter(
+    fichas = DigitalizacaoFicha.objects.filter(
         digitalizado_por=user,
         criado_em__gte=inicio,
         criado_em__lt=fim,
-    ).select_related('paciente').order_by('-criado_em')
+    ).exclude(
+        status=DigitalizacaoFicha.Status.ENGANO,
+    ).select_related('paciente')
+    return agrupar_fichas(fichas)
 
 
 def ficha_recem_enviada(user, bruto):
@@ -82,6 +87,9 @@ ROTULOS_TIPO = {
     'cadastro': ('cadastro', 'cadastros'),
     'anamnese': ('anamnese', 'anamneses'),
     'evolucao': ('evolução', 'evoluções'),
+    'encaminhamento': ('encaminhamento', 'encaminhamentos'),
+    'convenio': ('guia do convênio', 'guias do convênio'),
+    'exame': ('exame', 'exames'),
     'outro': ('outro', 'outros'),
 }
 
@@ -131,6 +139,10 @@ class GrupoDigitalizacao:
                 self.motivos.append(ficha.motivo_engano)
         if self.ultimo is None:
             self.ultimo = ficha
+
+    @property
+    def total(self):
+        return len(self.ids)
 
 
 def agrupar_fichas(fichas):
@@ -392,6 +404,8 @@ def detalhe_digitalizacao(request, pk):
         'trocas': ficha.trocas_paciente.select_related(
             'paciente_anterior', 'paciente_novo', 'trocado_por',
         ),
+        'trocas_tipo': ficha.trocas_tipo.select_related('trocado_por'),
+        'tipos_folha': DigitalizacaoFicha.Tipo.choices,
         'secretaria': (
             _e_secretaria(request.user) and not usuario_e_administrador(request.user)
         ),
@@ -511,4 +525,34 @@ def trocar_paciente_digitalizacao(request, pk):
         ficha.paciente = novo
         ficha.save(update_fields=['paciente'])
     messages.success(request, f'Paciente alterado para {novo.nome_completo}.')
+    return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+
+
+@login_required
+@require_POST
+def trocar_tipo_digitalizacao(request, pk):
+    ficha = _ficha_ou_404(request.user, pk)
+    if not usuario_pode_revisar_digitalizacao(request.user, ficha):
+        raise PermissionDenied
+    novo = (request.POST.get('tipo') or '').strip()
+    if novo not in DigitalizacaoFicha.Tipo.values:
+        messages.error(request, 'Escolha um tipo de folha válido.')
+        return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+    if novo == ficha.tipo:
+        messages.error(request, 'Escolha um tipo diferente.')
+        return redirect('core:detalhe_digitalizacao', pk=ficha.pk)
+    anterior = ficha.tipo
+    with transaction.atomic():
+        TrocaTipoDigitalizacao.objects.create(
+            ficha=ficha,
+            tipo_anterior=anterior,
+            tipo_novo=novo,
+            trocado_por=request.user,
+        )
+        ficha.tipo = novo
+        ficha.save(update_fields=['tipo'])
+    messages.success(
+        request,
+        f'Tipo alterado para {TrocaTipoDigitalizacao.rotulo(novo)}.',
+    )
     return redirect('core:detalhe_digitalizacao', pk=ficha.pk)

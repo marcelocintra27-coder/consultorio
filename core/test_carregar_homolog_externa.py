@@ -253,6 +253,74 @@ class DadosIncompativeisTests(TestCase):
             recusar_dados_incompativeis()
         self.assertIn('paciente', str(contexto.exception))
 
+    def _paciente_homolog(self, nome):
+        return Paciente.objects.create(
+            nome_completo=nome,
+            data_nascimento=date(1990, 1, 15),
+            telefone='61900000000',
+        )
+
+    def test_trava_reconhece_homolog_depois_da_0039(self):
+        import importlib
+
+        from django.apps import apps
+
+        from core.busca_paciente import formatar_nome
+
+        arrumar_nomes = importlib.import_module(
+            'core.migrations.0039_nome_paciente_arrumado'
+        ).arrumar_nomes
+        ana = self._paciente_homolog('HOMOLOG-Ana')
+        bruno = self._paciente_homolog('HOMOLOG-Bruno')
+        carla = self._paciente_homolog('HOMOLOG-Carla')
+        Paciente.objects.filter(pk=ana.pk).update(nome_completo='HOMOLOG-Ana')
+        Paciente.objects.filter(pk=bruno.pk).update(nome_completo='homolog-bruno')
+        Paciente.objects.filter(pk=carla.pk).update(nome_completo='Homolog-Carla')
+        arrumar_nomes(apps, None)
+        ana.refresh_from_db()
+        bruno.refresh_from_db()
+        carla.refresh_from_db()
+        self.assertEqual(ana.nome_completo, 'HOMOLOG-Ana')
+        self.assertEqual(bruno.nome_completo, 'HOMOLOG-Bruno')
+        self.assertEqual(carla.nome_completo, 'HOMOLOG-Carla')
+        self.assertEqual(formatar_nome('homolog-ana'), 'HOMOLOG-Ana')
+        recusar_dados_incompativeis()
+
+    def test_trava_aceita_grafia_antiga_sem_nova_migracao(self):
+        paciente = self._paciente_homolog('HOMOLOG-Ana')
+        Paciente.objects.filter(pk=paciente.pk).update(nome_completo='Homolog-Ana')
+        recusar_dados_incompativeis()
+
+    def test_recarga_nao_duplica_e_0040_restaura_o_prefixo(self):
+        import importlib
+
+        from django.apps import apps
+
+        from core.management.commands.carregar_homolog_local import (
+            obter_ou_criar_paciente_ficticio,
+        )
+
+        reaplicar_nomes = importlib.import_module(
+            'core.migrations.0040_reaplicar_nome_homolog'
+        ).reaplicar_nomes
+        paciente = self._paciente_homolog('HOMOLOG-Ana')
+        Paciente.objects.filter(pk=paciente.pk).update(
+            nome_completo='Homolog-Ana',
+            nome_busca='homolog ana',
+        )
+        achado = obter_ou_criar_paciente_ficticio(
+            'HOMOLOG-Ana',
+            data_nascimento=date(1990, 1, 15),
+            telefone='61900000000',
+        )
+        self.assertEqual(achado.pk, paciente.pk)
+        self.assertEqual(Paciente.objects.count(), 1)
+        Paciente.objects.filter(pk=paciente.pk).update(nome_completo='Homolog-Ana')
+        reaplicar_nomes(apps, None)
+        paciente.refresh_from_db()
+        self.assertEqual(paciente.nome_completo, 'HOMOLOG-Ana')
+        recusar_dados_incompativeis()
+
     def test_recusa_dentista_fora_do_prefixo(self):
         sala = Sala.objects.create(nome='HOMOLOG-Sala Suporte')
         Dentista.objects.create(nome_completo='Dra Real', sala=sala)

@@ -99,6 +99,7 @@ from .digitalizacao_revisao import (
     marcar_engano_digitalizacao,
     revisar_digitalizacao,
     trocar_paciente_digitalizacao,
+    trocar_tipo_digitalizacao,
 )
 from .relatorio_atividade import (
     relatorio_atividade,
@@ -154,6 +155,11 @@ urlpatterns = [
         'digitalizacao/<int:pk>/trocar-paciente/',
         trocar_paciente_digitalizacao,
         name='trocar_paciente_digitalizacao',
+    ),
+    path(
+        'digitalizacao/<int:pk>/trocar-tipo/',
+        trocar_tipo_digitalizacao,
+        name='trocar_tipo_digitalizacao',
     ),
     path(
         'digitalizacao/<int:pk>/processar-ia/',

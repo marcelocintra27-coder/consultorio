@@ -15,6 +15,7 @@ from core.models import (
     Paciente,
     RegistroAcesso,
     TrocaPacienteDigitalizacao,
+    TrocaTipoDigitalizacao,
 )
 from core.relatorio_atividade import eventos_do_dia, linhas_do_relatorio
 from locacao.models import Dentista, PerfilUsuario, Sala
@@ -141,6 +142,7 @@ class RevisaoDigitalizacaoTests(TestCase):
         self.assertEqual(detalhe.status_code, 200)
         self.assertContains(detalhe, reverse('core:foto_digitalizacao', args=[self.minha.pk]))
         self.assertNotContains(detalhe, 'name="acao" value="conferida"')
+        self.assertNotContains(detalhe, 'Trocar tipo')
         self.assertNotContains(detalhe, self.minha.imagem.name)
         self.assertEqual(
             self.client.get(reverse('core:detalhe_digitalizacao', args=[self.da_outra.pk])).status_code,
@@ -425,12 +427,12 @@ class RevisaoDigitalizacaoTests(TestCase):
         self._entrar(self.secretaria)
         antes = self.client.get(reverse('core:digitalizacao_upload'))
         self.assertContains(antes, 'Enviadas hoje')
-        self.assertEqual(
-            {ficha.pk for ficha in antes.context['enviadas_hoje']},
-            {self.minha.pk, self.para_refazer.pk},
-        )
-        self.assertNotIn(self.antiga.pk, {ficha.pk for ficha in antes.context['enviadas_hoje']})
-        self.assertNotIn(self.da_outra.pk, {ficha.pk for ficha in antes.context['enviadas_hoje']})
+        ids_antes = {
+            pk for grupo in antes.context['enviadas_hoje'] for pk in grupo.ids
+        }
+        self.assertEqual(ids_antes, {self.minha.pk, self.para_refazer.pk})
+        self.assertNotIn(self.antiga.pk, ids_antes)
+        self.assertNotIn(self.da_outra.pk, ids_antes)
 
         resposta = self.client.post(reverse('core:digitalizacao_upload'), {
             'paciente': self.paciente_a.pk,
@@ -444,8 +446,13 @@ class RevisaoDigitalizacaoTests(TestCase):
         ]).get()
         self.assertEqual(DigitalizacaoFicha.objects.filter(pk=self.para_refazer.pk).count(), 1)
         self.assertContains(pagina, 'Enviadas hoje')
-        self.assertContains(pagina, 'Evolução')
-        self.assertContains(pagina, reverse('core:detalhe_digitalizacao', args=[nova.pk]))
+        self.assertContains(pagina, '2 folhas')
+        self.assertContains(pagina, '1 cadastro, 1 evolução')
+        self.assertContains(
+            pagina,
+            reverse('core:folhas_digitalizacao_paciente', args=[self.paciente_a.pk]),
+        )
+        self.assertNotContains(pagina, reverse('core:detalhe_digitalizacao', args=[nova.pk]))
         self.assertNotContains(pagina, '<img')
         self.assertNotContains(pagina, nova.imagem.name)
         self.assertNotContains(pagina, '/media/')
@@ -463,6 +470,126 @@ class RevisaoDigitalizacaoTests(TestCase):
         })
         self.assertNotIn('paciente', negado.context['form'].initial)
         self.assertNotIn('tipo', negado.context['form'].initial)
+
+    def test_enviadas_hoje_uma_linha_por_paciente(self):
+        roberto = self._paciente('Roberto Gomes da Silva')
+        folhas = []
+        for indice, tipo in enumerate(('evolucao', 'evolucao', 'evolucao', 'outro', 'outro')):
+            folha = self._ficha(roberto, self.secretaria, tipo=tipo, nome=f'lote-{indice}.png')
+            folha.criado_em = timezone.make_aware(
+                datetime.combine(self.hoje, time(11, 31 + indice)),
+            )
+            folha.save(update_fields=['criado_em'])
+            folhas.append(folha)
+        self._ficha(
+            roberto, self.secretaria, tipo='cadastro', nome='engano-hoje.png',
+            status=DigitalizacaoFicha.Status.ENGANO,
+        )
+        self._ficha(roberto, self.outra_secretaria, tipo='exame', nome='de-outra.png')
+        self._em(self.minha, self.hoje)
+        self._em(self.para_refazer, self.hoje)
+        recente = self._paciente('Paciente mais recente')
+        ultima = self._ficha(recente, self.secretaria, nome='ultima.png')
+        ultima.criado_em = timezone.make_aware(datetime.combine(self.hoje, time(18, 0)))
+        ultima.save(update_fields=['criado_em'])
+
+        self._entrar(self.secretaria)
+        pagina = self.client.get(reverse('core:digitalizacao_upload'))
+        grupos = list(pagina.context['enviadas_hoje'])
+        do_roberto = next(grupo for grupo in grupos if grupo.paciente.pk == roberto.pk)
+        self.assertEqual(do_roberto.total, 5)
+        self.assertEqual(do_roberto.resumo_tipos, '3 evoluções, 2 outros')
+        self.assertEqual(do_roberto.ids, [folha.pk for folha in reversed(folhas)])
+        self.assertContains(pagina, '5 folhas')
+        self.assertContains(pagina, '3 evoluções, 2 outros')
+        self.assertContains(pagina, 'último envio 11:35')
+        self.assertContains(
+            pagina,
+            reverse('core:folhas_digitalizacao_paciente', args=[roberto.pk]),
+        )
+        self.assertContains(pagina, 'linha-enviada')
+        self.assertNotContains(pagina, '<img')
+        html = pagina.content.decode()
+        self.assertLess(
+            html.find(recente.nome_completo),
+            html.find(roberto.nome_completo),
+        )
+        self.assertEqual(grupos[0].paciente.pk, recente.pk)
+
+    def test_envio_grava_os_tipos_novos(self):
+        self._entrar(self.secretaria)
+        pagina = self.client.get(reverse('core:digitalizacao_upload'))
+        for rotulo in (
+            'Encaminhamento / carta de indicação',
+            'Guia / ficha do convênio',
+            'Exame / raio-X em papel',
+        ):
+            self.assertContains(pagina, rotulo)
+        for tipo in ('encaminhamento', 'convenio', 'exame'):
+            antes = set(DigitalizacaoFicha.objects.values_list('pk', flat=True))
+            resposta = self.client.post(reverse('core:digitalizacao_upload'), {
+                'paciente': self.paciente_a.pk,
+                'imagens': _png(f'{tipo}.png'),
+                'tipo': tipo,
+            })
+            self.assertEqual(resposta.status_code, 302)
+            nova = DigitalizacaoFicha.objects.exclude(pk__in=antes).get()
+            self.assertEqual(nova.tipo, tipo)
+            self.assertEqual(nova.paciente_id, self.paciente_a.pk)
+
+    def test_quem_revisa_troca_o_tipo_e_secretaria_nao(self):
+        self._entrar(self.dentista_user)
+        detalhe = self.client.get(reverse('core:detalhe_digitalizacao', args=[self.minha.pk]))
+        self.assertContains(detalhe, 'Trocar tipo')
+        self.assertContains(detalhe, 'csrfmiddlewaretoken')
+        self.assertContains(detalhe, 'Encaminhamento / carta de indicação')
+        imagem = self.minha.imagem.name
+        resposta = self.client.post(
+            reverse('core:trocar_tipo_digitalizacao', args=[self.minha.pk]),
+            {'tipo': 'encaminhamento'},
+            follow=True,
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.minha.refresh_from_db()
+        self.assertEqual(self.minha.tipo, 'encaminhamento')
+        self.assertEqual(self.minha.imagem.name, imagem)
+        self.assertEqual(DigitalizacaoFicha.objects.filter(pk=self.minha.pk).count(), 1)
+        troca = TrocaTipoDigitalizacao.objects.get()
+        self.assertEqual(troca.ficha_id, self.minha.pk)
+        self.assertEqual(troca.tipo_anterior, 'cadastro')
+        self.assertEqual(troca.tipo_novo, 'encaminhamento')
+        self.assertEqual(troca.trocado_por, self.dentista_user)
+        self.assertIsNotNone(troca.trocado_em)
+        self.assertContains(resposta, 'de Cadastro')
+        self.assertContains(resposta, 'para Encaminhamento / carta de indicação')
+
+        igual = self.client.post(
+            reverse('core:trocar_tipo_digitalizacao', args=[self.minha.pk]),
+            {'tipo': 'encaminhamento'},
+            follow=True,
+        )
+        self.assertContains(igual, 'Escolha um tipo diferente.')
+        invalido = self.client.post(
+            reverse('core:trocar_tipo_digitalizacao', args=[self.minha.pk]),
+            {'tipo': 'invasivo'},
+            follow=True,
+        )
+        self.assertContains(invalido, 'Escolha um tipo de folha válido.')
+        self.assertEqual(TrocaTipoDigitalizacao.objects.count(), 1)
+
+        self._entrar(self.secretaria)
+        negado = self.client.post(
+            reverse('core:trocar_tipo_digitalizacao', args=[self.minha.pk]),
+            {'tipo': 'exame'},
+        )
+        self.assertEqual(negado.status_code, 403)
+        self.minha.refresh_from_db()
+        self.assertEqual(self.minha.tipo, 'encaminhamento')
+        self.assertEqual(TrocaTipoDigitalizacao.objects.count(), 1)
+        self.assertNotContains(
+            self.client.get(reverse('core:detalhe_digitalizacao', args=[self.minha.pk])),
+            'Trocar tipo',
+        )
 
     def test_pagina_do_paciente_so_para_quem_tem_prontuario(self):
         url = reverse('core:editar_paciente', args=[self.paciente_a.pk])

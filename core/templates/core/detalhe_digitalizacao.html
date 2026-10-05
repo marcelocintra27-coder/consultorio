@@ -41,7 +41,38 @@
             {% endif %}
 
             {% include "core/_acoes_digitalizacao.html" %}
+
+            {% if ficha.pode_revisar %}
+            <form method="post" action="{% url 'core:trocar_tipo_digitalizacao' ficha.pk %}" class="form-cartao">
+                {% csrf_token %}
+                <div class="campo">
+                    <label for="tipo-novo-{{ ficha.pk }}">Novo tipo da folha</label>
+                    <select id="tipo-novo-{{ ficha.pk }}" name="tipo" required>
+                        {% for valor, rotulo in tipos_folha %}
+                        <option value="{{ valor }}"{% if valor == ficha.tipo %} selected{% endif %}>{{ rotulo }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="botao secundario">Trocar tipo</button>
+            </form>
+            {% endif %}
         </section>
+
+        {% if trocas_tipo %}
+        <section aria-labelledby="titulo-trocas-tipo">
+            <h2 id="titulo-trocas-tipo" class="secao-pagina">Trocas de tipo</h2>
+            <ul>
+                {% for troca in trocas_tipo %}
+                <li>
+                    {% if troca.trocado_por %}{{ troca.trocado_por.get_full_name|default:troca.trocado_por.username }}{% else %}—{% endif %}
+                    em {{ troca.trocado_em|date:"d/m/Y H:i" }}:
+                    de {{ troca.rotulo_anterior }}
+                    para {{ troca.rotulo_novo }}.
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
 
         {% if trocas %}
         <section aria-labelledby="titulo-trocas">

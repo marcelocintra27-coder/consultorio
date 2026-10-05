@@ -987,3 +987,12 @@ pessoa digita, aparecem até 10 nomes com a data de nascimento; depois o nome
 fica em destaque, com “Trocar”. Sem JavaScript, vale o select e uma foto.
 O texto vazio do paciente é “Escolha o paciente”. O nome gravado tira espaços
 sobrando e deixa preposições de/da/do/dos/das/e em minúsculo, salvo no começo.
+O prefixo fictício HOMOLOG- permanece em maiúsculas. A trava da carga de treino
+compara paciente, dentista e sala sem distinguir maiúsculas.
+
+Abaixo do formulário, “Enviadas hoje” é uma linha por paciente: nome, total de
+folhas que a própria pessoa enviou hoje, a contagem por tipo e o horário do
+último envio. “Enviada por engano” não entra. A linha abre as folhas daquele
+paciente. Os tipos de folha são Cadastro, Anamnese, Evolução, Encaminhamento,
+Guia do convênio, Exame e Outro. Quem revisa pode trocar o tipo de uma folha já
+enviada; a troca fica registrada e a foto permanece. Secretária não troca.

@@ -6,6 +6,7 @@ from django.db.models import Q
 
 PALAVRAS_IGNORADAS = {'de', 'da', 'do', 'dos', 'das', 'e'}
 _SEPARADORES_NOME = re.compile(r"([-'’])")
+_PREFIXO_HOMOLOG = 'HOMOLOG-'
 
 
 def _capitalizar_pedaco(pedaco):
@@ -21,15 +22,33 @@ def _capitalizar_palavra(palavra):
     )
 
 
-def formatar_nome(texto):
-    """Tira espaços sobrando e deixa preposições minúsculas, salvo no começo."""
+def _formatar_palavras(palavras, preservar_primeira=False):
     saida = []
-    for indice, palavra in enumerate((texto or '').split()):
-        if indice > 0 and palavra.casefold() in PALAVRAS_IGNORADAS:
+    for indice, palavra in enumerate(palavras):
+        if indice == 0 and preservar_primeira:
+            saida.append(palavra)
+        elif indice > 0 and palavra.casefold() in PALAVRAS_IGNORADAS:
             saida.append(palavra.casefold())
         else:
             saida.append(_capitalizar_palavra(palavra))
     return ' '.join(saida)
+
+
+def formatar_nome(texto):
+    """Tira espaços sobrando e deixa preposições minúsculas, salvo no começo.
+
+    O prefixo fictício HOMOLOG- permanece em maiúsculas, em qualquer grafia
+    de entrada, para a trava da carga de treino continuar reconhecendo o banco.
+    """
+    palavras = (texto or '').split()
+    if not palavras:
+        return ''
+    primeira = palavras[0]
+    if primeira.casefold().startswith('homolog-'):
+        resto = primeira[len('homolog-'):]
+        cabeca = _PREFIXO_HOMOLOG + (_capitalizar_palavra(resto) if resto else '')
+        return _formatar_palavras([cabeca, *palavras[1:]], preservar_primeira=True)
+    return _formatar_palavras(palavras)
 
 
 def normalizar_nome(texto):

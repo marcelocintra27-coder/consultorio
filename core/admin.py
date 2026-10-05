@@ -40,6 +40,7 @@ from .models import (
     FichaCadastroAnamnese,
     DigitalizacaoFicha,
     TrocaPacienteDigitalizacao,
+    TrocaTipoDigitalizacao,
     RegistroEvolucaoClinica,
     FichaPlanoTratamento,
     ItemConsentimentoProcedimento,
@@ -526,6 +527,24 @@ class TrocaPacienteDigitalizacaoAdmin(_SomenteLeituraSuperusuarioAdmin):
         'paciente_anterior',
         'paciente_novo',
         'motivo',
+        'trocado_por',
+        'trocado_em',
+    )
+
+
+@admin.register(TrocaTipoDigitalizacao)
+class TrocaTipoDigitalizacaoAdmin(_SomenteLeituraSuperusuarioAdmin):
+    list_display = (
+        'ficha',
+        'tipo_anterior',
+        'tipo_novo',
+        'trocado_por',
+        'trocado_em',
+    )
+    readonly_fields = (
+        'ficha',
+        'tipo_anterior',
+        'tipo_novo',
         'trocado_por',
         'trocado_em',
     )

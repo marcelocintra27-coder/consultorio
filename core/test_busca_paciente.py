@@ -77,6 +77,10 @@ class BuscaPacienteTests(TestCase):
         self.assertEqual(formatar_nome('  roberto   gomes da silva '), 'Roberto Gomes da Silva')
         self.assertEqual(formatar_nome('ana e maria'), 'Ana e Maria')
         self.assertEqual(formatar_nome('da silva roberto'), 'Da Silva Roberto')
+        self.assertEqual(formatar_nome('HOMOLOG-Ana'), 'HOMOLOG-Ana')
+        self.assertEqual(formatar_nome('homolog-ana'), 'HOMOLOG-Ana')
+        self.assertEqual(formatar_nome('Homolog-Ana'), 'HOMOLOG-Ana')
+        self.assertEqual(formatar_nome('HOMOLOG-ana da silva'), 'HOMOLOG-Ana da Silva')
         paciente = Paciente.objects.create(
             nome_completo='  roberto   gomes da silva ',
             data_nascimento=date(1985, 5, 5),

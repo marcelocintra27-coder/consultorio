@@ -951,6 +951,31 @@ h2.secao-pagina {
     font-size: 1.15rem;
 }
 
+.enviadas-hoje {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.linha-enviada {
+    display: block;
+    min-height: 48px;
+    padding: 14px 12px;
+    background: #fff;
+    border: 1px solid var(--cor-borda);
+    border-radius: 8px;
+    color: inherit;
+    font-size: 16px;
+    line-height: 1.4;
+    text-decoration: none;
+}
+
+.linha-enviada:hover {
+    background: var(--cor-hover);
+}
+
 .confirmacao-envio {
     margin-top: 16px;
     padding-top: 16px;

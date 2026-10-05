@@ -73,6 +73,20 @@ def exigir_ambiente_homolog():
         )
 
 
+def obter_ou_criar_paciente_ficticio(nome, **defaults):
+    """Acha o paciente pelo nome sem distinguir maiúsculas e grava o prefixo HOMOLOG-."""
+    gravado = formatar_nome(nome)
+    paciente = Paciente.objects.filter(nome_completo__iexact=gravado).order_by('pk').first()
+    if paciente is None:
+        paciente = Paciente(nome_completo=gravado, **defaults)
+        paciente.save()
+        return paciente
+    if paciente.nome_completo != gravado:
+        paciente.nome_completo = gravado
+        paciente.save(update_fields=['nome_completo'])
+    return paciente
+
+
 def gravar_senhas_homolog(senhas, base_dir=None):
     """Grava senhas só em homolog_local/; nunca envia ao stdout."""
     pasta = Path(base_dir or settings.BASE_DIR) / 'homolog_local'
@@ -193,16 +207,13 @@ class Command(BaseCommand):
             'HOMOLOG-Diego',
             'HOMOLOG-Elena',
         ):
-            paciente, _ = Paciente.objects.get_or_create(
-                nome_completo=formatar_nome(nome),
-                defaults={
-                    'data_nascimento': nascimento,
-                    'telefone': '61900000000',
-                    'convenio': particular,
-                    'observacoes': 'Dado fictício de homologação local.',
-                },
+            pacientes[nome] = obter_ou_criar_paciente_ficticio(
+                nome,
+                data_nascimento=nascimento,
+                telefone='61900000000',
+                convenio=particular,
+                observacoes='Dado fictício de homologação local.',
             )
-            pacientes[nome] = paciente
 
         dent_a = dentistas['HOMOLOG-Dentista A']
         dent_b = dentistas['HOMOLOG-Dentista B']
@@ -313,10 +324,10 @@ class Command(BaseCommand):
         )
 
         contagens = {
-            'salas': Sala.objects.filter(nome__startswith=PREFIXO).count(),
-            'dentistas': Dentista.objects.filter(nome_completo__startswith=PREFIXO).count(),
+            'salas': Sala.objects.filter(nome__istartswith=PREFIXO).count(),
+            'dentistas': Dentista.objects.filter(nome_completo__istartswith=PREFIXO).count(),
             'usuarios': User.objects.filter(username__startswith='homolog.').count(),
-            'pacientes': Paciente.objects.filter(nome_completo__startswith=PREFIXO).count(),
+            'pacientes': Paciente.objects.filter(nome_completo__istartswith=PREFIXO).count(),
             'consultas': Consulta.objects.filter(
                 observacoes__startswith='Consulta fictícia HOMOLOG'
             ).count(),
