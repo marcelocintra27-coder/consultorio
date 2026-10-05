@@ -1,6 +1,7 @@
 ﻿import openpyxl
 from datetime import datetime, date
 from django.core.management.base import BaseCommand
+from core.busca_paciente import formatar_nome
 from core.models import Paciente, Convenio, Evolucao
 
 
@@ -51,7 +52,7 @@ class Command(BaseCommand):
         convenios_cache = {}
 
         for row_num, row in enumerate(ws1.iter_rows(min_row=2, values_only=True), start=2):
-            nome = texto(row[idx("Nome Completo")])
+            nome = formatar_nome(texto(row[idx("Nome Completo")]))
             if not nome:
                 continue
             try:
@@ -127,7 +128,9 @@ class Command(BaseCommand):
             if not data_atend or not descricao:
                 erros_evo.append(f"Linha {row_num}: data ou descricao ausente - pulado")
                 continue
-            paciente = Paciente.objects.filter(nome_completo=nome_paciente).first()
+            paciente = Paciente.objects.filter(
+                nome_completo=formatar_nome(nome_paciente)
+            ).first()
             if not paciente:
                 erros_evo.append(f"Linha {row_num}: paciente {nome_paciente} nao encontrado - pulado")
                 continue

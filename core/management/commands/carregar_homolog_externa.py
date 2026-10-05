@@ -20,6 +20,7 @@ from consultorio.settings import (
     nome_banco_homolog_externa_valido,
     resolver_disco_homolog_externa,
 )
+from core.busca_paciente import formatar_nome
 from core.management.commands.carregar_homolog_local import gerar_senha_homolog
 from core.models import (
     CategoriaContaPagar,
@@ -326,7 +327,7 @@ class Command(BaseCommand):
             'HOMOLOG-Elena',
         ):
             paciente, _ = Paciente.objects.get_or_create(
-                nome_completo=nome,
+                nome_completo=formatar_nome(nome),
                 defaults={
                     'data_nascimento': nascimento,
                     'telefone': '61900000000',

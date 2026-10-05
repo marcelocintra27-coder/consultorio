@@ -148,6 +148,40 @@ class DigitalizacaoTests(TestCase):
         self.assertContains(resposta, 'data-remover-arquivo hidden')
         self.assertContains(resposta, 'type="file"')
 
+    def test_camera_e_galeria_acumulam_ate_seis_e_removem(self):
+        import re
+        html = self.client.get('/digitalizacao/nova/').content.decode()
+        camera = re.search(r'<input\b[^>]*\bid="foto-camera"[^>]*>', html)
+        galeria = re.search(r'<input\b[^>]*\bid="foto-galeria"[^>]*>', html)
+        direto = re.search(r'<input\b[^>]*\bid="id_imagens"[^>]*>', html)
+        self.assertIsNotNone(camera)
+        self.assertIsNotNone(galeria)
+        self.assertIsNotNone(direto)
+        self.assertIn('capture="environment"', camera.group(0))
+        self.assertIn('accept="image/*"', camera.group(0))
+        self.assertNotIn('multiple', camera.group(0))
+        self.assertNotIn('name=', camera.group(0))
+        self.assertIn('multiple', galeria.group(0))
+        self.assertIn('accept="image/*"', galeria.group(0))
+        self.assertNotIn('capture', galeria.group(0))
+        self.assertNotIn('name=', galeria.group(0))
+        self.assertIn('name="imagens"', direto.group(0))
+        self.assertIn('multiple', direto.group(0))
+        self.assertNotIn('capture', direto.group(0))
+        self.assertIn('Tirar foto', html)
+        self.assertIn('Escolher da galeria', html)
+        self.assertIn('var limiteFolhas = 6', html)
+        self.assertIn('function adicionarFolhas', html)
+        self.assertIn('function removerFolha', html)
+        self.assertIn('folhas.splice(indice, 1)', html)
+        self.assertIn("textContent = 'Remover'", html)
+        self.assertIn("textContent = 'Subir'", html)
+        self.assertIn("textContent = 'Descer'", html)
+        self.assertIn('imageOrientation', html)
+        self.assertIn('3000', html)
+        self.assertIn('0.85', html)
+        self.assertNotIn('<img', html)
+
     def test_secretaria_envia_paciente_ativo_e_recebe_403_na_ia(self):
         inativo = Paciente.objects.create(
             nome_completo='Paciente inativo fictício', cpf=None,

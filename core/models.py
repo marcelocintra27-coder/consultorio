@@ -114,13 +114,16 @@ class Paciente(models.Model):
         return self.nome_completo
 
     def save(self, *args, **kwargs):
-        from .busca_paciente import normalizar_nome, somente_digitos
+        from .busca_paciente import formatar_nome, normalizar_nome, somente_digitos
 
+        self.nome_completo = formatar_nome(self.nome_completo)
         self.nome_busca = normalizar_nome(self.nome_completo)
         self.cpf_busca = somente_digitos(self.cpf)
         self.telefone_busca = somente_digitos(self.telefone)
         self.whatsapp_busca = somente_digitos(self.whatsapp)
-        extras = {'nome_busca', 'cpf_busca', 'telefone_busca', 'whatsapp_busca'}
+        extras = {
+            'nome_completo', 'nome_busca', 'cpf_busca', 'telefone_busca', 'whatsapp_busca',
+        }
         anterior = False
         if self.pk:
             anterior = type(self).objects.filter(pk=self.pk).values_list(

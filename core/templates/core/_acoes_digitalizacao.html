@@ -14,13 +14,21 @@
                 {% csrf_token %}
                 <div class="campo">
                     <label for="paciente-novo-{{ ficha.pk }}">Novo paciente</label>
-                    <input type="search" id="busca-paciente-{{ ficha.pk }}" class="busca-paciente" data-filtra="paciente-novo-{{ ficha.pk }}" placeholder="Buscar por nome, CPF ou telefone" autocomplete="off" aria-label="Buscar paciente">
-                    <select id="paciente-novo-{{ ficha.pk }}" name="paciente" required>
-                        <option value="">Selecione</option>
-                        {% for candidato in ficha.lista_troca %}
-                        <option value="{{ candidato.pk }}" data-busca="{{ candidato.nome_busca }} {{ candidato.cpf_busca }} {{ candidato.telefone_busca }} {{ candidato.whatsapp_busca }}">{{ candidato.nome_completo }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="busca-paciente-bloco">
+                        <div class="paciente-escolhido" hidden>
+                            <strong class="nome-paciente" data-paciente-escolhido></strong>
+                            <button type="button" class="botao secundario" data-trocar-paciente>Trocar</button>
+                        </div>
+                        <input type="search" id="busca-paciente-{{ ficha.pk }}" class="busca-paciente" data-filtra="paciente-novo-{{ ficha.pk }}" placeholder="Digite o nome, CPF ou telefone do paciente" autocomplete="off" aria-label="Digite o nome, CPF ou telefone do paciente" hidden>
+                        <div class="busca-paciente-resultados" role="listbox" hidden></div>
+                        <p class="busca-paciente-vazio" hidden>Nenhum paciente encontrado. <a href="{% url 'core:cadastrar_paciente' %}">Cadastrar novo paciente</a></p>
+                        <select id="paciente-novo-{{ ficha.pk }}" name="paciente" required>
+                            <option value="">Escolha o paciente</option>
+                            {% for candidato in ficha.lista_troca %}
+                            <option value="{{ candidato.pk }}" data-busca="{{ candidato.nome_busca }} {{ candidato.cpf_busca }} {{ candidato.telefone_busca }} {{ candidato.whatsapp_busca }}" data-nascimento="{{ candidato.data_nascimento|date:'d/m/Y' }}">{{ candidato.nome_completo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
                 <div class="campo">
                     <label for="motivo-troca-{{ ficha.pk }}">Motivo da troca</label>

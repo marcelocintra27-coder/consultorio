@@ -475,6 +475,96 @@ th.valor {
 
 .campo .busca-paciente {
     margin-bottom: 8px;
+    font-size: 16px;
+    min-height: 48px;
+}
+
+.busca-paciente-bloco {
+    position: relative;
+}
+
+@media (min-width: 640px) {
+    .acoes-foto {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.busca-paciente-bloco.com-js > select {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.paciente-escolhido {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.paciente-escolhido .botao {
+    flex: 0 0 auto;
+    min-height: 48px;
+}
+
+.busca-paciente-resultados {
+    max-height: 60vh;
+    overflow-y: auto;
+    margin: 8px 0;
+    border: 1px solid var(--cor-borda);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.busca-paciente-opcao {
+    display: block;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    text-align: left;
+    background: #fff;
+    border: 0;
+    border-bottom: 1px solid var(--cor-borda);
+    font: inherit;
+    font-size: 16px;
+    color: var(--cor-texto);
+    cursor: pointer;
+}
+
+.busca-paciente-opcao small {
+    display: block;
+    color: var(--cor-texto-secundario);
+    font-size: 14px;
+}
+
+.busca-paciente-opcao:hover,
+.busca-paciente-opcao:focus {
+    background: var(--cor-hover);
+}
+
+.acoes-foto {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+}
+
+.acoes-foto .botao {
+    display: block;
+    text-align: center;
+    min-height: 48px;
+    padding: 14px 18px;
+    font-size: 16px;
+}
+
+.folha-acoes .botao {
+    min-height: 44px;
 }
 
 .campo input,

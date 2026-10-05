@@ -979,3 +979,11 @@ orientação EXIF); se o navegador não conseguir, o arquivo original segue e os
 limites do servidor continuam valendo. O gunicorn usa 1 worker, 4 threads e
 timeout de 120 s, para o restante do site não esperar o re-encode. O processo
 isolado da imagem mantém o teto de memória.
+
+No celular, a mesma tela tem “Tirar foto” (câmera, uma folha por vez) e
+“Escolher da galeria”. As fotos entram na mesma lista, até 6, com miniatura,
+tipo, ordem e “Remover”. A escolha do paciente é uma caixa só: enquanto a
+pessoa digita, aparecem até 10 nomes com a data de nascimento; depois o nome
+fica em destaque, com “Trocar”. Sem JavaScript, vale o select e uma foto.
+O texto vazio do paciente é “Escolha o paciente”. O nome gravado tira espaços
+sobrando e deixa preposições de/da/do/dos/das/e em minúsculo, salvo no começo.

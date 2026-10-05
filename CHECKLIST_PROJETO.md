@@ -488,6 +488,25 @@ Legenda:
     local. Migrações `core.0037_ordem_lote_digitalizacao` e
     `core.0038_busca_paciente`.
 
+## Digitalização no celular e nome do paciente
+
+- [x] Câmera e galeria na mesma lista, busca numa caixa só e nome arrumado.
+  - Critérios: “Tirar foto” abre a câmera e “Escolher da galeria” aceita
+    várias; as fotos acumulam até 6, com miniatura, tipo, ordem, Subir,
+    Descer e Remover; sem JavaScript segue 1 foto. A escolha do paciente é
+    uma caixa, com até 10 nomes e a data de nascimento, “Trocar”, “Nenhum
+    paciente encontrado” e “Cadastrar novo paciente”. O endpoint de busca
+    exige login, devolve só nome e nascimento e respeita quem cada perfil
+    vê. O texto vazio é “Escolha o paciente”. Ao salvar, “roberto gomes da
+    silva” vira “Roberto Gomes da Silva”, também nos cadastros antigos.
+  - Validação: suíte completa com 451 testes; só as 3 falhas já conhecidas
+    (`test_seeds_legitimos_nao_recusam`,
+    `test_configuracao_ativa_usa_somente_homolog_local`,
+    `test_recusa_banco_que_nao_e_consultorio_homolog`). Os testes de
+    digitalização, revisão, busca e auditoria de paciente também passaram
+    no PostgreSQL 16 local (83 testes). Migração
+    `core.0039_nome_paciente_arrumado`.
+
 ## Regras de execução contínua
 
 - [x] Sem commit, push ou deploy sem autorização explícita.

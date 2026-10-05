@@ -86,6 +86,11 @@ class PacienteForm(forms.ModelForm):
         },
     )
 
+    def clean_nome_completo(self):
+        from .busca_paciente import formatar_nome
+
+        return formatar_nome(self.cleaned_data.get('nome_completo'))
+
     def clean_data_nascimento(self):
         valor = self.cleaned_data.get('data_nascimento')
         if valor.year < 1900:
@@ -141,7 +146,7 @@ class PacienteForm(forms.ModelForm):
 
 
 class PacienteSelect(forms.Select):
-    """Select de paciente com busca por nome, CPF ou telefone no navegador."""
+    """Uma caixa de busca. Sem JavaScript, o select com os pacientes visíveis fica no lugar."""
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(
@@ -152,25 +157,41 @@ class PacienteSelect(forms.Select):
         if paciente is not None:
             from .busca_paciente import texto_para_busca
             option['attrs']['data-busca'] = texto_para_busca(paciente)
+            option['attrs']['data-nome'] = paciente.nome_completo
+            nascimento = getattr(paciente, 'data_nascimento', None)
+            if nascimento:
+                option['attrs']['data-nascimento'] = nascimento.strftime('%d/%m/%Y')
         return option
 
     def render(self, name, value, attrs=None, renderer=None):
+        from django.urls import reverse
+
         attrs = attrs or {}
         select_html = super().render(name, value, attrs, renderer)
         select_id = attrs.get('id') or f'id_{name}'
-        busca = format_html(
-            '<input type="search" id="{}" class="busca-paciente" data-filtra="{}" '
-            'placeholder="Buscar por nome, CPF ou telefone" autocomplete="off" '
-            'aria-label="Buscar paciente">',
-            f'{select_id}_busca',
-            select_id,
-        )
         return format_html(
-            '<div class="busca-paciente-bloco">{}{}</div>', busca, select_html,
+            '<div class="busca-paciente-bloco">'
+            '<div class="paciente-escolhido" hidden>'
+            '<strong class="nome-paciente" data-paciente-escolhido></strong>'
+            '<button type="button" class="botao secundario" data-trocar-paciente>Trocar</button>'
+            '</div>'
+            '<input type="search" id="{busca_id}" class="busca-paciente" data-filtra="{select_id}" '
+            'placeholder="Digite o nome, CPF ou telefone do paciente" autocomplete="off" '
+            'aria-label="Digite o nome, CPF ou telefone do paciente" hidden>'
+            '<div class="busca-paciente-resultados" role="listbox" hidden></div>'
+            '<p class="busca-paciente-vazio" hidden>Nenhum paciente encontrado. '
+            '<a href="{cadastro}">Cadastrar novo paciente</a></p>'
+            '{select}'
+            '</div>',
+            busca_id=f'{select_id}_busca',
+            select_id=select_id,
+            cadastro=reverse('core:cadastrar_paciente'),
+            select=select_html,
         )
 
 
 def usar_busca_paciente(field):
+    field.empty_label = 'Escolha o paciente'
     field.widget = PacienteSelect()
     field.widget.choices = field.choices
     field.widget.pacientes_por_id = {
@@ -273,6 +294,7 @@ class ConsultaForm(HorarioConsultaMixin, forms.ModelForm):
         label='dentista',
         queryset=Dentista.objects.filter(ativo=True).order_by('nome_completo'),
         required=True,
+        empty_label='Escolha a dentista',
     )
     paciente = forms.ModelChoiceField(
         label='paciente',
@@ -781,6 +803,7 @@ class ComplementarDentistaForm(forms.Form):
         label='dentista',
         queryset=Dentista.objects.filter(ativo=True).order_by('nome_completo'),
         required=True,
+        empty_label='Escolha a dentista',
     )
 
 

@@ -11,6 +11,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 from django.utils import timezone
 
+from core.busca_paciente import formatar_nome
 from core.models import (
     CategoriaContaPagar,
     ContaPagar,
@@ -193,7 +194,7 @@ class Command(BaseCommand):
             'HOMOLOG-Elena',
         ):
             paciente, _ = Paciente.objects.get_or_create(
-                nome_completo=nome,
+                nome_completo=formatar_nome(nome),
                 defaults={
                     'data_nascimento': nascimento,
                     'telefone': '61900000000',

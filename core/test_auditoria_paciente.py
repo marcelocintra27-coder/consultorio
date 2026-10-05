@@ -80,7 +80,7 @@ class AuditoriaPacienteTests(TestCase):
 
     def _paciente(self, **extra):
         dados = {
-            'nome_completo': 'Paciente já existente',
+            'nome_completo': 'Paciente Já Existente',
             'cpf': '801.000.000-11',
             'data_nascimento': date(1981, 2, 2),
             'telefone': '11922222222',
@@ -172,7 +172,7 @@ class AuditoriaPacienteTests(TestCase):
         self.assertEqual(auditoria.origem, AuditoriaPaciente.Origem.ADMINISTRACAO)
         self.assertEqual(
             auditoria.alteracoes['nome_completo'],
-            {'antes': 'Paciente já existente', 'depois': 'Nome alterado no admin'},
+            {'antes': 'Paciente Já Existente', 'depois': 'Nome Alterado No Admin'},
         )
 
         paciente.refresh_from_db()
@@ -205,7 +205,7 @@ class AuditoriaPacienteTests(TestCase):
         self.assertEqual(criada.usuario, self.admin)
         self.assertEqual(
             criada.alteracoes['nome_completo'],
-            {'antes': None, 'depois': 'Paciente criado no admin'},
+            {'antes': None, 'depois': 'Paciente Criado No Admin'},
         )
 
     def test_auditoria_e_somente_leitura_no_admin(self):

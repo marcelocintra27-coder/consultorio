@@ -87,6 +87,9 @@ class PacienteAdmin(admin.ModelAdmin):
     list_per_page = 25
 
     def save_model(self, request, obj, form, change):
+        from .busca_paciente import formatar_nome
+
+        obj.nome_completo = formatar_nome(obj.nome_completo)
         with transaction.atomic():
             if change:
                 original = Paciente.objects.select_for_update().get(pk=obj.pk)

@@ -55,13 +55,13 @@ class LocatariaTests(TestCase):
             dentista=self.titular,
         )
         self.paciente_loc = Paciente.objects.create(
-            nome_completo='Paciente da locatária',
+            nome_completo='Paciente da Locatária',
             cpf='705.111.000-01',
             data_nascimento=date(1990, 1, 1),
             telefone='11900000001',
         )
         self.paciente_tit = Paciente.objects.create(
-            nome_completo='Paciente da titular',
+            nome_completo='Paciente da Titular',
             cpf='705.111.000-02',
             data_nascimento=date(1991, 2, 2),
             telefone='11900000002',
@@ -332,12 +332,12 @@ class LocatariaTests(TestCase):
         )
         self.client.force_login(usuario)
         pacientes = self.client.get(reverse('core:listar_pacientes'))
-        self.assertContains(pacientes, 'Paciente da locatária')
-        self.assertNotContains(pacientes, 'Paciente da titular')
+        self.assertContains(pacientes, 'Paciente da Locatária')
+        self.assertNotContains(pacientes, 'Paciente da Titular')
         agenda = self.client.get(reverse('core:listar_consultas') + '?data=2026-09-28')
-        self.assertContains(agenda, 'Paciente da locatária')
+        self.assertContains(agenda, 'Paciente da Locatária')
         self.assertContains(agenda, 'Sala Adriana')
-        self.assertNotContains(agenda, 'Paciente da titular')
+        self.assertNotContains(agenda, 'Paciente da Titular')
         self.assertEqual(
             self.client.get(reverse('core:ficha_consulta', args=[consulta_tit.pk])).status_code,
             403,
@@ -348,11 +348,11 @@ class LocatariaTests(TestCase):
         )
         self.client.force_login(self.secretaria)
         todos = self.client.get(reverse('core:listar_pacientes'))
-        self.assertContains(todos, 'Paciente da locatária')
-        self.assertContains(todos, 'Paciente da titular')
+        self.assertContains(todos, 'Paciente da Locatária')
+        self.assertContains(todos, 'Paciente da Titular')
         agenda_secretaria = self.client.get(reverse('core:listar_consultas') + '?data=2026-09-28')
-        self.assertContains(agenda_secretaria, 'Paciente da locatária')
-        self.assertContains(agenda_secretaria, 'Paciente da titular')
+        self.assertContains(agenda_secretaria, 'Paciente da Locatária')
+        self.assertContains(agenda_secretaria, 'Paciente da Titular')
 
     def _consulta(self, dentista, dia, inicio, fim, paciente, status=Consulta.Status.AGENDADA):
         return Consulta.objects.create(
@@ -384,9 +384,9 @@ class LocatariaTests(TestCase):
                 mensagem,
             )
             self.assertIn('Remarque-as antes: ', mensagem)
-            self.assertIn('06/10 08:30 Dra. Adriana — Paciente da titular', mensagem)
-            self.assertIn('13/10 10:00 Dra. Adriana — Paciente da locatária', mensagem)
-            self.assertIn('20/10 11:30 Dra. Adriana — Paciente da titular', mensagem)
+            self.assertIn('06/10 08:30 Dra. Adriana — Paciente da Titular', mensagem)
+            self.assertIn('13/10 10:00 Dra. Adriana — Paciente da Locatária', mensagem)
+            self.assertIn('20/10 11:30 Dra. Adriana — Paciente da Titular', mensagem)
             self.client.force_login(self.admin)
             resposta = self.client.post(
                 reverse('locacao:cadastrar_turno', args=[locataria.pk]),
@@ -399,7 +399,7 @@ class LocatariaTests(TestCase):
                 },
             )
         self.assertContains(resposta, 'a sala já tem 3 consultas marcadas nesse horário')
-        self.assertContains(resposta, '06/10 08:30 Dra. Adriana — Paciente da titular')
+        self.assertContains(resposta, '06/10 08:30 Dra. Adriana — Paciente da Titular')
         self.assertFalse(locataria.turnos.exists())
 
         turno = self.turno(locataria, 0, time(8), time(12))

@@ -5,6 +5,31 @@ import unicodedata
 from django.db.models import Q
 
 PALAVRAS_IGNORADAS = {'de', 'da', 'do', 'dos', 'das', 'e'}
+_SEPARADORES_NOME = re.compile(r"([-'’])")
+
+
+def _capitalizar_pedaco(pedaco):
+    if not pedaco:
+        return pedaco
+    return pedaco[0].upper() + pedaco[1:].lower()
+
+
+def _capitalizar_palavra(palavra):
+    return ''.join(
+        parte if parte in {'-', "'", '’'} else _capitalizar_pedaco(parte)
+        for parte in _SEPARADORES_NOME.split(palavra)
+    )
+
+
+def formatar_nome(texto):
+    """Tira espaços sobrando e deixa preposições minúsculas, salvo no começo."""
+    saida = []
+    for indice, palavra in enumerate((texto or '').split()):
+        if indice > 0 and palavra.casefold() in PALAVRAS_IGNORADAS:
+            saida.append(palavra.casefold())
+        else:
+            saida.append(_capitalizar_palavra(palavra))
+    return ' '.join(saida)
 
 
 def normalizar_nome(texto):

@@ -17,7 +17,7 @@ from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_POST, require_http_methods
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from .permissoes import usuario_pode_digitalizar, usuario_pode_acessar_digitalizacao
 from .digitalizacao_uploads import (
@@ -260,6 +260,35 @@ def administracao(request):
 def sair(request):
     logout(request)
     return redirect('entrar')
+
+@require_GET
+def buscar_pacientes(request):
+    """Até 10 pacientes visíveis. Só nome e nascimento, sem dado clínico."""
+    from .busca_paciente import filtrar_pacientes
+
+    termo = request.GET.get('q', '').strip()
+    pacientes = pacientes_visiveis_para_usuario(
+        request.user,
+        Paciente.objects.filter(ativo=True),
+    )
+    if not termo:
+        pacientes = pacientes.none()
+    else:
+        pacientes = filtrar_pacientes(pacientes, termo)
+    linhas = pacientes.order_by('nome_completo').values(
+        'pk', 'nome_completo', 'data_nascimento',
+    )[:10]
+    return JsonResponse({
+        'pacientes': [
+            {
+                'id': linha['pk'],
+                'nome': linha['nome_completo'],
+                'nascimento': linha['data_nascimento'].strftime('%d/%m/%Y'),
+            }
+            for linha in linhas
+        ],
+    })
+
 
 def listar_pacientes(request):
     termo = request.GET.get('q', '').strip()

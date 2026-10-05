@@ -74,33 +74,105 @@
         function normalizar(texto) {
             return (texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         }
-        document.querySelectorAll('.busca-paciente').forEach(function (campo) {
-            var select = document.getElementById(campo.getAttribute('data-filtra'));
-            if (!select) return;
-            var opcoes = Array.prototype.map.call(select.options, function (opcao) {
+        function combina(busca, bruto) {
+            var digitos = bruto.replace(/\D/g, '');
+            var numerico = digitos && /^[\d\s.\-()/+]+$/.test(bruto);
+            if (numerico) return busca.indexOf(digitos) !== -1;
+            var palavras = normalizar(bruto).split(/\s+/).filter(Boolean);
+            return palavras.every(function (palavra) { return busca.indexOf(palavra) !== -1; });
+        }
+        document.querySelectorAll('.busca-paciente-bloco').forEach(function (bloco) {
+            var campo = bloco.querySelector('.busca-paciente');
+            var select = campo && document.getElementById(campo.getAttribute('data-filtra'));
+            var resultados = bloco.querySelector('.busca-paciente-resultados');
+            var vazio = bloco.querySelector('.busca-paciente-vazio');
+            var escolhido = bloco.querySelector('.paciente-escolhido');
+            var nomeEscolhido = bloco.querySelector('[data-paciente-escolhido]');
+            var trocar = bloco.querySelector('[data-trocar-paciente]');
+            if (!campo || !select || !resultados || !escolhido || !nomeEscolhido || !trocar) return;
+            bloco.classList.add('com-js');
+            var opcoes = Array.prototype.filter.call(select.options, function (opcao) {
+                return opcao.value;
+            }).map(function (opcao) {
                 return {
-                    el: opcao,
+                    id: opcao.value,
+                    nome: (opcao.getAttribute('data-nome') || opcao.textContent || '').trim(),
+                    nascimento: opcao.getAttribute('data-nascimento') || '',
                     busca: normalizar(opcao.getAttribute('data-busca') || opcao.textContent || ''),
                 };
             });
+            function mostrarEscolhido() {
+                var texto = '';
+                if (select.value && select.selectedIndex >= 0) {
+                    texto = (select.options[select.selectedIndex].textContent || '').trim();
+                }
+                if (!texto) {
+                    escolhido.hidden = true;
+                    campo.hidden = false;
+                    return;
+                }
+                nomeEscolhido.textContent = texto;
+                escolhido.hidden = false;
+                campo.hidden = true;
+                campo.value = '';
+                resultados.hidden = true;
+                resultados.replaceChildren();
+                if (vazio) vazio.hidden = true;
+            }
+            function pintar(lista) {
+                resultados.replaceChildren();
+                lista.forEach(function (item) {
+                    var botao = document.createElement('button');
+                    botao.type = 'button';
+                    botao.className = 'busca-paciente-opcao';
+                    botao.setAttribute('role', 'option');
+                    var nome = document.createElement('span');
+                    nome.textContent = item.nome;
+                    botao.appendChild(nome);
+                    if (item.nascimento) {
+                        var data = document.createElement('small');
+                        data.textContent = item.nascimento;
+                        botao.appendChild(data);
+                    }
+                    botao.addEventListener('click', function () {
+                        select.value = item.id;
+                        mostrarEscolhido();
+                    });
+                    resultados.appendChild(botao);
+                });
+            }
             campo.addEventListener('input', function () {
                 var bruto = campo.value.trim();
-                var digitos = bruto.replace(/\D/g, '');
-                var numerico = digitos && /^[\d\s.\-()/+]+$/.test(bruto);
-                var palavras = normalizar(bruto).split(/\s+/).filter(Boolean);
-                opcoes.forEach(function (item) {
-                    if (!item.el.value) {
-                        item.el.hidden = false;
-                        item.el.disabled = false;
-                        return;
-                    }
-                    var ok = !bruto || (numerico
-                        ? item.busca.indexOf(digitos) !== -1
-                        : palavras.every(function (palavra) { return item.busca.indexOf(palavra) !== -1; }));
-                    item.el.hidden = !ok;
-                    item.el.disabled = !ok;
-                });
+                if (!bruto) {
+                    resultados.hidden = true;
+                    resultados.replaceChildren();
+                    if (vazio) vazio.hidden = true;
+                    return;
+                }
+                var achados = opcoes.filter(function (item) {
+                    return combina(item.busca, bruto);
+                }).slice(0, 10);
+                if (!achados.length) {
+                    resultados.hidden = true;
+                    resultados.replaceChildren();
+                    if (vazio) vazio.hidden = false;
+                    return;
+                }
+                if (vazio) vazio.hidden = true;
+                pintar(achados);
+                resultados.hidden = false;
             });
+            trocar.addEventListener('click', function () {
+                select.value = '';
+                escolhido.hidden = true;
+                campo.hidden = false;
+                campo.value = '';
+                resultados.hidden = true;
+                resultados.replaceChildren();
+                if (vazio) vazio.hidden = true;
+                campo.focus();
+            });
+            mostrarEscolhido();
         });
     }());
     </script>

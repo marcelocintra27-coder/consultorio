@@ -49,12 +49,16 @@
 
             <div class="campo">
                 <label for="id_imagens">Fotos</label>
-                <div class="acoes">
-                    <input id="id_imagens" type="file" name="imagens" accept="image/*" multiple>
-                    <button type="button" class="botao secundario" data-remover-arquivo hidden>Remover arquivo</button>
+                <div class="acoes acoes-foto" id="botoes-foto" hidden>
+                    <label class="botao" for="foto-camera">Tirar foto</label>
+                    <input id="foto-camera" type="file" accept="image/*" capture="environment" hidden>
+                    <label class="botao secundario" for="foto-galeria">Escolher da galeria</label>
+                    <input id="foto-galeria" type="file" accept="image/*" multiple hidden>
                 </div>
+                <input id="id_imagens" type="file" name="imagens" accept="image/*" multiple>
+                <button type="button" class="botao secundario" data-remover-arquivo hidden>Remover arquivo</button>
                 <p data-arquivo-escolhido hidden></p>
-                <p>Até 6 fotos e 60 MiB no total. No celular, a câmera e a galeria ficam disponíveis. Sem a prévia, envie uma foto por vez.</p>
+                <p>Até 6 fotos e 60 MiB no total. Toque em Tirar foto para cada folha, ou escolha várias na galeria. Sem a prévia, envie uma foto por vez.</p>
                 {% if form.tipo.errors %}
                 <div class="erro">{{ form.tipo.errors }}</div>
                 {% endif %}
@@ -108,13 +112,21 @@
     }
     var campo = document.getElementById('id_imagens');
     var bloco = campo && campo.closest('.campo');
-    var botao = bloco && bloco.querySelector('[data-remover-arquivo]');
     var info = bloco && bloco.querySelector('[data-arquivo-escolhido]');
     var lista = document.getElementById('folhas-selecionadas');
     var tipoUnico = document.getElementById('id_tipo');
     var blocoTipo = document.getElementById('tipo-unico');
+    var camera = document.getElementById('foto-camera');
+    var galeria = document.getElementById('foto-galeria');
+    var botoes = document.getElementById('botoes-foto');
     var urls = [];
-    if (!campo || !botao || !info || !lista || !tipoUnico) return;
+    var folhas = [];
+    var tipos = [];
+    var limiteFolhas = 6;
+    if (!campo || !info || !lista || !tipoUnico || !camera || !galeria || !botoes) return;
+    if (typeof DataTransfer === 'undefined') return;
+    botoes.hidden = false;
+    campo.hidden = true;
 
     function limparUrls() {
         urls.forEach(function (url) { URL.revokeObjectURL(url); });
@@ -129,25 +141,63 @@
             return '<option value="' + opcao.value + '"' + marca + '>' + opcao.text + '</option>';
         }).join('');
     }
-    function montarFolhas() {
+    function sincronizar() {
+        try {
+            var transferencia = new DataTransfer();
+            folhas.forEach(function (foto) { transferencia.items.add(foto); });
+            campo.files = transferencia.files;
+            return true;
+        } catch (erro) {
+            return false;
+        }
+    }
+    function adicionarFolhas(arquivos) {
+        var listaArquivos = Array.prototype.slice.call(arquivos || []);
+        var estourou = false;
+        listaArquivos.forEach(function (arquivo) {
+            if (folhas.length >= limiteFolhas) {
+                estourou = true;
+                return;
+            }
+            var tipo = folhas.length === 0 ? valorTipoInicial() : 'evolucao';
+            folhas.push(arquivo);
+            tipos.push(tipo);
+        });
+        sincronizar();
+        montarFolhas(estourou);
+    }
+    function removerFolha(indice) {
+        folhas.splice(indice, 1);
+        tipos.splice(indice, 1);
+        sincronizar();
+        montarFolhas(false);
+    }
+    function moverFolha(indice, destino) {
+        if (destino < 0 || destino >= folhas.length) return;
+        var foto = folhas.splice(indice, 1)[0];
+        var tipo = tipos.splice(indice, 1)[0];
+        folhas.splice(destino, 0, foto);
+        tipos.splice(destino, 0, tipo);
+        sincronizar();
+        montarFolhas(false);
+    }
+    function montarFolhas(limiteAtingido) {
         limparUrls();
         lista.replaceChildren();
-        var arquivos = campo.files ? Array.prototype.slice.call(campo.files) : [];
-        var varios = arquivos.length > 0;
-        tipoUnico.disabled = varios;
-        if (blocoTipo) blocoTipo.hidden = varios;
-        if (!arquivos.length) {
-            botao.hidden = true;
+        tipoUnico.disabled = folhas.length > 0;
+        if (blocoTipo) blocoTipo.hidden = folhas.length > 0;
+        if (!folhas.length) {
             info.hidden = true;
             info.textContent = '';
             return;
         }
-        botao.hidden = false;
         info.hidden = false;
-        var total = arquivos.reduce(function (soma, arquivo) { return soma + arquivo.size; }, 0);
-        info.textContent = arquivos.length + ' foto(s) — ' + tamanhoLegivel(total);
-        var padrao = valorTipoInicial();
-        arquivos.forEach(function (arquivo, indice) {
+        var total = folhas.reduce(function (soma, arquivo) { return soma + arquivo.size; }, 0);
+        info.textContent = folhas.length + ' foto(s) — ' + tamanhoLegivel(total);
+        if (limiteAtingido) {
+            info.textContent += '. Envie no máximo 6 fotos por vez.';
+        }
+        folhas.forEach(function (arquivo, indice) {
             var linha = document.createElement('div');
             linha.className = 'folha-envio';
             var foto = document.createElement('img');
@@ -159,21 +209,55 @@
             var campos = document.createElement('div');
             var nome = document.createElement('p');
             nome.textContent = arquivo.name;
-            var tipoEscolhido = indice === 0 ? padrao : 'evolucao';
-            campos.innerHTML =
+            campos.appendChild(nome);
+            campos.insertAdjacentHTML(
+                'beforeend',
                 '<div class="campo"><label for="tipo-folha-' + indice + '">Tipo</label>' +
-                '<select id="tipo-folha-' + indice + '" name="tipo">' + opcoesTipo(tipoEscolhido) + '</select></div>' +
+                '<select id="tipo-folha-' + indice + '" name="tipo">' + opcoesTipo(tipos[indice] || 'evolucao') + '</select></div>' +
                 '<div class="campo"><label for="ordem-folha-' + indice + '">Ordem da folha</label>' +
-                '<input id="ordem-folha-' + indice + '" name="ordem" type="number" min="1" value="' + (indice + 1) + '" required></div>';
+                '<input id="ordem-folha-' + indice + '" name="ordem" type="number" min="1" value="' + (indice + 1) + '" required></div>'
+            );
+            var acoes = document.createElement('div');
+            acoes.className = 'acoes folha-acoes';
+            var subir = document.createElement('button');
+            subir.type = 'button';
+            subir.className = 'botao secundario';
+            subir.textContent = 'Subir';
+            subir.disabled = indice === 0;
+            subir.addEventListener('click', function () { moverFolha(indice, indice - 1); });
+            var descer = document.createElement('button');
+            descer.type = 'button';
+            descer.className = 'botao secundario';
+            descer.textContent = 'Descer';
+            descer.disabled = indice === folhas.length - 1;
+            descer.addEventListener('click', function () { moverFolha(indice, indice + 1); });
+            var remover = document.createElement('button');
+            remover.type = 'button';
+            remover.className = 'botao secundario';
+            remover.textContent = 'Remover';
+            remover.addEventListener('click', function () { removerFolha(indice); });
+            acoes.appendChild(subir);
+            acoes.appendChild(descer);
+            acoes.appendChild(remover);
+            campos.appendChild(acoes);
+            var selectTipo = campos.querySelector('select');
+            if (selectTipo) {
+                selectTipo.addEventListener('change', function () {
+                    tipos[indice] = selectTipo.value;
+                });
+            }
             linha.appendChild(foto);
             linha.appendChild(campos);
             lista.appendChild(linha);
         });
     }
-    campo.addEventListener('change', montarFolhas);
-    botao.addEventListener('click', function () {
-        campo.value = '';
-        montarFolhas();
+    camera.addEventListener('change', function () {
+        adicionarFolhas(camera.files);
+        camera.value = '';
+    });
+    galeria.addEventListener('change', function () {
+        adicionarFolhas(galeria.files);
+        galeria.value = '';
     });
 })();
 (function () {
@@ -195,7 +279,7 @@
     var qualidadeJpeg = 0.85;
     var enviando = document.getElementById('enviando-digitalizacao');
     function textoSelecionado(campo) {
-        if (!campo || campo.selectedIndex < 0) return '';
+        if (!campo || !campo.value || campo.selectedIndex < 0) return '';
         return (campo.options[campo.selectedIndex].text || '').trim();
     }
     function mostrarEnviando() {

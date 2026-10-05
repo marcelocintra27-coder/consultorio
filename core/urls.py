@@ -3,6 +3,7 @@ from .views import (
     inicio,
     administracao,
     listar_pacientes,
+    buscar_pacientes,
     cadastrar_paciente,
     editar_paciente,
     digitalizacao_upload,
@@ -183,6 +184,7 @@ urlpatterns = [
     path('financeiro/formas-pagamento/<int:pk>/editar/', editar_forma_pagamento_configuravel, name='editar_forma_pagamento_configuravel'),
     path('financeiro/relatorios/', relatorios_financeiros, name='relatorios_financeiros'),
     path('pacientes/', listar_pacientes, name='listar_pacientes'),
+    path('pacientes/busca/', buscar_pacientes, name='buscar_pacientes'),
     path('pacientes/cadastrar/', cadastrar_paciente, name='cadastrar_paciente'),
     path('pacientes/<int:pk>/editar/', editar_paciente, name='editar_paciente'),
     path(

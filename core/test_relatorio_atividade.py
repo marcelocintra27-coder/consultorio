@@ -145,7 +145,7 @@ class RelatorioAtividadeTests(TestCase):
         self.admin = User.objects.create_superuser('admin_atividade', password='x')
         self.instante = datetime(2026, 9, 28, 21, 30, tzinfo=SP)
         self.paciente = Paciente.objects.create(
-            nome_completo='Paciente da atividade',
+            nome_completo='Paciente da Atividade',
             cpf='802.000.000-10',
             data_nascimento=date(1980, 5, 12),
             telefone='11900000000',
@@ -181,7 +181,7 @@ class RelatorioAtividadeTests(TestCase):
             usuario=self.secretaria,
             acao=AuditoriaPaciente.Acao.CRIADO,
             origem=AuditoriaPaciente.Origem.TELA,
-            alteracoes={'nome_completo': {'antes': None, 'depois': 'Paciente da atividade'}},
+            alteracoes={'nome_completo': {'antes': None, 'depois': 'Paciente da Atividade'}},
         )
         self._no_instante(AuditoriaPaciente, criado.pk, 'criado_em')
         alterado = AuditoriaPaciente.objects.create(
@@ -247,10 +247,10 @@ class RelatorioAtividadeTests(TestCase):
         self.assertEqual(detalhe.status_code, 200)
         self.assertContains(detalhe, 'Entrou no sistema')
         self.assertContains(detalhe, 'Senha incorreta')
-        self.assertContains(detalhe, 'Cadastrou o paciente Paciente da atividade')
-        self.assertContains(detalhe, 'Alterou o paciente Paciente da atividade')
+        self.assertContains(detalhe, 'Cadastrou o paciente Paciente da Atividade')
+        self.assertContains(detalhe, 'Alterou o paciente Paciente da Atividade')
         self.assertContains(detalhe, 'Confirmou a consulta')
-        self.assertContains(detalhe, 'Enviou foto de ficha de Paciente da atividade')
+        self.assertContains(detalhe, 'Enviou foto de ficha de Paciente da Atividade')
         self.assertContains(detalhe, '21:30')
 
         csv = self.client.get(reverse('core:relatorio_atividade_csv'), {
