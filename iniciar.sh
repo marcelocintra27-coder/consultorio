@@ -8,7 +8,10 @@ set -eu
 iniciar_aplicacao() {
   python manage.py migrate --noinput
   python manage.py collectstatic --noinput
-  exec gunicorn consultorio.wsgi:application --bind 0.0.0.0:${PORT:-8000}
+  # 1 worker cabe nos 512 MB. As threads atendem o restante do site
+  # enquanto um envio de fotos ainda está na validação. O re-encode segue
+  # num processo isolado, com o teto de memória de sempre.
+  exec gunicorn consultorio.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 1 --worker-class gthread --threads 4 --timeout 120
 }
 
 if [ "${CLAMAV_ATIVO:-}" != "1" ]; then

@@ -67,6 +67,10 @@ class DockerDeploySecurityTests(SimpleTestCase):
             'gunicorn consultorio.wsgi:application --bind 0.0.0.0:${PORT:-8000}',
             script,
         )
+        self.assertIn(
+            '--workers 1 --worker-class gthread --threads 4 --timeout 120',
+            script,
+        )
         self.assertIn('TCPAddr 127.0.0.1', script)
         self.assertNotIn('TCPAddr 0.0.0.0', script)
 

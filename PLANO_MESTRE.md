@@ -973,4 +973,9 @@ exige todas as palavras do nome, em qualquer ordem, sem acento. Se o texto for
 numérico, procura CPF, telefone e WhatsApp só pelos dígitos. No cadastro, um
 paciente ativo parecido (mesma data e ao menos duas palavras do nome, ou mesmo
 telefone/WhatsApp e ao menos uma palavra) não é gravado até a pessoa confirmar
-que é outra. CPF igual continua impedindo o novo cadastro.
+que é outra. CPF igual continua impedindo o novo cadastro. No navegador, cada
+foto é reduzida antes do envio (lado maior de 3000 px, JPEG 0,85, com a
+orientação EXIF); se o navegador não conseguir, o arquivo original segue e os
+limites do servidor continuam valendo. O gunicorn usa 1 worker, 4 threads e
+timeout de 120 s, para o restante do site não esperar o re-encode. O processo
+isolado da imagem mantém o teto de memória.

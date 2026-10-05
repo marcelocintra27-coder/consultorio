@@ -510,6 +510,10 @@ class RevisaoDigitalizacaoTests(TestCase):
         self.assertContains(formulario, 'Confirmar envio')
         self.assertContains(formulario, 'Corrigir')
         self.assertContains(formulario, 'data-salvar-envio')
+        self.assertContains(formulario, 'Enviando...')
+        self.assertContains(formulario, 'imageOrientation')
+        self.assertContains(formulario, '3000')
+        self.assertContains(formulario, '0.85')
         self.assertNotContains(formulario, '<img')
 
         resposta = self.client.post(reverse('core:digitalizacao_upload'), {

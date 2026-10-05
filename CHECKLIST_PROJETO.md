@@ -476,7 +476,10 @@ Legenda:
     avisa paciente parecido por data+nome ou telefone+nome e só grava outra
     pessoa com a confirmação marcada; CPF igual continua bloqueado. O aviso
     não mostra dado clínico. Permissões, re-encode, antivírus, exames e o
-    registro de cada foto aberta permanecem.
+    registro de cada foto aberta permanecem. Antes do envio, o navegador
+    reduz a foto (lado maior 3000 px, JPEG 0,85, orientação EXIF); se não
+    conseguir, segue o arquivo original. O gunicorn sobe com 1 worker,
+    gthread, 4 threads e timeout de 120 s.
   - Validação: suíte completa com 446 testes; só as 3 falhas já conhecidas
     (`test_seeds_legitimos_nao_recusam`,
     `test_configuracao_ativa_usa_somente_homolog_local`,

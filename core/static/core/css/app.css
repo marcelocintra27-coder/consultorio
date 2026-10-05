@@ -867,6 +867,18 @@ h2.secao-pagina {
     border-top: 1px solid var(--cor-borda);
 }
 
+.enviando-digitalizacao {
+    margin-top: 12px;
+}
+
+.enviando-digitalizacao progress {
+    display: block;
+    width: 100%;
+    height: 8px;
+    margin-top: 8px;
+    accent-color: var(--cor-primaria);
+}
+
 .folhas-envio {
     display: grid;
     gap: 12px;
