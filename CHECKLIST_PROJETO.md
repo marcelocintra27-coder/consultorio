@@ -449,11 +449,12 @@ Legenda:
 
 - [x] Lembrete simulado da véspera, com confirmação e desmarcação.
   - Critérios: só consulta de amanhã, agendada ou confirmada, com WhatsApp e
-    autorização; sem duplicar; texto sem conteúdo clínico; resposta 1 confirma,
-    2 cancela e destaca para a secretária, outra resposta pede atenção; webhook
-    recusa assinatura inválida; modo meta sem variáveis não envia; dentista não
-    vê a tela; simular resposta só o administrador.
-  - Validação: suíte completa com 430 testes; só as 3 falhas já conhecidas
+    autorização; sem duplicar; texto sem conteúdo clínico e com “amanhã” só na
+    véspera; resposta 1 confirma e 2 cancela só consulta de hoje ou futura ainda
+    agendada ou confirmada, senão pede atenção da secretária; webhook recusa
+    assinatura inválida; modo meta sem variáveis não envia; dentista não vê a
+    tela; simular resposta só o administrador.
+  - Validação: suíte completa com 432 testes; só as 3 falhas já conhecidas
     (`test_seeds_legitimos_nao_recusam`,
     `test_configuracao_ativa_usa_somente_homolog_local`,
     `test_recusa_banco_que_nao_e_consultorio_homolog`). Migração

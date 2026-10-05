@@ -951,6 +951,9 @@ cancelada, naquele dia da semana e horário.
 
 O lembrete da véspera sai só para consulta de amanhã com status agendada ou
 confirmada, paciente com WhatsApp e autorização registrada. O texto leva data,
-hora e nome da dentista, sem conteúdo clínico. A resposta 1 confirma, a 2
-cancela e avisa a secretária, e qualquer outra fica para a secretária. Nesta
-etapa o envio é simulado (`WHATSAPP_MODO=simulado`); a API da Meta não é chamada.
+hora e nome da dentista, sem conteúdo clínico. Diz “amanhã” só quando a consulta
+é no dia seguinte; nas outras datas diz “no dia dd/mm”. A resposta 1 confirma e
+a 2 cancela somente se a consulta for de hoje ou de um dia futuro e ainda estiver
+agendada ou confirmada. Consulta passada, realizada, com falta, cancelada, ou
+lembrete sem consulta, não muda de status e a resposta fica para a secretária.
+Nesta etapa o envio é simulado (`WHATSAPP_MODO=simulado`); a API da Meta não é chamada.

@@ -15,7 +15,13 @@ from django.urls import reverse
 from locacao.models import Dentista, PerfilUsuario, Sala
 
 from .models import AuditoriaConsulta, Consulta, MensagemWhatsApp, Paciente
-from .whatsapp import ErroWhatsApp, preparar_lembretes, registrar_resposta, texto_lembrete
+from .whatsapp import (
+    ErroWhatsApp,
+    normalizar_telefone,
+    preparar_lembretes,
+    registrar_resposta,
+    texto_lembrete,
+)
 
 
 class LembreteWhatsAppTests(TestCase):
@@ -26,6 +32,9 @@ class LembreteWhatsAppTests(TestCase):
         self.ambiente = patch.dict(os.environ, {'WHATSAPP_MODO': 'simulado'})
         self.ambiente.start()
         self.addCleanup(self.ambiente.stop)
+        self.hoje = patch('core.whatsapp.timezone.localdate', return_value=self.HOJE)
+        self.hoje.start()
+        self.addCleanup(self.hoje.stop)
 
         sala = Sala.objects.create(nome='Sala WhatsApp')
         self.dentista = Dentista.objects.create(
@@ -151,13 +160,108 @@ class LembreteWhatsAppTests(TestCase):
             'Responda 1 para CONFIRMAR ou 2 para DESMARCAR. Esta é uma mensagem automática.'
         )
         self.assertEqual(mensagem.texto, esperado)
-        self.assertEqual(texto_lembrete(self.consulta), esperado)
+        with patch('core.whatsapp.timezone.localdate', return_value=self.HOJE):
+            self.assertEqual(texto_lembrete(self.consulta), esperado)
         proibido = (
             'canal', 'cárie', 'diagnóstico', 'restauração', 'R$', '500',
             'Rua das Flores', 'procedimento',
         )
         for termo in proibido:
             self.assertNotIn(termo, mensagem.texto)
+
+    def test_texto_usa_amanha_somente_na_vespera(self):
+        self.assertIn('90 amanhã, 06/10, às 08:30', texto_lembrete(self.consulta))
+        outro_dia = self.criar_consulta(
+            self.paciente, date(2026, 10, 8),
+            hora_inicio=time(9, 0), hora_fim=time(10, 0),
+        )
+        texto = texto_lembrete(outro_dia)
+        self.assertIn(
+            'sua consulta na Clínica Odontológica 90 no dia 08/10, às 09:00, com Dra. Helena Costa.',
+            texto,
+        )
+        self.assertNotIn('amanhã', texto)
+
+    def gravar_lembrete(self, consulta):
+        return MensagemWhatsApp.objects.create(
+            consulta=consulta,
+            paciente=consulta.paciente,
+            telefone=normalizar_telefone(consulta.paciente.whatsapp),
+            direcao=MensagemWhatsApp.Direcao.ENVIADA,
+            texto=texto_lembrete(consulta),
+            status=MensagemWhatsApp.Status.SIMULADA,
+        )
+
+    def test_resposta_nao_altera_consulta_passada_ou_encerrada(self):
+        passada = self.criar_consulta(
+            self.criar_paciente('Eva Passada', '11944443333', True, '801.000.000-07'),
+            date(2026, 10, 4),
+        )
+        self.gravar_lembrete(passada)
+        registrar_resposta('11944443333', '2')
+        passada.refresh_from_db()
+        self.assertEqual(passada.status, Consulta.Status.AGENDADA)
+        self.assertFalse(passada.auditorias.exists())
+        self.assertEqual(
+            MensagemWhatsApp.objects.get(consulta=passada, direcao='recebida').acao,
+            MensagemWhatsApp.Acao.PRECISA_ATENCAO,
+        )
+
+        realizada = self.criar_consulta(
+            self.criar_paciente('Rita Feita', '11933332222', True, '801.000.000-08'),
+            self.AMANHA, status=Consulta.Status.REALIZADA,
+            hora_inicio=time(18, 30), hora_fim=time(19, 0),
+        )
+        self.gravar_lembrete(realizada)
+        registrar_resposta('11933332222', '2')
+        realizada.refresh_from_db()
+        self.assertEqual(realizada.status, Consulta.Status.REALIZADA)
+        self.assertFalse(realizada.auditorias.exists())
+        self.assertEqual(
+            MensagemWhatsApp.objects.get(consulta=realizada, direcao='recebida').acao,
+            MensagemWhatsApp.Acao.PRECISA_ATENCAO,
+        )
+
+        cancelada = self.criar_consulta(
+            self.criar_paciente('Caio Cancelado', '11922221111', True, '801.000.000-10'),
+            self.AMANHA, status=Consulta.Status.CANCELADA,
+            hora_inicio=time(19, 30), hora_fim=time(20, 0),
+        )
+        self.gravar_lembrete(cancelada)
+        registrar_resposta('11922221111', '1')
+        cancelada.refresh_from_db()
+        self.assertEqual(cancelada.status, Consulta.Status.CANCELADA)
+        self.assertFalse(cancelada.auditorias.exists())
+        self.assertEqual(
+            MensagemWhatsApp.objects.get(consulta=cancelada, direcao='recebida').acao,
+            MensagemWhatsApp.Acao.PRECISA_ATENCAO,
+        )
+
+        agendada = self.criar_consulta(
+            self.criar_paciente('Bia Amanha', '11911110000', True, '801.000.000-11'),
+            self.AMANHA, hora_inicio=time(20, 0), hora_fim=time(20, 30),
+        )
+        self.gravar_lembrete(agendada)
+        registrar_resposta('11911110000', '2')
+        agendada.refresh_from_db()
+        self.assertEqual(agendada.status, Consulta.Status.CANCELADA)
+        self.assertEqual(
+            MensagemWhatsApp.objects.get(consulta=agendada, direcao='recebida').acao,
+            MensagemWhatsApp.Acao.DESMARCOU,
+        )
+        self.assertIn('origem: resposta WhatsApp', agendada.auditorias.get().descricao)
+
+        self.gravar_lembrete(self.consulta_confirmada)
+        registrar_resposta('11977776666', '1')
+        self.consulta_confirmada.refresh_from_db()
+        self.assertEqual(self.consulta_confirmada.status, Consulta.Status.CONFIRMADA)
+        self.assertFalse(self.consulta_confirmada.auditorias.exists())
+        self.assertEqual(
+            MensagemWhatsApp.objects.get(
+                consulta=self.consulta_confirmada, direcao='recebida',
+            ).acao,
+            MensagemWhatsApp.Acao.CONFIRMOU,
+        )
 
     def test_resposta_1_confirma_2_cancela_e_outra_pede_atencao(self):
         self.preparar_amanha()

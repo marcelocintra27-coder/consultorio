@@ -39,9 +39,13 @@ def texto_lembrete(consulta):
         dentista = consulta.dentista.nome_completo
     else:
         dentista = 'não informada'
+    if consulta.data == timezone.localdate() + timedelta(days=1):
+        quando = f'amanhã, {consulta.data:%d/%m}'
+    else:
+        quando = f'no dia {consulta.data:%d/%m}'
     return (
-        f'Olá, {primeiro}! Lembramos da sua consulta na Clínica Odontológica 90 amanhã, '
-        f'{consulta.data:%d/%m}, às {consulta.hora_inicio:%H:%M}, com {dentista}. '
+        f'Olá, {primeiro}! Lembramos da sua consulta na Clínica Odontológica 90 {quando}, '
+        f'às {consulta.hora_inicio:%H:%M}, com {dentista}. '
         'Responda 1 para CONFIRMAR ou 2 para DESMARCAR. Esta é uma mensagem automática.'
     )
 
@@ -145,6 +149,13 @@ def _registrar_auditoria_resposta(consulta, status_anterior):
     )
 
 
+def _resposta_pode_alterar_consulta(consulta):
+    return (
+        consulta.data >= timezone.localdate()
+        and consulta.status in (Consulta.Status.AGENDADA, Consulta.Status.CONFIRMADA)
+    )
+
+
 def registrar_resposta(telefone, texto, id_externo=''):
     """Associa a resposta ao lembrete mais recente daquele telefone."""
     telefone = normalizar_telefone(telefone)
@@ -173,7 +184,9 @@ def registrar_resposta(telefone, texto, id_externo=''):
         if consulta is not None:
             consulta = Consulta.objects.select_for_update().get(pk=consulta.pk)
             status_anterior = consulta.status
-            if resposta_texto == '1':
+            if not _resposta_pode_alterar_consulta(consulta):
+                acao = MensagemWhatsApp.Acao.PRECISA_ATENCAO
+            elif resposta_texto == '1':
                 acao = MensagemWhatsApp.Acao.CONFIRMOU
                 consulta.status = Consulta.Status.CONFIRMADA
             elif resposta_texto == '2':
