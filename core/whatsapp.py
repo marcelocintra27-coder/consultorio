@@ -139,6 +139,16 @@ def _lembrete_mais_recente(telefone):
     )
 
 
+def _queryset_lembrete_travado():
+    """Trava só a mensagem.
+
+    consulta e paciente são anuláveis. Juntá-los com select_related gera
+    LEFT OUTER JOIN, e o PostgreSQL recusa FOR UPDATE nesse lado do join.
+    A consulta, quando existe, é travada na própria tabela logo em seguida.
+    """
+    return MensagemWhatsApp.objects.select_for_update(of=('self',))
+
+
 def _registrar_auditoria_resposta(consulta, status_anterior):
     AuditoriaConsulta.objects.create(
         consulta=consulta,
@@ -173,11 +183,7 @@ def registrar_resposta(telefone, texto, id_externo=''):
     with transaction.atomic():
         lembrete = _lembrete_mais_recente(telefone)
         if lembrete is not None:
-            lembrete = (
-                MensagemWhatsApp.objects.select_for_update()
-                .select_related('consulta', 'paciente')
-                .get(pk=lembrete.pk)
-            )
+            lembrete = _queryset_lembrete_travado().get(pk=lembrete.pk)
         acao = ''
         consulta = lembrete.consulta if lembrete is not None else None
         paciente = lembrete.paciente if lembrete is not None else None

@@ -17,6 +17,7 @@ from locacao.models import Dentista, PerfilUsuario, Sala
 from .models import AuditoriaConsulta, Consulta, MensagemWhatsApp, Paciente
 from .whatsapp import (
     ErroWhatsApp,
+    _queryset_lembrete_travado,
     normalizar_telefone,
     preparar_lembretes,
     registrar_resposta,
@@ -123,6 +124,21 @@ class LembreteWhatsAppTests(TestCase):
 
     def enviadas(self):
         return MensagemWhatsApp.objects.filter(direcao=MensagemWhatsApp.Direcao.ENVIADA)
+
+    def test_trava_do_lembrete_nao_aplica_for_update_em_fk_anulavel(self):
+        qs = _queryset_lembrete_travado()
+        self.assertTrue(qs.query.select_for_update)
+        self.assertEqual(qs.query.select_for_update_of, ('self',))
+        relacionados = set(qs.query.select_related or ())
+        anulaveis = {
+            campo.name
+            for campo in MensagemWhatsApp._meta.get_fields()
+            if getattr(campo, 'many_to_one', False) and campo.null
+        }
+        self.assertTrue({'consulta', 'paciente'} <= anulaveis)
+        self.assertFalse(relacionados & anulaveis)
+        sql = str(qs.query)
+        self.assertNotIn('LEFT OUTER JOIN', sql.upper())
 
     def test_autorizacao_comeca_desligada_e_grava_a_data(self):
         paciente = Paciente.objects.create(

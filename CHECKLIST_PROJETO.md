@@ -453,8 +453,9 @@ Legenda:
     véspera; resposta 1 confirma e 2 cancela só consulta de hoje ou futura ainda
     agendada ou confirmada, senão pede atenção da secretária; webhook recusa
     assinatura inválida; modo meta sem variáveis não envia; dentista não vê a
-    tela; simular resposta só o administrador.
-  - Validação: suíte completa com 432 testes; só as 3 falhas já conhecidas
+    tela; simular resposta só o administrador. A trava da resposta não usa
+    FOR UPDATE junto de select_related em consulta ou paciente, que são anuláveis.
+  - Validação: suíte completa com 433 testes; só as 3 falhas já conhecidas
     (`test_seeds_legitimos_nao_recusam`,
     `test_configuracao_ativa_usa_somente_homolog_local`,
     `test_recusa_banco_que_nao_e_consultorio_homolog`). Migração

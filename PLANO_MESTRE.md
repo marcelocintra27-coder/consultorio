@@ -956,4 +956,4 @@ hora e nome da dentista, sem conteúdo clínico. Diz “amanhã” só quando a 
 a 2 cancela somente se a consulta for de hoje ou de um dia futuro e ainda estiver
 agendada ou confirmada. Consulta passada, realizada, com falta, cancelada, ou
 lembrete sem consulta, não muda de status e a resposta fica para a secretária.
-Nesta etapa o envio é simulado (`WHATSAPP_MODO=simulado`); a API da Meta não é chamada.
+A trava da resposta usa só a linha da mensagem: consulta e paciente são anuláveis, e o PostgreSQL recusa FOR UPDATE no lado nulo de um outer join. Nesta etapa o envio é simulado (`WHATSAPP_MODO=simulado`); a API da Meta não é chamada.
