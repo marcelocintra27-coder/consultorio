@@ -40,53 +40,7 @@
             <p>Motivo: {{ ficha.motivo_engano }}</p>
             {% endif %}
 
-            {% if pode_engano %}
-            <form method="post" action="{% url 'core:marcar_engano_digitalizacao' ficha.pk %}" class="form-cartao">
-                {% csrf_token %}
-                <div class="campo">
-                    <label for="motivo-engano">Motivo do engano (opcional)</label>
-                    <textarea id="motivo-engano" name="motivo_engano" rows="2"></textarea>
-                </div>
-                <button type="submit" class="botao secundario">Enviada por engano</button>
-            </form>
-            {% endif %}
-
-            {% if pode_trocar and pacientes_troca %}
-            <form method="post" action="{% url 'core:trocar_paciente_digitalizacao' ficha.pk %}" class="form-cartao">
-                {% csrf_token %}
-                <div class="campo">
-                    <label for="paciente-novo">Novo paciente</label>
-                    <select id="paciente-novo" name="paciente" required>
-                        <option value="">Selecione</option>
-                        {% for candidato in pacientes_troca %}
-                        <option value="{{ candidato.pk }}">{{ candidato.nome_completo }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="campo">
-                    <label for="motivo-troca">Motivo da troca</label>
-                    <textarea id="motivo-troca" name="motivo" rows="3" required></textarea>
-                </div>
-                <button type="submit" class="botao">Trocar paciente</button>
-            </form>
-            {% endif %}
-
-            {% if pode_revisar %}
-            <form method="post" action="{% url 'core:revisar_digitalizacao' ficha.pk %}" class="form-inline">
-                {% csrf_token %}
-                <input type="hidden" name="acao" value="conferida">
-                <button type="submit" class="botao">Conferida</button>
-            </form>
-            <form method="post" action="{% url 'core:revisar_digitalizacao' ficha.pk %}" class="form-cartao">
-                {% csrf_token %}
-                <input type="hidden" name="acao" value="refazer">
-                <div class="campo">
-                    <label for="motivo-refazer">Motivo para refazer a foto</label>
-                    <textarea id="motivo-refazer" name="motivo_refazer" rows="3" required>{{ ficha.motivo_refazer }}</textarea>
-                </div>
-                <button type="submit" class="botao secundario">Refazer foto</button>
-            </form>
-            {% endif %}
+            {% include "core/_acoes_digitalizacao.html" %}
         </section>
 
         {% if trocas %}

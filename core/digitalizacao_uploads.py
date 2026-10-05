@@ -14,6 +14,8 @@ from django.core.files.uploadhandler import FileUploadHandler, StopUpload
 from exames import antivirus
 
 MAX_BYTES = 20 * 1024 * 1024
+MAX_FOLHAS = 6
+MAX_TOTAL = 60 * 1024 * 1024
 MAX_PIXELS = 40_000_000
 VALIDATION_TIMEOUT = 15
 TIPOS = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
@@ -26,18 +28,30 @@ def antivirus_ligado():
     return os.environ.get('CLAMAV_ATIVO') == '1'
 
 
+ERROS_UPLOAD = {
+    'quantidade': 'Envie no máximo 6 fotos por vez.',
+    'total': 'As fotos juntas devem ter até 60 MiB.',
+    'tamanho': 'Cada foto deve ter até 20 MiB.',
+    'campo': 'Envie as fotos no campo de imagens.',
+}
+
+
 class UploadDigitalizacao(FileUploadHandler):
-    """Um arquivo limitado desde o recebimento, removido ao terminar a requisição."""
+    """Até 6 fotos no campo imagens, limitadas desde o recebimento e apagadas no fim."""
     def __init__(self, request):
         super().__init__(request)
         self.temporarios = []
         self.quantidade = 0
+        self.total_lote = 0
 
     def new_file(self, *args, **kwargs):
         super().new_file(*args, **kwargs)
+        if self.field_name != 'imagens':
+            self.request.digitalizacao_upload_erro = 'campo'
+            raise StopUpload(connection_reset=False)
         self.quantidade += 1
-        if self.quantidade != 1 or self.field_name != 'imagem':
-            self.request.digitalizacao_upload_erro = True
+        if self.quantidade > MAX_FOLHAS:
+            self.request.digitalizacao_upload_erro = 'quantidade'
             raise StopUpload(connection_reset=False)
         self.arquivo = tempfile.NamedTemporaryFile(
             mode='w+b', prefix='digitalizacao-', dir=settings.FILE_UPLOAD_TEMP_DIR,
@@ -47,8 +61,12 @@ class UploadDigitalizacao(FileUploadHandler):
 
     def receive_data_chunk(self, raw_data, start):
         self.total += len(raw_data)
+        self.total_lote += len(raw_data)
         if self.total > MAX_BYTES:
-            self.request.digitalizacao_upload_erro = True
+            self.request.digitalizacao_upload_erro = 'tamanho'
+            raise StopUpload(connection_reset=False)
+        if self.total_lote > MAX_TOTAL:
+            self.request.digitalizacao_upload_erro = 'total'
             raise StopUpload(connection_reset=False)
         self.arquivo.write(raw_data)
         return None

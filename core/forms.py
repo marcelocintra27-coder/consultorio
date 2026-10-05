@@ -141,43 +141,39 @@ class PacienteForm(forms.ModelForm):
 
 class DigitalizacaoFichaForm(forms.ModelForm):
     paciente = forms.ModelChoiceField(
-        label='paciente', queryset=Paciente.objects.none(), required=False,
+        label='paciente',
+        queryset=Paciente.objects.none(),
+        required=True,
+        error_messages={'required': 'Escolha o paciente.'},
     )
 
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
+        from .models import DigitalizacaoFicha
         from .permissoes import (
-            usuario_e_administrador, usuario_pode_digitalizar,
+            usuario_pode_digitalizar,
             pacientes_visiveis_para_usuario,
         )
         self.user = user
         if usuario_pode_digitalizar(user):
             self.fields['paciente'].queryset = pacientes_visiveis_para_usuario(
                 user, Paciente.objects.filter(ativo=True).order_by('nome_completo'))
-        self.fields['paciente'].required = not usuario_e_administrador(user)
+        self.fields['paciente'].required = True
+        if not self.initial.get('tipo'):
+            self.fields['tipo'].initial = DigitalizacaoFicha.Tipo.CADASTRO
 
     def clean_paciente(self):
         from .permissoes import usuario_pode_enviar_digitalizacao
         paciente = self.cleaned_data.get('paciente')
+        if paciente is None:
+            raise forms.ValidationError('Escolha o paciente.')
         if not usuario_pode_enviar_digitalizacao(self.user, paciente):
             raise forms.ValidationError('Paciente não autorizado para digitalização.')
         return paciente
 
-    def clean_imagem(self):
-        from uuid import uuid4
-        from pathlib import Path
-        from django.core.files.base import ContentFile
-        from .digitalizacao_uploads import validar_imagem
-        arquivo = self.cleaned_data['imagem']
-        # Um paciente inválido não deve provocar inspeção ou processamento.
-        if 'paciente' in self.errors:
-            return arquivo
-        dados, _ = validar_imagem(arquivo, arquivo.name)
-        return ContentFile(dados, name=uuid4().hex + Path(arquivo.name).suffix.lower())
-
     class Meta:
         model = DigitalizacaoFicha
-        fields = ['paciente', 'imagem', 'tipo']
+        fields = ['paciente', 'tipo']
 
 
 class ConvenioForm(forms.ModelForm):

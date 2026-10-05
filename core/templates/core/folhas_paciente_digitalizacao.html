@@ -1,0 +1,45 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_digitalizacoes' %}" class="botao secundario">Voltar</a>
+            {% if pode_conferir_todas %}
+            <form method="post" action="{% if paciente %}{% url 'core:conferir_folhas_digitalizacao' paciente.pk %}{% else %}{% url 'core:conferir_folhas_sem_paciente' %}{% endif %}">
+                {% csrf_token %}
+                <button type="submit" class="botao">Marcar todas como conferidas</button>
+            </form>
+            {% endif %}
+        </div>
+
+        <p class="resumo">Folhas de <strong class="nome-paciente">{{ titulo }}</strong>, na ordem do envio.</p>
+
+        {% for ficha in fichas %}
+        <article class="form-cartao{% if ficha.status == 'refazer' %} ficha-refazer{% endif %}">
+            <h2 class="secao-pagina">Folha {{ ficha.ordem }} — {{ ficha.get_tipo_display }}</h2>
+            <figure class="foto-ficha-quadro">
+                <img src="{% url 'core:foto_digitalizacao' ficha.pk %}" alt="Foto da folha {{ ficha.ordem }} de {{ titulo }}" class="foto-ficha">
+            </figure>
+            <p>
+                {{ ficha.get_status_display }}
+                — {{ ficha.criado_em|date:"d/m/Y H:i" }}
+                — {% if ficha.digitalizado_por %}{{ ficha.digitalizado_por.get_full_name|default:ficha.digitalizado_por.username }}{% else %}—{% endif %}
+            </p>
+            {% if ficha.status == 'refazer' and ficha.motivo_refazer %}
+            <p>{{ ficha.motivo_refazer }}</p>
+            {% endif %}
+            {% if ficha.status == 'engano' and ficha.motivo_engano %}
+            <p>{{ ficha.motivo_engano }}</p>
+            {% endif %}
+            <div class="acoes">
+                <a href="{% url 'core:detalhe_digitalizacao' ficha.pk %}" class="botao secundario">Ver foto</a>
+                {% if secretaria and ficha.status == 'refazer' and ficha.paciente_id %}
+                <a href="{% url 'core:digitalizacao_upload' %}?paciente={{ ficha.paciente_id }}&amp;tipo={{ ficha.tipo }}" class="botao secundario">Enviar nova foto</a>
+                {% endif %}
+            </div>
+            {% include "core/_acoes_digitalizacao.html" %}
+        </article>
+        {% endfor %}
+{% endblock %}

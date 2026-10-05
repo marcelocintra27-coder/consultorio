@@ -957,3 +957,14 @@ a 2 cancela somente se a consulta for de hoje ou de um dia futuro e ainda estive
 agendada ou confirmada. Consulta passada, realizada, com falta, cancelada, ou
 lembrete sem consulta, não muda de status e a resposta fica para a secretária.
 A trava da resposta usa só a linha da mensagem: consulta e paciente são anuláveis, e o PostgreSQL recusa FOR UPDATE no lado nulo de um outer join. Nesta etapa o envio é simulado (`WHATSAPP_MODO=simulado`); a API da Meta não é chamada.
+
+### Digitalização de fichas antigas — envio em lote
+
+O paciente é obrigatório para qualquer usuário que envia uma ficha. Folhas já
+gravadas sem paciente continuam no sistema e podem ser corrigidas com
+“Trocar paciente”. Na mesma tela dá para escolher o paciente uma vez e enviar
+até 6 fotos (60 MiB no total); cada foto segue a validação e o re-encode
+atuais. O envio é tudo ou nada, guarda a ordem da folha e um lote comum, e a
+lista de fichas digitalizadas agrupa por paciente. “Enviada por engano” não
+entra nos totais, mas aparece no filtro. Quem revisa pode marcar as pendentes
+daquele paciente de uma vez. Secretária continua vendo só as próprias folhas.

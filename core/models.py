@@ -2344,6 +2344,8 @@ class DigitalizacaoFicha(models.Model):
     revisado_em = models.DateTimeField('revisado em', null=True, blank=True)
     motivo_refazer = models.TextField('motivo para refazer', blank=True, default='')
     motivo_engano = models.TextField('motivo do engano', blank=True, default='')
+    ordem = models.PositiveIntegerField('ordem da folha', default=1)
+    lote = models.UUIDField('lote de envio', null=True, blank=True, db_index=True)
     criado_em = models.DateTimeField('criado em', auto_now_add=True)
 
     class Meta:

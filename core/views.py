@@ -1,6 +1,7 @@
 ﻿from decimal import Decimal
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
 from uuid import uuid4
 
 
@@ -8,6 +9,7 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_not_required, login_required
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.base import ContentFile
 from django.db import DatabaseError, transaction
 from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
@@ -18,7 +20,12 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from .permissoes import usuario_pode_digitalizar, usuario_pode_acessar_digitalizacao
-from .digitalizacao_uploads import UploadDigitalizacao
+from .digitalizacao_uploads import (
+    ERROS_UPLOAD,
+    MAX_TOTAL,
+    UploadDigitalizacao,
+    validar_imagem,
+)
 
 from locacao.models import Dentista, Despesa, PerfilUsuario, Sala
 
@@ -55,7 +62,7 @@ from .auditoria_paciente import (
     snapshot,
     valores_iniciais,
 )
-from .digitalizacao_revisao import enviadas_hoje, ficha_recem_enviada, inicial_envio
+from .digitalizacao_revisao import enviadas_hoje, fichas_recem_enviadas, inicial_envio
 from .ia_digitalizacao import processar_digitalizacao_com_ia
 from .tabela_uniodonto import FATOR_US_UNIODONTO
 from .models import (
@@ -352,55 +359,130 @@ def digitalizacao_upload(request):
         handler.fechar()
 
 
+def _tipos_e_ordens(post, quantidade):
+    tipos = post.getlist('tipo')
+    if quantidade == 1 and tipos:
+        tipos = [tipos[0]]
+    elif len(tipos) != quantidade:
+        return None, None, 'Escolha o tipo de cada foto. Sem a prévia, envie uma foto por vez.'
+    if any(tipo not in DigitalizacaoFicha.Tipo.values for tipo in tipos):
+        return None, None, 'Tipo de ficha inválido.'
+    ordens_brutas = post.getlist('ordem')
+    if not ordens_brutas:
+        return tipos, list(range(1, quantidade + 1)), ''
+    if len(ordens_brutas) != quantidade:
+        return None, None, 'A ordem das folhas está incompleta.'
+    try:
+        ordens = [int(item) for item in ordens_brutas]
+    except ValueError:
+        return None, None, 'A ordem da folha deve ser um número.'
+    if any(item < 1 for item in ordens) or len(set(ordens)) != len(ordens):
+        return None, None, 'A ordem das folhas deve ser 1, 2, 3… sem repetir.'
+    return tipos, ordens, ''
+
+
+def _apagar_imagens(fichas):
+    for ficha in fichas:
+        imagem = getattr(ficha, 'imagem', None)
+        if imagem and getattr(imagem, '_committed', False):
+            imagem.storage.delete(imagem.name)
+
+
 @csrf_protect
 def _digitalizacao_upload_protegido(request):
     if request.method == 'POST':
-        form = DigitalizacaoFichaForm(request.POST, request.FILES, user=request.user)
-        if getattr(request, 'digitalizacao_upload_erro', False):
-            form = DigitalizacaoFichaForm(request.POST, user=request.user)
-            form.add_error(None, 'Envie somente uma imagem de até 20 MiB.')
-            # Não validar nem inspecionar o primeiro arquivo de um envio rejeitado.
+        # POST/FILES disparam o handler; o aviso só existe depois disso.
+        post = request.POST
+        erro_upload = getattr(request, 'digitalizacao_upload_erro', '')
+        form = DigitalizacaoFichaForm(post, user=request.user)
+        valido = form.is_valid()
+        if erro_upload:
+            # Limite estourado no recebimento: não validar nem inspecionar as fotos.
+            form.add_error(None, ERROS_UPLOAD.get(erro_upload, ERROS_UPLOAD['campo']))
+            messages.error(request, 'Não foi possível enviar. Confira os avisos no formulário.')
             return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
-        if form.is_valid():
-            digitalizacao = form.save(commit=False)
-            digitalizacao.digitalizado_por = request.user
+        if not valido:
+            messages.error(request, 'Não foi possível enviar. Confira os avisos no formulário.')
+            return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
+        arquivos = request.FILES.getlist('imagens')
+        if not arquivos:
+            form.add_error(None, 'Selecione ao menos uma foto.')
+        elif len(arquivos) > 6:
+            form.add_error(None, ERROS_UPLOAD['quantidade'])
+        elif sum(arquivo.size for arquivo in arquivos) > MAX_TOTAL:
+            form.add_error(None, ERROS_UPLOAD['total'])
+        if form.errors:
+            messages.error(request, 'Não foi possível enviar. Confira os avisos no formulário.')
+            return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
+        tipos, ordens, erro_tipos = _tipos_e_ordens(post, len(arquivos))
+        if erro_tipos:
+            form.add_error(None, erro_tipos)
+            messages.error(request, 'Não foi possível enviar. Confira os avisos no formulário.')
+            return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
+        prontas = []
+        for indice, arquivo in enumerate(arquivos, start=1):
             try:
-                with transaction.atomic():
-                    digitalizacao.save()
-            except (DatabaseError, OSError):
-                if digitalizacao.imagem and digitalizacao.imagem._committed:
-                    digitalizacao.imagem.storage.delete(digitalizacao.imagem.name)
-                return HttpResponse('Não foi possível registrar a digitalização.', status=503)
-            nome = (
-                digitalizacao.paciente.nome_completo
-                if digitalizacao.paciente_id else 'sem paciente'
+                dados, _tipo = validar_imagem(arquivo, arquivo.name)
+            except ValidationError as exc:
+                form.add_error(
+                    None,
+                    f'A foto {indice} ({arquivo.name}) não foi aceita: {" ".join(exc.messages)}',
+                )
+                continue
+            prontas.append((
+                dados, Path(arquivo.name).suffix.lower(), tipos[indice - 1], ordens[indice - 1],
+            ))
+        if form.errors:
+            messages.error(request, 'Não foi possível enviar. Confira os avisos no formulário.')
+            return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
+        paciente = form.cleaned_data['paciente']
+        lote = uuid4()
+        criadas = []
+        atual = None
+        try:
+            with transaction.atomic():
+                for dados, sufixo, tipo, ordem in prontas:
+                    atual = DigitalizacaoFicha(
+                        paciente=paciente,
+                        tipo=tipo,
+                        ordem=ordem,
+                        lote=lote,
+                        digitalizado_por=request.user,
+                        imagem=ContentFile(dados, name=f'{uuid4().hex}{sufixo}'),
+                    )
+                    atual.save()
+                    criadas.append(atual)
+        except (DatabaseError, OSError):
+            pendentes = list(criadas)
+            if atual is not None and atual not in pendentes:
+                pendentes.append(atual)
+            _apagar_imagens(pendentes)
+            return HttpResponse('Não foi possível registrar a digitalização.', status=503)
+        if len(criadas) == 1:
+            texto = f'1 folha enviada para {paciente.nome_completo}. Ficou pendente de revisão.'
+        else:
+            texto = (
+                f'{len(criadas)} folhas enviadas para {paciente.nome_completo}. '
+                'Ficaram pendentes de revisão.'
             )
-            messages.success(
-                request,
-                f'Digitalização enviada para {nome}. A ficha ficou pendente de revisão.',
-            )
-            destino = reverse('core:digitalizacao_upload')
-            return redirect(f'{destino}?enviada={digitalizacao.pk}')
-        messages.error(
-            request,
-            'Não foi possível enviar. Confira os avisos no formulário.',
-        )
-        return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
-    else:
-        form = DigitalizacaoFichaForm(
-            user=request.user, initial=inicial_envio(request, request.user),
-        )
+        messages.success(request, texto)
+        destino = reverse('core:digitalizacao_upload')
+        return redirect(f'{destino}?lote={lote}')
+    form = DigitalizacaoFichaForm(
+        user=request.user, initial=inicial_envio(request, request.user),
+    )
     return render(request, 'core/digitalizacao_upload.html', _contexto_envio(request, form))
 
 
 def _contexto_envio(request, form):
-    enviada = None
+    enviadas = []
     if request.method == 'GET':
-        enviada = ficha_recem_enviada(request.user, request.GET.get('enviada'))
+        enviadas = fichas_recem_enviadas(request.user, request)
     return {
         'form': form,
         'enviadas_hoje': enviadas_hoje(request.user),
-        'ficha_enviada': enviada,
+        'fichas_enviadas': enviadas,
+        'ficha_enviada': enviadas[0] if enviadas else None,
     }
 
 

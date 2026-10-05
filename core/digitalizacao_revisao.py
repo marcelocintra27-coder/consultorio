@@ -1,4 +1,5 @@
 """Lista, foto protegida e revisão das fichas digitalizadas."""
+import uuid
 from datetime import datetime, time, timedelta
 from pathlib import Path
 
@@ -59,6 +60,99 @@ def ficha_recem_enviada(user, bruto):
     return digitalizacoes_visiveis(user).filter(
         pk=int(bruto),
     ).select_related('paciente').first()
+
+
+def fichas_recem_enviadas(user, request):
+    lote = (request.GET.get('lote') or '').strip()
+    if lote:
+        try:
+            identificador = uuid.UUID(lote)
+        except ValueError:
+            return []
+        return list(
+            digitalizacoes_visiveis(user).filter(lote=identificador)
+            .select_related('paciente')
+            .order_by('ordem', 'pk')
+        )
+    uma = ficha_recem_enviada(user, request.GET.get('enviada'))
+    return [uma] if uma else []
+
+
+ROTULOS_TIPO = {
+    'cadastro': ('cadastro', 'cadastros'),
+    'anamnese': ('anamnese', 'anamneses'),
+    'evolucao': ('evolução', 'evoluções'),
+    'outro': ('outro', 'outros'),
+}
+
+
+class GrupoDigitalizacao:
+    def __init__(self, paciente):
+        self.paciente = paciente
+        self.ids = []
+        self.contagens = {}
+        self.pendentes = 0
+        self.refazer = 0
+        self.motivos = []
+        self.refazer_tipo = ''
+        self.ultimo = None
+
+    @property
+    def nome(self):
+        if self.paciente is None:
+            return 'Sem paciente'
+        return self.paciente.nome_completo
+
+    @property
+    def resumo_tipos(self):
+        partes = []
+        for valor, _rotulo in DigitalizacaoFicha.Tipo.choices:
+            quantidade = self.contagens.get(valor, 0)
+            if not quantidade:
+                continue
+            singular, plural = ROTULOS_TIPO[valor]
+            palavra = singular if quantidade == 1 else plural
+            partes.append(f'{quantidade} {palavra}')
+        return ', '.join(partes)
+
+    def adicionar(self, ficha):
+        self.ids.append(ficha.pk)
+        self.contagens[ficha.tipo] = self.contagens.get(ficha.tipo, 0) + 1
+        if ficha.status == DigitalizacaoFicha.Status.PENDENTE_REVISAO:
+            self.pendentes += 1
+        elif ficha.status == DigitalizacaoFicha.Status.REFAZER:
+            self.refazer += 1
+            if ficha.motivo_refazer and ficha.motivo_refazer not in self.motivos:
+                self.motivos.append(ficha.motivo_refazer)
+            if not self.refazer_tipo:
+                self.refazer_tipo = ficha.tipo
+        elif ficha.status == DigitalizacaoFicha.Status.ENGANO:
+            if ficha.motivo_engano and ficha.motivo_engano not in self.motivos:
+                self.motivos.append(ficha.motivo_engano)
+        if self.ultimo is None:
+            self.ultimo = ficha
+
+
+def agrupar_fichas(fichas):
+    grupos = {}
+    ordem = []
+    for ficha in fichas.order_by('-criado_em', '-pk'):
+        chave = ficha.paciente_id
+        grupo = grupos.get(chave)
+        if grupo is None:
+            grupo = GrupoDigitalizacao(ficha.paciente)
+            grupos[chave] = grupo
+            ordem.append(chave)
+        grupo.adicionar(ficha)
+    return [grupos[chave] for chave in ordem]
+
+
+def anotar_acoes(user, ficha):
+    ficha.pode_revisar = usuario_pode_revisar_digitalizacao(user, ficha)
+    ficha.pode_engano = usuario_pode_marcar_engano(user, ficha)
+    ficha.pode_trocar = usuario_pode_trocar_paciente_digitalizacao(user, ficha)
+    ficha.lista_troca = list(pacientes_para_troca(user, ficha))
+    return ficha
 
 
 def pacientes_para_troca(user, ficha):
@@ -159,8 +253,10 @@ def listar_digitalizacoes(request):
         raise PermissionDenied
     visiveis = digitalizacoes_visiveis(request.user)
     fichas, filtros = _aplicar_filtros(request, visiveis)
-    fichas = fichas.order_by('-criado_em', '-pk')
-    paginas = Paginator(fichas, POR_PAGINA)
+    if filtros['situacao'] != DigitalizacaoFicha.Status.ENGANO:
+        fichas = fichas.exclude(status=DigitalizacaoFicha.Status.ENGANO)
+    grupos = agrupar_fichas(fichas)
+    paginas = Paginator(grupos, POR_PAGINA)
     pagina = paginas.get_page(request.GET.get('pagina') or 1)
     secretaria = (
         _e_secretaria(request.user) and not usuario_e_administrador(request.user)
@@ -184,16 +280,112 @@ def listar_digitalizacoes(request):
     })
 
 
+def _fichas_do_paciente(user, paciente_id):
+    if not usuario_pode_listar_digitalizacoes(user):
+        raise PermissionDenied
+    return digitalizacoes_visiveis(user).filter(paciente_id=paciente_id)
+
+
+@login_required
+@require_GET
+def folhas_paciente(request, pk):
+    paciente = get_object_or_404(Paciente, pk=pk)
+    fichas = list(
+        _fichas_do_paciente(request.user, paciente.pk)
+        .order_by('ordem', 'criado_em', 'pk')
+    )
+    if not fichas:
+        raise Http404
+    for ficha in fichas:
+        anotar_acoes(request.user, ficha)
+    return render(request, 'core/folhas_paciente_digitalizacao.html', {
+        'titulo': paciente.nome_completo,
+        'paciente': paciente,
+        'fichas': fichas,
+        'pode_conferir_todas': any(ficha.pode_revisar and ficha.status == DigitalizacaoFicha.Status.PENDENTE_REVISAO for ficha in fichas),
+        'secretaria': (
+            _e_secretaria(request.user) and not usuario_e_administrador(request.user)
+        ),
+    })
+
+
+@login_required
+@require_GET
+def folhas_sem_paciente(request):
+    fichas = list(
+        _fichas_do_paciente(request.user, None)
+        .order_by('ordem', 'criado_em', 'pk')
+    )
+    if not fichas:
+        raise Http404
+    for ficha in fichas:
+        anotar_acoes(request.user, ficha)
+    return render(request, 'core/folhas_paciente_digitalizacao.html', {
+        'titulo': 'Sem paciente',
+        'paciente': None,
+        'fichas': fichas,
+        'pode_conferir_todas': any(ficha.pode_revisar and ficha.status == DigitalizacaoFicha.Status.PENDENTE_REVISAO for ficha in fichas),
+        'secretaria': (
+            _e_secretaria(request.user) and not usuario_e_administrador(request.user)
+        ),
+    })
+
+
+@login_required
+@require_POST
+def conferir_folhas_paciente(request, pk):
+    return _conferir_folhas(request, pk)
+
+
+@login_required
+@require_POST
+def conferir_folhas_sem_paciente(request):
+    return _conferir_folhas(request, None)
+
+
+def _conferir_folhas(request, paciente_id):
+    if not usuario_pode_listar_digitalizacoes(request.user):
+        raise PermissionDenied
+    fichas = list(
+        digitalizacoes_visiveis(request.user).filter(
+            paciente_id=paciente_id,
+            status=DigitalizacaoFicha.Status.PENDENTE_REVISAO,
+        )
+    )
+    if paciente_id is None:
+        destino = redirect('core:folhas_digitalizacao_sem_paciente')
+    else:
+        destino = redirect('core:folhas_digitalizacao_paciente', pk=paciente_id)
+    if not fichas:
+        raise Http404
+    if not any(usuario_pode_revisar_digitalizacao(request.user, ficha) for ficha in fichas):
+        raise PermissionDenied
+    agora = timezone.now()
+    with transaction.atomic():
+        for ficha in fichas:
+            if not usuario_pode_revisar_digitalizacao(request.user, ficha):
+                continue
+            ficha.status = DigitalizacaoFicha.Status.CONFIRMADA
+            ficha.motivo_refazer = ''
+            ficha.revisado_por = request.user
+            ficha.revisado_em = agora
+            ficha.save(update_fields=[
+                'status', 'motivo_refazer', 'revisado_por', 'revisado_em',
+            ])
+    messages.success(request, 'Folhas pendentes marcadas como conferidas.')
+    return destino
+
+
 @login_required
 @require_GET
 def detalhe_digitalizacao(request, pk):
-    ficha = _ficha_ou_404(request.user, pk)
+    ficha = anotar_acoes(request.user, _ficha_ou_404(request.user, pk))
     return render(request, 'core/detalhe_digitalizacao.html', {
         'ficha': ficha,
-        'pode_revisar': usuario_pode_revisar_digitalizacao(request.user, ficha),
-        'pode_engano': usuario_pode_marcar_engano(request.user, ficha),
-        'pode_trocar': usuario_pode_trocar_paciente_digitalizacao(request.user, ficha),
-        'pacientes_troca': pacientes_para_troca(request.user, ficha),
+        'pode_revisar': ficha.pode_revisar,
+        'pode_engano': ficha.pode_engano,
+        'pode_trocar': ficha.pode_trocar,
+        'pacientes_troca': ficha.lista_troca,
         'trocas': ficha.trocas_paciente.select_related(
             'paciente_anterior', 'paciente_novo', 'trocado_por',
         ),

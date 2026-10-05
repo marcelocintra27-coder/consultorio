@@ -120,7 +120,7 @@ class DigitalizacaoTests(TestCase):
 
     def enviar(self, arquivo=None, paciente=None, **extra):
         dados = {'paciente': self.paciente.pk if paciente is None else paciente,
-                 'imagem': arquivo if arquivo is not None else imagem(), 'tipo': 'cadastro'}
+                 'imagens': arquivo if arquivo is not None else imagem(), 'tipo': 'cadastro'}
         dados.update(extra)
         return self.client.post('/digitalizacao/nova/', dados)
 
@@ -203,8 +203,13 @@ class DigitalizacaoTests(TestCase):
     def test_admin_sem_paciente_e_dentista_vinculado_incluem(self):
         self.assertEqual(self.enviar().status_code, 302)
         self.client.force_login(self.admin)
-        self.assertEqual(self.enviar(paciente='').status_code, 302)
-        self.assertEqual(DigitalizacaoFicha.objects.count(), 2)
+        self.scan.reset_mock()
+        sem_paciente = self.enviar(paciente='')
+        self.assertEqual(sem_paciente.status_code, 200)
+        self.assertContains(sem_paciente, 'Escolha o paciente.')
+        self.assertEqual(DigitalizacaoFicha.objects.count(), 1)
+        self.scan.assert_not_called()
+        self.assertEqual(self.temporarios(), [])
 
     def test_ia_sem_paciente_apenas_admin(self):
         registro = self.registro()
@@ -248,13 +253,13 @@ class DigitalizacaoTests(TestCase):
         cliente = Client(enforce_csrf_checks=True)
         cliente.force_login(self.user)
         self.assertEqual(cliente.post('/digitalizacao/nova/',
-            {'imagem': imagem(), 'paciente': self.paciente.pk, 'tipo': 'cadastro'}).status_code, 403)
+            {'imagens': imagem(), 'paciente': self.paciente.pk, 'tipo': 'cadastro'}).status_code, 403)
         self.assertFalse(DigitalizacaoFicha.objects.exists())
         self.assertEqual(self.arquivos(), set())
         cliente.get('/digitalizacao/nova/')
         token = cliente.cookies['csrftoken'].value
         resposta = cliente.post('/digitalizacao/nova/',
-            {'imagem': imagem(), 'paciente': self.paciente.pk, 'tipo': 'cadastro',
+            {'imagens': imagem(), 'paciente': self.paciente.pk, 'tipo': 'cadastro',
              'csrfmiddlewaretoken': token})
         self.assertEqual(resposta.status_code, 302)
         registro = DigitalizacaoFicha.objects.get()
@@ -294,10 +299,20 @@ class DigitalizacaoTests(TestCase):
                 self.assertEqual(self.arquivos(), set())
 
     def test_multiplos_arquivos_rejeitados(self):
-        resposta = self.enviar([imagem(), imagem('outra.png')])
+        resposta = self.enviar([imagem(f'folha-{indice}.png') for indice in range(7)])
         self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Envie no máximo 6 fotos por vez.')
         self.assertFalse(DigitalizacaoFicha.objects.exists())
-        self.assertEqual(self.arquivos(), set())
+        self.assertEqual(self.temporarios(), [])
+        self.scan.assert_not_called()
+
+        self.scan.reset_mock()
+        with patch('core.digitalizacao_uploads.MAX_TOTAL', 1):
+            acima = self.enviar([imagem('a.png'), imagem('b.png')])
+        self.assertEqual(acima.status_code, 200)
+        self.assertContains(acima, 'As fotos juntas devem ter até 60 MiB.')
+        self.assertFalse(DigitalizacaoFicha.objects.exists())
+        self.assertEqual(self.temporarios(), [])
         self.scan.assert_not_called()
 
 
@@ -714,6 +729,50 @@ class DigitalizacaoTests(TestCase):
                 self.assertEqual(aberta.format, 'PNG')
         registro.refresh_from_db()
         self.assertEqual(registro.texto_bruto_ia['nome_paciente']['valor'], 'Fictício')
+        self.assertEqual(self.temporarios(), [])
+
+    def test_lote_de_tres_folhas_grava_ordem_tipo_e_mesmo_lote(self):
+        fotos = [imagem('cadastro.png'), imagem('evo-a.png'), imagem('evo-b.png')]
+        resposta = self.enviar(
+            fotos,
+            tipo=['cadastro', 'anamnese', 'evolucao'],
+            ordem=['1', '2', '3'],
+        )
+        self.assertEqual(resposta.status_code, 302)
+        fichas = list(DigitalizacaoFicha.objects.order_by('ordem', 'pk'))
+        self.assertEqual([ficha.ordem for ficha in fichas], [1, 2, 3])
+        self.assertEqual(
+            [ficha.tipo for ficha in fichas],
+            ['cadastro', 'anamnese', 'evolucao'],
+        )
+        self.assertEqual(len({ficha.lote for ficha in fichas}), 1)
+        self.assertIsNotNone(fichas[0].lote)
+        self.assertEqual({ficha.paciente_id for ficha in fichas}, {self.paciente.pk})
+        self.assertEqual(self.temporarios(), [])
+
+    def test_foto_invalida_no_lote_nao_grava_nenhuma(self):
+        fotos = [
+            imagem('boa.png'),
+            SimpleUploadedFile('ruim.png', b'nao e imagem'),
+            imagem('outra.png'),
+        ]
+        resposta = self.enviar(
+            fotos,
+            tipo=['cadastro', 'evolucao', 'evolucao'],
+            ordem=['1', '2', '3'],
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'A foto 2 (ruim.png) não foi aceita')
+        self.assertFalse(DigitalizacaoFicha.objects.exists())
+        self.assertEqual(self.temporarios(), [])
+        self.assertEqual(self.arquivos(), set())
+
+    def test_varias_fotos_com_um_tipo_so_sao_recusadas(self):
+        resposta = self.enviar([imagem('a.png'), imagem('b.png')])
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Escolha o tipo de cada foto. Sem a prévia, envie uma foto por vez.')
+        self.assertFalse(DigitalizacaoFicha.objects.exists())
+        self.scan.assert_not_called()
         self.assertEqual(self.temporarios(), [])
 
 

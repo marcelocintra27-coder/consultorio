@@ -41,33 +41,41 @@
             <thead>
                 <tr>
                     <th scope="col">Paciente</th>
-                    <th scope="col">Tipo</th>
-                    <th scope="col">Envio</th>
-                    <th scope="col">Quem enviou</th>
+                    <th scope="col">Folhas</th>
                     <th scope="col">Situação</th>
+                    <th scope="col">Último envio</th>
+                    <th scope="col">Quem enviou</th>
                     <th scope="col"></th>
                 </tr>
             </thead>
             <tbody>
-                {% for ficha in pagina %}
-                <tr{% if ficha.status == 'refazer' %} class="ficha-refazer"{% endif %}>
-                    <td>{% if ficha.paciente %}{{ ficha.paciente.nome_completo }}{% else %}Sem paciente{% endif %}</td>
-                    <td>{{ ficha.get_tipo_display }}</td>
-                    <td>{{ ficha.criado_em|date:"d/m/Y H:i" }}</td>
-                    <td>{% if ficha.digitalizado_por %}{{ ficha.digitalizado_por.get_full_name|default:ficha.digitalizado_por.username }}{% else %}—{% endif %}</td>
+                {% for grupo in pagina %}
+                <tr{% if grupo.refazer %} class="ficha-refazer"{% endif %}>
                     <td>
-                        {{ ficha.get_status_display }}
-                        {% if ficha.status == 'refazer' and ficha.motivo_refazer %}
-                        <p>{{ ficha.motivo_refazer }}</p>
-                        {% endif %}
-                        {% if ficha.status == 'engano' and ficha.motivo_engano %}
-                        <p>{{ ficha.motivo_engano }}</p>
+                        {% if grupo.paciente %}
+                        <a href="{% url 'core:folhas_digitalizacao_paciente' grupo.paciente.pk %}">{{ grupo.nome }}</a>
+                        {% else %}
+                        <a href="{% url 'core:folhas_digitalizacao_sem_paciente' %}">Sem paciente</a>
                         {% endif %}
                     </td>
+                    <td>{{ grupo.resumo_tipos }}</td>
+                    <td>
+                        {{ grupo.pendentes }} pendente{{ grupo.pendentes|pluralize }},
+                        {{ grupo.refazer }} para refazer
+                        {% for motivo in grupo.motivos %}
+                        <p>{{ motivo }}</p>
+                        {% endfor %}
+                    </td>
+                    <td>{% if grupo.ultimo %}{{ grupo.ultimo.criado_em|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
+                    <td>{% if grupo.ultimo and grupo.ultimo.digitalizado_por %}{{ grupo.ultimo.digitalizado_por.get_full_name|default:grupo.ultimo.digitalizado_por.username }}{% else %}—{% endif %}</td>
                     <td class="acoes">
-                        <a href="{% url 'core:detalhe_digitalizacao' ficha.pk %}" class="botao">Ver foto</a>
-                        {% if secretaria and ficha.status == 'refazer' and ficha.paciente_id %}
-                        <a href="{% url 'core:digitalizacao_upload' %}?paciente={{ ficha.paciente_id }}&amp;tipo={{ ficha.tipo }}" class="botao secundario">Enviar nova foto</a>
+                        {% if grupo.paciente %}
+                        <a href="{% url 'core:folhas_digitalizacao_paciente' grupo.paciente.pk %}" class="botao">Abrir</a>
+                        {% else %}
+                        <a href="{% url 'core:folhas_digitalizacao_sem_paciente' %}" class="botao">Abrir</a>
+                        {% endif %}
+                        {% if secretaria and grupo.refazer and grupo.paciente %}
+                        <a href="{% url 'core:digitalizacao_upload' %}?paciente={{ grupo.paciente.pk }}&amp;tipo={{ grupo.refazer_tipo }}" class="botao secundario">Enviar nova foto</a>
                         {% endif %}
                     </td>
                 </tr>

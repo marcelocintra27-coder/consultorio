@@ -88,7 +88,11 @@ app_name = 'core'
 from django.urls import include
 
 from .digitalizacao_revisao import (
+    conferir_folhas_paciente,
+    conferir_folhas_sem_paciente,
     detalhe_digitalizacao,
+    folhas_paciente,
+    folhas_sem_paciente,
     foto_digitalizacao,
     listar_digitalizacoes,
     marcar_engano_digitalizacao,
@@ -121,6 +125,26 @@ urlpatterns = [
     path('', inicio, name='inicio'),
     path('digitalizacao/', listar_digitalizacoes, name='listar_digitalizacoes'),
     path('digitalizacao/nova/', digitalizacao_upload, name='digitalizacao_upload'),
+    path(
+        'digitalizacao/paciente/<int:pk>/',
+        folhas_paciente,
+        name='folhas_digitalizacao_paciente',
+    ),
+    path(
+        'digitalizacao/paciente/<int:pk>/conferir/',
+        conferir_folhas_paciente,
+        name='conferir_folhas_digitalizacao',
+    ),
+    path(
+        'digitalizacao/sem-paciente/',
+        folhas_sem_paciente,
+        name='folhas_digitalizacao_sem_paciente',
+    ),
+    path(
+        'digitalizacao/sem-paciente/conferir/',
+        conferir_folhas_sem_paciente,
+        name='conferir_folhas_sem_paciente',
+    ),
     path('digitalizacao/<int:pk>/', detalhe_digitalizacao, name='detalhe_digitalizacao'),
     path('digitalizacao/<int:pk>/foto/', foto_digitalizacao, name='foto_digitalizacao'),
     path('digitalizacao/<int:pk>/revisar/', revisar_digitalizacao, name='revisar_digitalizacao'),

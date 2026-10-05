@@ -862,3 +862,49 @@ h2.secao-pagina {
     padding-top: 16px;
     border-top: 1px solid var(--cor-borda);
 }
+
+.folhas-envio {
+    display: grid;
+    gap: 12px;
+}
+
+.folha-envio {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid var(--cor-borda);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.foto-mini {
+    display: block;
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #f4f7f8;
+}
+
+.fotos-gravadas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 12px 0 16px;
+}
+
+.fotos-gravadas .foto-mini {
+    width: auto;
+    height: auto;
+    max-width: 180px;
+    max-height: 180px;
+    object-fit: contain;
+}
+
+@media (max-width: 480px) {
+    .folha-envio {
+        grid-template-columns: 1fr;
+    }
+}

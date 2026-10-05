@@ -462,6 +462,23 @@ Legenda:
     `core.0036_lembrete_whatsapp_simulado`. `check` e
     `makemigrations --check --dry-run` sem pendência.
 
+## Digitalização de fichas antigas — envio em lote
+
+- [x] Paciente obrigatório e várias folhas no mesmo envio.
+  - Critérios: qualquer perfil escolhe o paciente antes de gravar; até 6
+    fotos e 60 MiB no total, cada foto com os limites e a validação atuais;
+    se uma foto falha, nenhuma é gravada; a ordem e o lote ficam na ficha;
+    a lista agrupa por paciente e ignora “enviada por engano” nos totais;
+    “marcar todas como conferidas” só nas pendentes e só para quem revisa;
+    secretária continua vendo só o que ela enviou. Permissões, re-encode,
+    antivírus, exames e o registro de cada foto aberta permanecem.
+  - Validação: suíte completa com 438 testes; só as 3 falhas já conhecidas
+    (`test_seeds_legitimos_nao_recusam`,
+    `test_configuracao_ativa_usa_somente_homolog_local`,
+    `test_recusa_banco_que_nao_e_consultorio_homolog`). Os 63 testes de
+    digitalização também passaram no PostgreSQL 16 local. Migração
+    `core.0037_ordem_lote_digitalizacao`.
+
 ## Regras de execução contínua
 
 - [x] Sem commit, push ou deploy sem autorização explícita.

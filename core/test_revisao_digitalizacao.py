@@ -389,7 +389,9 @@ class RevisaoDigitalizacaoTests(TestCase):
             reverse('core:listar_digitalizacoes'),
             {'de': self.hoje.isoformat(), 'ate': self.hoje.isoformat()},
         )
-        self.assertNotIn(self.antiga.pk, {ficha.pk for ficha in de_hoje.context['pagina']})
+        self.assertNotIn(self.antiga.pk, {
+            pk for grupo in de_hoje.context['pagina'] for pk in grupo.ids
+        })
         self.assertContains(de_hoje, self.paciente_b.nome_completo)
         so_ontem = self.client.get(
             reverse('core:listar_digitalizacoes'),
@@ -406,7 +408,8 @@ class RevisaoDigitalizacaoTests(TestCase):
         self.assertContains(invertido, self.paciente_solto.nome_completo)
 
         for indice in range(21):
-            self._ficha(self.paciente_solto, self.admin, nome=f'lote-{indice}.png')
+            extra = self._paciente(f'Paciente pagina {indice:02d}')
+            self._ficha(extra, self.admin, nome=f'lote-{indice}.png')
         pagina = self.client.get(reverse('core:listar_digitalizacoes'))
         self.assertContains(pagina, 'Página 1 de 2')
         self.assertContains(pagina, 'Próxima')
@@ -414,7 +417,7 @@ class RevisaoDigitalizacaoTests(TestCase):
         self.assertContains(seguinte, 'Página 2 de 2')
         self.assertContains(seguinte, 'Anterior')
         primeira = [
-            ficha.pk for ficha in pagina.context['pagina'].object_list
+            grupo.ultimo.pk for grupo in pagina.context['pagina'].object_list
         ]
         self.assertEqual(primeira, sorted(primeira, reverse=True))
 
@@ -431,7 +434,7 @@ class RevisaoDigitalizacaoTests(TestCase):
 
         resposta = self.client.post(reverse('core:digitalizacao_upload'), {
             'paciente': self.paciente_a.pk,
-            'imagem': _png(),
+            'imagens': _png(),
             'tipo': 'evolucao',
         })
         self.assertEqual(resposta.status_code, 302)
@@ -511,28 +514,30 @@ class RevisaoDigitalizacaoTests(TestCase):
 
         resposta = self.client.post(reverse('core:digitalizacao_upload'), {
             'paciente': self.paciente_a.pk,
-            'imagem': _png('confirmada.png'),
+            'imagens': _png('confirmada.png'),
             'tipo': 'cadastro',
         })
         nova = DigitalizacaoFicha.objects.exclude(pk__in=[
             self.minha.pk, self.da_outra.pk, self.para_refazer.pk,
             self.conferida.pk, self.antiga.pk,
         ]).get()
-        self.assertRedirects(
-            resposta,
-            f"{reverse('core:digitalizacao_upload')}?enviada={nova.pk}",
-        )
-        pagina = self.client.get(reverse('core:digitalizacao_upload'), {'enviada': nova.pk})
+        self.assertIn('?lote=', resposta['Location'])
+        self.assertRedirects(resposta, resposta['Location'])
+        pagina = self.client.get(resposta['Location'])
         self.assertContains(
             pagina,
             f'<strong class="nome-paciente">{self.paciente_a.nome_completo}</strong>',
         )
         self.assertContains(pagina, reverse('core:foto_digitalizacao', args=[nova.pk]))
-        self.assertContains(pagina, 'Enviar outra folha deste paciente')
+        self.assertContains(pagina, 'Enviar mais folhas deste paciente')
         self.assertContains(
             pagina,
             f'paciente={self.paciente_a.pk}&amp;tipo=cadastro',
         )
+        legado = self.client.get(
+            reverse('core:digitalizacao_upload'), {'enviada': nova.pk},
+        )
+        self.assertEqual(legado.context['ficha_enviada'].pk, nova.pk)
         self.assertContains(pagina, 'Enviar ficha de outro paciente')
         self.assertNotContains(pagina, nova.imagem.name)
         self.assertNotContains(pagina, '/media/')
@@ -707,3 +712,114 @@ class RevisaoDigitalizacaoTests(TestCase):
         self.assertEqual(self.minha.paciente, destino)
         self.assertEqual(TrocaPacienteDigitalizacao.objects.count(), 1)
         self.assertTrue(self.minha.imagem.storage.exists(arquivo))
+
+    def test_lista_agrupada_ignora_engano_e_conta_por_tipo(self):
+        so_engano = self._paciente('Paciente so engano')
+        self._ficha(
+            so_engano, self.admin, tipo='evolucao',
+            status=DigitalizacaoFicha.Status.ENGANO, nome='so-engano.png',
+        )
+        self._entrar(self.admin)
+        lista = self.client.get(reverse('core:listar_digitalizacoes'))
+        self.assertContains(lista, 'Pendentes: 3. Para refazer: 1.')
+        self.assertContains(lista, '3 cadastros')
+        self.assertContains(lista, '1 anamnese')
+        self.assertNotContains(lista, so_engano.nome_completo)
+        self.assertNotContains(lista, '<img')
+        filtro = self.client.get(
+            reverse('core:listar_digitalizacoes'), {'situacao': 'engano'},
+        )
+        self.assertContains(filtro, 'Pendentes: 3. Para refazer: 1.')
+        self.assertContains(filtro, so_engano.nome_completo)
+        self.assertContains(filtro, '1 evolução')
+        self.assertNotContains(filtro, self.paciente_b.nome_completo)
+
+        self._entrar(self.secretaria)
+        secreta = self.client.get(reverse('core:listar_digitalizacoes'))
+        self.assertContains(secreta, 'Minhas fichas enviadas')
+        self.assertContains(secreta, '2 cadastros')
+        self.assertContains(secreta, '1 anamnese')
+        self.assertNotContains(secreta, 'Bia')
+        self.assertNotContains(secreta, so_engano.nome_completo)
+        self.assertNotContains(secreta, self.paciente_solto.nome_completo)
+
+    def test_marcar_todas_conferidas_so_pendentes_de_quem_revisa(self):
+        self.antiga.status = DigitalizacaoFicha.Status.REFAZER
+        self.antiga.motivo_refazer = 'Manter esta'
+        self.antiga.save(update_fields=['status', 'motivo_refazer'])
+        engano = self._ficha(
+            self.paciente_a, self.admin, tipo='outro',
+            status=DigitalizacaoFicha.Status.ENGANO, nome='engano-a.png',
+        )
+        self._entrar(self.secretaria)
+        self.assertEqual(
+            self.client.post(
+                reverse('core:conferir_folhas_digitalizacao', args=[self.paciente_a.pk]),
+            ).status_code,
+            403,
+        )
+        folhas = self.client.get(
+            reverse('core:folhas_digitalizacao_paciente', args=[self.paciente_a.pk]),
+        )
+        self.assertContains(folhas, self.paciente_a.nome_completo)
+        self.assertContains(folhas, reverse('core:detalhe_digitalizacao', args=[self.minha.pk]))
+        self.assertNotContains(folhas, reverse('core:detalhe_digitalizacao', args=[self.da_outra.pk]))
+        self.assertNotContains(folhas, 'Marcar todas como conferidas')
+        self.minha.refresh_from_db()
+        self.assertEqual(self.minha.status, DigitalizacaoFicha.Status.PENDENTE_REVISAO)
+
+        self._entrar(self.admin)
+        pagina = self.client.get(
+            reverse('core:folhas_digitalizacao_paciente', args=[self.paciente_a.pk]),
+        )
+        self.assertContains(pagina, 'Marcar todas como conferidas')
+        self.assertContains(pagina, 'Ver foto')
+        self.assertContains(pagina, 'Conferida')
+        self.assertContains(pagina, 'Refazer foto')
+        self.assertContains(pagina, 'Enviada por engano')
+        self.assertContains(pagina, 'Trocar paciente')
+        self.assertContains(pagina, reverse('core:foto_digitalizacao', args=[self.minha.pk]))
+        resposta = self.client.post(
+            reverse('core:conferir_folhas_digitalizacao', args=[self.paciente_a.pk]),
+        )
+        self.assertRedirects(
+            resposta, reverse('core:folhas_digitalizacao_paciente', args=[self.paciente_a.pk]),
+        )
+        self.minha.refresh_from_db()
+        self.da_outra.refresh_from_db()
+        self.antiga.refresh_from_db()
+        engano.refresh_from_db()
+        self.para_refazer.refresh_from_db()
+        self.assertEqual(self.minha.status, DigitalizacaoFicha.Status.CONFIRMADA)
+        self.assertEqual(self.minha.revisado_por, self.admin)
+        self.assertEqual(self.da_outra.status, DigitalizacaoFicha.Status.CONFIRMADA)
+        self.assertEqual(self.antiga.status, DigitalizacaoFicha.Status.REFAZER)
+        self.assertEqual(self.antiga.motivo_refazer, 'Manter esta')
+        self.assertEqual(engano.status, DigitalizacaoFicha.Status.ENGANO)
+        self.assertEqual(self.para_refazer.status, DigitalizacaoFicha.Status.REFAZER)
+        self.assertEqual(
+            self.client.post(
+                reverse('core:conferir_folhas_digitalizacao', args=[self.paciente_a.pk]),
+            ).status_code,
+            404,
+        )
+
+        self.conferida.paciente = None
+        self.conferida.save(update_fields=['paciente'])
+        sem = self.client.get(reverse('core:folhas_digitalizacao_sem_paciente'))
+        self.assertContains(sem, 'Sem paciente')
+        self.assertContains(sem, 'Trocar paciente')
+
+        self._entrar(self.dentista_user)
+        self.assertEqual(
+            self.client.get(
+                reverse('core:folhas_digitalizacao_paciente', args=[self.paciente_b.pk]),
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.post(
+                reverse('core:conferir_folhas_digitalizacao', args=[self.paciente_b.pk]),
+            ).status_code,
+            404,
+        )
