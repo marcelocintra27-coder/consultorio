@@ -514,6 +514,53 @@ th.valor {
     min-height: 48px;
 }
 
+.paciente-escolhido-faixa {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 12px 14px;
+    background: #e8f6ee;
+    border: 1px solid var(--cor-sucesso);
+    border-radius: 8px;
+}
+
+.paciente-escolhido-faixa .nome-paciente {
+    flex: 1 1 12rem;
+    min-width: 0;
+    color: #145c32;
+    font-size: 16px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.paciente-escolhido.paciente-escolhido-faixa .botao-trocar-paciente {
+    min-height: 40px;
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+.dica-escolher-paciente {
+    margin: 8px 0 0;
+    color: var(--cor-texto-secundario);
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+#form-digitalizacao .passo-titulo {
+    margin: 20px 0 8px;
+    color: var(--cor-primaria);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+#form-digitalizacao .campo label.passo-titulo {
+    font-size: 18px;
+}
+
+#form-digitalizacao .campo:first-of-type .passo-titulo {
+    margin-top: 0;
+}
+
 .busca-paciente-resultados {
     max-height: 60vh;
     overflow-y: auto;

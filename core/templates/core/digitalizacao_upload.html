@@ -16,7 +16,7 @@
                 {% for ficha in fichas_enviadas %}
                 <figure>
                     <img src="{% url 'core:foto_digitalizacao' ficha.pk %}" alt="Foto gravada da folha {{ ficha.ordem }}" class="foto-mini">
-                    <figcaption>Folha {{ ficha.ordem }} — {{ ficha.get_tipo_display }}</figcaption>
+                    <figcaption>Folha {{ ficha.ordem }} — {% if ficha.tipo == 'convenio' %}GTO / Guia do convênio{% else %}{{ ficha.get_tipo_display }}{% endif %}</figcaption>
                 </figure>
                 {% endfor %}
             </div>
@@ -38,7 +38,7 @@
             {% endif %}
 
             <div class="campo">
-                <label for="{{ form.paciente.id_for_label }}">Paciente</label>
+                <label class="passo-titulo" for="{{ form.paciente.id_for_label }}">1. Paciente</label>
                 {{ form.paciente }}
                 <p id="aviso-folhas-hoje" class="aviso-folhas-hoje" role="status" {% if not aviso_hoje %}hidden{% endif %} data-modelo="{% url 'core:folhas_digitalizacao_paciente' 0 %}">
                     {% if aviso_hoje %}Atenção: este paciente já recebeu {{ aviso_hoje.total }} folha{{ aviso_hoje.total|pluralize:"s" }} hoje. <a href="{{ aviso_hoje.url }}">Veja antes de enviar de novo.</a>{% endif %}
@@ -50,7 +50,7 @@
             </div>
 
             <div class="campo">
-                <label for="id_imagens">Fotos</label>
+                <label class="passo-titulo" for="id_imagens">2. Fotos</label>
                 <div class="acoes acoes-foto" id="botoes-foto" hidden>
                     <label class="botao" for="foto-camera">Tirar foto</label>
                     <input id="foto-camera" type="file" accept="image/*" capture="environment" hidden>
@@ -66,6 +66,7 @@
                 {% endif %}
             </div>
 
+            <h2 class="passo-titulo" id="passo-tipo">3. Confira o tipo de cada folha</h2>
             <div class="campo" id="tipo-unico">
                 <label for="{{ form.tipo.id_for_label }}">{{ form.tipo.label }}</label>
                 {{ form.tipo }}
@@ -73,7 +74,8 @@
 
             <div id="folhas-selecionadas" class="folhas-envio"></div>
 
-            <button type="submit" class="botao botao-enviar" id="botao-enviar" data-enviar-folhas>Escolha o paciente e as fotos</button>
+            <h2 class="passo-titulo" id="passo-enviar">4. Enviar</h2>
+            <button type="submit" class="botao botao-enviar" id="botao-enviar" data-enviar-folhas disabled>Falta escolher o paciente e tirar as fotos</button>
             <p id="enviando-digitalizacao" class="enviando-digitalizacao" hidden role="status">
                 <span>Enviando...</span>
                 <progress aria-label="Enviando..."></progress>
@@ -305,9 +307,19 @@
         if (pronto || preparando) return;
         var quantidade = arquivo.files ? arquivo.files.length : 0;
         var nomePaciente = textoSelecionado(paciente);
-        if (!quantidade || !nomePaciente) {
+        if (!nomePaciente && !quantidade) {
             botao.disabled = true;
-            botao.textContent = 'Escolha o paciente e as fotos';
+            botao.textContent = 'Falta escolher o paciente e tirar as fotos';
+            return;
+        }
+        if (!nomePaciente) {
+            botao.disabled = true;
+            botao.textContent = 'Falta escolher o paciente (toque no nome lá em cima)';
+            return;
+        }
+        if (!quantidade) {
+            botao.disabled = true;
+            botao.textContent = 'Falta tirar as fotos';
             return;
         }
         var palavra = quantidade === 1 ? 'folha' : 'folhas';

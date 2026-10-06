@@ -5,6 +5,7 @@ from itertools import groupby
 
 from django import forms
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 from django.utils import timezone
 from django.forms.formsets import formset_factory
 from django.forms.models import ModelChoiceField, ModelChoiceIterator, inlineformset_factory
@@ -169,20 +170,42 @@ class PacienteSelect(forms.Select):
         attrs = attrs or {}
         select_html = super().render(name, value, attrs, renderer)
         select_id = attrs.get('id') or f'id_{name}'
+        if getattr(self, 'faixa_paciente', False):
+            escolha = mark_safe(
+                '<div class="paciente-escolhido paciente-escolhido-faixa" hidden>'
+                '<strong class="nome-paciente">✓ Paciente: '
+                '<span data-paciente-escolhido></span></strong>'
+                '<button type="button" class="botao secundario botao-trocar-paciente" '
+                'data-trocar-paciente>Trocar paciente</button>'
+                '</div>'
+            )
+            dica = mark_safe(
+                '<p class="dica-escolher-paciente" hidden>'
+                'Toque no nome do paciente para escolher</p>'
+            )
+        else:
+            escolha = mark_safe(
+                '<div class="paciente-escolhido" hidden>'
+                '<strong class="nome-paciente" data-paciente-escolhido></strong>'
+                '<button type="button" class="botao secundario" data-trocar-paciente>'
+                'Trocar</button>'
+                '</div>'
+            )
+            dica = ''
         return format_html(
             '<div class="busca-paciente-bloco">'
-            '<div class="paciente-escolhido" hidden>'
-            '<strong class="nome-paciente" data-paciente-escolhido></strong>'
-            '<button type="button" class="botao secundario" data-trocar-paciente>Trocar</button>'
-            '</div>'
+            '{escolha}'
             '<input type="search" id="{busca_id}" class="busca-paciente" data-filtra="{select_id}" '
             'placeholder="Digite o nome, CPF ou telefone do paciente" autocomplete="off" '
             'aria-label="Digite o nome, CPF ou telefone do paciente" hidden>'
+            '{dica}'
             '<div class="busca-paciente-resultados" role="listbox" hidden></div>'
             '<p class="busca-paciente-vazio" hidden>Nenhum paciente encontrado. '
             '<a href="{cadastro}">Cadastrar novo paciente</a></p>'
             '{select}'
             '</div>',
+            escolha=escolha,
+            dica=dica,
             busca_id=f'{select_id}_busca',
             select_id=select_id,
             cadastro=reverse('core:cadastrar_paciente'),
@@ -190,10 +213,11 @@ class PacienteSelect(forms.Select):
         )
 
 
-def usar_busca_paciente(field):
+def usar_busca_paciente(field, faixa_paciente=False):
     field.empty_label = 'Escolha o paciente'
     field.widget = PacienteSelect()
     field.widget.choices = field.choices
+    field.widget.faixa_paciente = faixa_paciente
     field.widget.pacientes_por_id = {
         str(paciente.pk): paciente for paciente in field.queryset
     }
@@ -219,7 +243,16 @@ class DigitalizacaoFichaForm(forms.ModelForm):
             self.fields['paciente'].queryset = pacientes_visiveis_para_usuario(
                 user, Paciente.objects.filter(ativo=True).order_by('nome_completo'))
         self.fields['paciente'].required = True
-        usar_busca_paciente(self.fields['paciente'])
+        usar_busca_paciente(self.fields['paciente'], faixa_paciente=True)
+        self.fields['tipo'].choices = [
+            (
+                valor,
+                'GTO / Guia do convênio'
+                if valor == DigitalizacaoFicha.Tipo.CONVENIO
+                else rotulo,
+            )
+            for valor, rotulo in self.fields['tipo'].choices
+        ]
         if not self.initial.get('tipo'):
             self.fields['tipo'].initial = DigitalizacaoFicha.Tipo.CADASTRO
 

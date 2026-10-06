@@ -521,10 +521,12 @@ class RevisaoDigitalizacaoTests(TestCase):
         pagina = self.client.get(reverse('core:digitalizacao_upload'))
         for rotulo in (
             'Encaminhamento / carta de indicação',
-            'Guia / ficha do convênio',
+            'GTO / Guia do convênio',
             'Exame / raio-X em papel',
         ):
             self.assertContains(pagina, rotulo)
+        self.assertNotContains(pagina, 'Guia / ficha do convênio')
+        self.assertContains(pagina, 'value="convenio"')
         for tipo in ('encaminhamento', 'convenio', 'exame'):
             antes = set(DigitalizacaoFicha.objects.values_list('pk', flat=True))
             resposta = self.client.post(reverse('core:digitalizacao_upload'), {
@@ -633,7 +635,11 @@ class RevisaoDigitalizacaoTests(TestCase):
     def test_confirmacao_no_html_e_sucesso_mostra_a_foto_gravada(self):
         self._entrar(self.secretaria)
         formulario = self.client.get(reverse('core:digitalizacao_upload'))
-        self.assertContains(formulario, 'Escolha o paciente e as fotos')
+        self.assertContains(formulario, 'Falta escolher o paciente e tirar as fotos')
+        self.assertContains(formulario, '1. Paciente')
+        self.assertContains(formulario, '2. Fotos')
+        self.assertContains(formulario, '3. Confira o tipo de cada folha')
+        self.assertContains(formulario, '4. Enviar')
         self.assertContains(formulario, 'id="botao-enviar"')
         self.assertContains(formulario, 'Enviando...')
         self.assertContains(formulario, 'imageOrientation')
@@ -713,7 +719,16 @@ class RevisaoDigitalizacaoTests(TestCase):
     def test_botao_unico_mostra_quantidade_e_paciente(self):
         self._entrar(self.secretaria)
         html = self.client.get(reverse('core:digitalizacao_upload')).content.decode()
-        self.assertIn('>Escolha o paciente e as fotos<', html)
+        self.assertIn('>Falta escolher o paciente e tirar as fotos<', html)
+        self.assertIn(
+            "botao.textContent = 'Falta escolher o paciente e tirar as fotos'",
+            html,
+        )
+        self.assertIn(
+            "botao.textContent = 'Falta escolher o paciente (toque no nome lá em cima)'",
+            html,
+        )
+        self.assertIn("botao.textContent = 'Falta tirar as fotos'", html)
         self.assertIn(
             "botao.textContent = 'Enviar ' + quantidade + ' ' + palavra + ' para ' + nomePaciente",
             html,

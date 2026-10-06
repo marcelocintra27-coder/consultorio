@@ -89,6 +89,7 @@
             var escolhido = bloco.querySelector('.paciente-escolhido');
             var nomeEscolhido = bloco.querySelector('[data-paciente-escolhido]');
             var trocar = bloco.querySelector('[data-trocar-paciente]');
+            var dica = bloco.querySelector('.dica-escolher-paciente');
             if (!campo || !select || !resultados || !escolhido || !nomeEscolhido || !trocar) return;
             bloco.classList.add('com-js');
             var opcoes = Array.prototype.filter.call(select.options, function (opcao) {
@@ -109,11 +110,13 @@
                 if (!texto) {
                     escolhido.hidden = true;
                     campo.hidden = false;
+                    if (dica) dica.hidden = false;
                     return;
                 }
                 nomeEscolhido.textContent = texto;
                 escolhido.hidden = false;
                 campo.hidden = true;
+                if (dica) dica.hidden = true;
                 campo.value = '';
                 resultados.hidden = true;
                 resultados.replaceChildren();
@@ -170,6 +173,7 @@
                 resultados.hidden = true;
                 resultados.replaceChildren();
                 if (vazio) vazio.hidden = true;
+                if (dica) dica.hidden = false;
                 campo.focus();
             });
             mostrarEscolhido();
