@@ -1,4 +1,5 @@
 ﻿from django.urls import path
+from .alerta_horario import listar_entradas_fora_do_horario
 from .views import (
     inicio,
     administracao,
@@ -125,6 +126,11 @@ urlpatterns = [
     path('pacientes/<int:pk>/prescricoes/<int:ficha_pk>/pdf/', imprimir_prescricao, {'pdf': True}, name='pdf_prescricao'),
     path('documentos/<str:tipo>/<int:pk>/retificar/', retificar_documento, name='retificar_documento'),
     path('', inicio, name='inicio'),
+    path(
+        'entradas-fora-do-horario/',
+        listar_entradas_fora_do_horario,
+        name='listar_entradas_fora_do_horario',
+    ),
     path('digitalizacao/', listar_digitalizacoes, name='listar_digitalizacoes'),
     path('digitalizacao/nova/', digitalizacao_upload, name='digitalizacao_upload'),
     path(

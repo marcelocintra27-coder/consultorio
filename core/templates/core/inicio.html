@@ -5,6 +5,11 @@
 {% block container_class %}largo{% endblock %}
 
 {% block content %}
+    {% if alertas_fora_do_horario %}
+    <p class="resumo" role="status">
+        <a href="{% url 'core:listar_entradas_fora_do_horario' %}">{{ alertas_fora_do_horario }} entrada{{ alertas_fora_do_horario|pluralize }} fora do horário nos últimos 7 dias</a>
+    </p>
+    {% endif %}
     {% if dashboard_administrador %}
     <section class="secao" aria-labelledby="titulo-dashboard-administrador">
         <h2 id="titulo-dashboard-administrador">Painel administrativo</h2>

@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 import os
 import re
+from datetime import time
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -534,6 +535,13 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = 'pt-br'
 
 TIME_ZONE = 'America/Sao_Paulo'
+
+# Horário em que a clínica está aberta. Fora disso, a entrada da funcionária
+# só gera alerta — o login continua valendo. 0 = segunda … 4 = sexta.
+HORARIO_CLINICA_INICIO = time(7, 30)
+HORARIO_CLINICA_FIM = time(18, 0)
+HORARIO_CLINICA_DIAS = (0, 1, 2, 3, 4)
+FUSO_HORARIO_CLINICA = 'America/Sao_Paulo'
 
 USE_I18N = True
 

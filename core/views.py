@@ -177,9 +177,13 @@ from .permissoes import (
 )
 
 def inicio(request):
+    from .alerta_horario import contagem_entradas_fora_do_horario
+
+    alertas_fora_do_horario = contagem_entradas_fora_do_horario(request.user)
     perfil = perfil_do_usuario(request.user)
     if usuario_e_administrador(request.user):
         return render(request, 'core/inicio.html', {
+            'alertas_fora_do_horario': alertas_fora_do_horario,
             'dashboard_administrador': True,
             'consultas_em_andamento': Consulta.objects.filter(
                 status__in=[
@@ -201,6 +205,7 @@ def inicio(request):
             .order_by('hora_inicio'),
         ))
         return render(request, 'core/inicio.html', {
+            'alertas_fora_do_horario': alertas_fora_do_horario,
             'dashboard_secretaria': True,
             'hoje': hoje,
             'consultas_hoje': consultas_hoje,
@@ -237,6 +242,7 @@ def inicio(request):
             status=FichaAutorizacaoCusto.Status.RASCUNHO,
         ).select_related('paciente', 'consulta')
         return render(request, 'core/inicio.html', {
+            'alertas_fora_do_horario': alertas_fora_do_horario,
             'dashboard_dentista': True,
             'hoje': hoje,
             'consultas_hoje': consultas_hoje,
@@ -247,7 +253,9 @@ def inicio(request):
             'anamneses_pendentes': anamneses_pendentes,
             'autorizacoes_pendentes': autorizacoes_pendentes,
         })
-    return render(request, 'core/inicio.html')
+    return render(request, 'core/inicio.html', {
+        'alertas_fora_do_horario': alertas_fora_do_horario,
+    })
 
 
 @exige_financeiro

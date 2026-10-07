@@ -6,6 +6,7 @@ from django.contrib.auth.signals import (
 )
 from django.dispatch import receiver
 
+from .alerta_horario import entrada_de_funcionaria_fora_do_horario
 from .models import RegistroAcesso
 
 
@@ -16,6 +17,7 @@ def registrar_entrada(sender, request, user, **kwargs):
     RegistroAcesso.objects.create(
         usuario=user,
         tipo=RegistroAcesso.Tipo.ENTROU,
+        fora_do_horario=entrada_de_funcionaria_fora_do_horario(user),
     )
 
 

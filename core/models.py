@@ -195,6 +195,7 @@ class RegistroAcesso(models.Model):
         'usuário digitado', max_length=150, blank=True, default='',
     )
     tipo = models.CharField('tipo', max_length=20, choices=Tipo.choices)
+    fora_do_horario = models.BooleanField('fora do horário', default=False)
     digitalizacao = models.ForeignKey(
         'DigitalizacaoFicha',
         verbose_name='ficha digitalizada',
