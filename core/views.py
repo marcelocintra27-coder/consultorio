@@ -317,12 +317,24 @@ def listar_pacientes(request):
         'pode_clinico': pode_clinico,
     })
 
+_VOLTAR_DIGITALIZACAO = 'digitalizacao'
+
+
+def _volta_para_digitalizacao(request):
+    """Aceita somente o valor fixo. Não usa o texto como endereço."""
+    valores = [request.GET.get('voltar')]
+    if request.method == 'POST':
+        valores.append(request.POST.get('voltar'))
+    return _VOLTAR_DIGITALIZACAO in valores
+
+
 def cadastrar_paciente(request):
     if not usuario_pode_cadastrar_paciente(request.user):
         raise PermissionDenied
     duplicados = []
     bloqueio_cpf = False
     aviso_confirmacao = ''
+    voltar_digitalizacao = _volta_para_digitalizacao(request)
     if request.method == 'POST':
         form = PacienteForm(request.POST, user=request.user)
         if form.is_valid():
@@ -355,6 +367,13 @@ def cadastrar_paciente(request):
                         origem=AuditoriaPaciente.Origem.TELA,
                         alteracoes=valores_iniciais(paciente),
                     )
+                if voltar_digitalizacao:
+                    messages.success(
+                        request,
+                        'Paciente cadastrado. Agora tire as fotos das folhas.',
+                    )
+                    destino = reverse('core:digitalizacao_upload')
+                    return redirect(f'{destino}?paciente={paciente.pk}')
                 return redirect('core:listar_pacientes')
     else:
         form = PacienteForm(user=request.user)
@@ -364,6 +383,7 @@ def cadastrar_paciente(request):
         'duplicados': duplicados,
         'bloqueio_cpf': bloqueio_cpf,
         'aviso_confirmacao': aviso_confirmacao,
+        'voltar_digitalizacao': voltar_digitalizacao,
     })
 
 

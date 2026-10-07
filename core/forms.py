@@ -165,8 +165,6 @@ class PacienteSelect(forms.Select):
         return option
 
     def render(self, name, value, attrs=None, renderer=None):
-        from django.urls import reverse
-
         attrs = attrs or {}
         select_html = super().render(name, value, attrs, renderer)
         select_id = attrs.get('id') or f'id_{name}'
@@ -208,16 +206,28 @@ class PacienteSelect(forms.Select):
             dica=dica,
             busca_id=f'{select_id}_busca',
             select_id=select_id,
-            cadastro=reverse('core:cadastrar_paciente'),
+            cadastro=_url_cadastro_paciente(getattr(self, 'voltar_cadastro', '')),
             select=select_html,
         )
 
 
-def usar_busca_paciente(field, faixa_paciente=False):
+def _url_cadastro_paciente(voltar):
+    """Só a digitalização pede retorno; qualquer outro valor fica sem parâmetro."""
+    from django.urls import reverse
+
+    url = reverse('core:cadastrar_paciente')
+    if voltar == 'digitalizacao':
+        return f'{url}?voltar=digitalizacao'
+    return url
+
+
+def usar_busca_paciente(field, faixa_paciente=False, voltar_cadastro=''):
     field.empty_label = 'Escolha o paciente'
     field.widget = PacienteSelect()
     field.widget.choices = field.choices
     field.widget.faixa_paciente = faixa_paciente
+    if voltar_cadastro == 'digitalizacao':
+        field.widget.voltar_cadastro = 'digitalizacao'
     field.widget.pacientes_por_id = {
         str(paciente.pk): paciente for paciente in field.queryset
     }
@@ -243,7 +253,11 @@ class DigitalizacaoFichaForm(forms.ModelForm):
             self.fields['paciente'].queryset = pacientes_visiveis_para_usuario(
                 user, Paciente.objects.filter(ativo=True).order_by('nome_completo'))
         self.fields['paciente'].required = True
-        usar_busca_paciente(self.fields['paciente'], faixa_paciente=True)
+        usar_busca_paciente(
+            self.fields['paciente'],
+            faixa_paciente=True,
+            voltar_cadastro='digitalizacao',
+        )
         self.fields['tipo'].choices = [
             (
                 valor,

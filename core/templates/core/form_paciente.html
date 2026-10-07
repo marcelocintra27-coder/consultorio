@@ -21,6 +21,9 @@
 
         <form method="post" class="form-cartao">
             {% csrf_token %}
+            {% if voltar_digitalizacao %}
+            <input type="hidden" name="voltar" value="digitalizacao">
+            {% endif %}
             {% for field in form %}
             <div class="campo{% if field.field.widget.input_type == 'checkbox' %} aceite{% endif %}">
                 <label for="{{ field.id_for_label }}">{{ field.label }}</label>
