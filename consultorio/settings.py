@@ -650,9 +650,54 @@ if exige_smtp(AMBIENTE):
         },
     }
     DEFAULT_FROM_EMAIL = os.environ['DEFAULT_FROM_EMAIL']
+    SERVER_EMAIL = DEFAULT_FROM_EMAIL
 else:
     MAILERS = {
         'default': {
             'BACKEND': 'django.core.mail.backends.console.EmailBackend',
         },
     }
+
+
+# Aviso de erro por e-mail
+# Quem recebe: variável de ambiente ALERTA_ERRO_EMAILS (e-mails separados por
+# vírgula), configurada direto no Render. Sem ela, nenhum aviso é enviado.
+# O e-mail é curto e não leva dados de pacientes (ver core/alerta_erro.py).
+
+def lista_emails_alerta(valor):
+    return [email.strip() for email in (valor or '').split(',') if email.strip()]
+
+
+ADMINS = lista_emails_alerta(os.environ.get('ALERTA_ERRO_EMAILS'))
+EMAIL_SUBJECT_PREFIX = '[Consultório] '
+ALERTA_ERRO_INTERVALO_MINUTOS = 15
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {
+        'require_debug_false': {'()': 'django.utils.log.RequireDebugFalse'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler'},
+        'alerta_erro_email': {
+            'level': 'ERROR',
+            'filters': ['require_debug_false'],
+            'class': 'core.alerta_erro.AlertaErroEmailHandler',
+        },
+    },
+    'loggers': {
+        # Substitui o aviso padrão do Django (que mandaria o pedido inteiro,
+        # com dados digitados, por e-mail). Aqui ele só vai para os logs.
+        'django': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'alerta_erro_email'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
