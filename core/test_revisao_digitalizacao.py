@@ -602,8 +602,8 @@ class RevisaoDigitalizacaoTests(TestCase):
         self.assertNotContains(admin, self.minha.imagem.name)
         self.assertNotContains(admin, '/media/')
         self.assertLess(
-            admin.content.decode().find(reverse('core:detalhe_digitalizacao', args=[self.da_outra.pk])),
             admin.content.decode().find(reverse('core:detalhe_digitalizacao', args=[self.antiga.pk])),
+            admin.content.decode().find(reverse('core:detalhe_digitalizacao', args=[self.da_outra.pk])),
         )
 
         self._entrar(self.secretaria)

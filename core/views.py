@@ -11,7 +11,7 @@ from django.contrib.auth.decorators import login_not_required, login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
 from django.db import DatabaseError, transaction
-from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum, Value
+from django.db.models import DecimalField, ExpressionWrapper, F, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
@@ -427,7 +427,7 @@ def editar_paciente(request, pk):
     if pode_clinico:
         fichas_digitalizadas = paciente.digitalizacoes.exclude(
             status=DigitalizacaoFicha.Status.ENGANO,
-        ).select_related('digitalizado_por').order_by('-criado_em')
+        ).select_related('digitalizado_por').order_by('ordem', 'criado_em', 'pk')
     return render(request, 'core/form_paciente.html', {
         'form': form,
         'titulo': 'Editar Paciente',
@@ -473,6 +473,14 @@ def _tipos_e_ordens(post, quantidade):
     if any(item < 1 for item in ordens) or len(set(ordens)) != len(ordens):
         return None, None, 'A ordem das folhas deve ser 1, 2, 3… sem repetir.'
     return tipos, ordens, ''
+
+
+def ordem_base_do_paciente(paciente):
+    """Maior ordem já gravada. O envio novo continua depois dela."""
+    maior = DigitalizacaoFicha.objects.filter(paciente=paciente).aggregate(
+        maior=Max('ordem'),
+    )['maior']
+    return maior or 0
 
 
 def _apagar_imagens(fichas):
@@ -535,11 +543,13 @@ def _digitalizacao_upload_protegido(request):
         atual = None
         try:
             with transaction.atomic():
+                Paciente.objects.select_for_update().get(pk=paciente.pk)
+                base = ordem_base_do_paciente(paciente)
                 for dados, sufixo, tipo, ordem in prontas:
                     atual = DigitalizacaoFicha(
                         paciente=paciente,
                         tipo=tipo,
-                        ordem=ordem,
+                        ordem=base + ordem,
                         lote=lote,
                         digitalizado_por=request.user,
                         imagem=ContentFile(dados, name=f'{uuid4().hex}{sufixo}'),
