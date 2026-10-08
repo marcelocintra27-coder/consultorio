@@ -110,10 +110,6 @@ class DigitalizacaoTests(TestCase):
         self.secretaria = User.objects.create_user('secretaria_digitalizacao', password='teste')
         PerfilUsuario.objects.create(usuario=self.secretaria, papel='secretaria')
         self.negados = []
-        auxiliar = User.objects.create_user('auxiliar_digitalizacao', password='teste')
-        PerfilUsuario.objects.create(
-            usuario=auxiliar, papel='auxiliar', dentista=self.dentista)
-        self.negados.append(auxiliar)
         self.negados.append(User.objects.create_user('sem_perfil_digitalizacao', password='teste'))
         self.negados.append(User.objects.create_user('staff_digitalizacao', password='teste', is_staff=True))
         self.client.force_login(self.user)

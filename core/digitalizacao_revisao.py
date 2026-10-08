@@ -32,6 +32,7 @@ from .permissoes import (
     usuario_pode_receber_troca_digitalizacao,
     usuario_pode_revisar_digitalizacao,
     usuario_pode_trocar_paciente_digitalizacao,
+    usuario_reenvia_digitalizacao,
     _e_secretaria,
 )
 
@@ -305,7 +306,7 @@ def listar_digitalizacoes(request):
             status=DigitalizacaoFicha.Status.PENDENTE_REVISAO,
         ).count(),
         'refazer': visiveis.filter(status=DigitalizacaoFicha.Status.REFAZER).count(),
-        'secretaria': secretaria,
+        'secretaria': usuario_reenvia_digitalizacao(request.user),
         'query_anterior': _query(request, pagina.previous_page_number()) if pagina.has_previous() else '',
         'query_proxima': _query(request, pagina.next_page_number()) if pagina.has_next() else '',
     })
@@ -334,9 +335,7 @@ def folhas_paciente(request, pk):
         'paciente': paciente,
         'fichas': fichas,
         'pode_conferir_todas': any(ficha.pode_revisar and ficha.status == DigitalizacaoFicha.Status.PENDENTE_REVISAO for ficha in fichas),
-        'secretaria': (
-            _e_secretaria(request.user) and not usuario_e_administrador(request.user)
-        ),
+        'secretaria': usuario_reenvia_digitalizacao(request.user),
     })
 
 
@@ -356,9 +355,7 @@ def folhas_sem_paciente(request):
         'paciente': None,
         'fichas': fichas,
         'pode_conferir_todas': any(ficha.pode_revisar and ficha.status == DigitalizacaoFicha.Status.PENDENTE_REVISAO for ficha in fichas),
-        'secretaria': (
-            _e_secretaria(request.user) and not usuario_e_administrador(request.user)
-        ),
+        'secretaria': usuario_reenvia_digitalizacao(request.user),
     })
 
 
@@ -422,9 +419,7 @@ def detalhe_digitalizacao(request, pk):
         ),
         'trocas_tipo': ficha.trocas_tipo.select_related('trocado_por'),
         'tipos_folha': DigitalizacaoFicha.Tipo.choices,
-        'secretaria': (
-            _e_secretaria(request.user) and not usuario_e_administrador(request.user)
-        ),
+        'secretaria': usuario_reenvia_digitalizacao(request.user),
     })
 
 

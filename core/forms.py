@@ -244,14 +244,9 @@ class DigitalizacaoFichaForm(forms.ModelForm):
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
         from .models import DigitalizacaoFicha
-        from .permissoes import (
-            usuario_pode_digitalizar,
-            pacientes_visiveis_para_usuario,
-        )
+        from .permissoes import pacientes_para_digitalizar
         self.user = user
-        if usuario_pode_digitalizar(user):
-            self.fields['paciente'].queryset = pacientes_visiveis_para_usuario(
-                user, Paciente.objects.filter(ativo=True).order_by('nome_completo'))
+        self.fields['paciente'].queryset = pacientes_para_digitalizar(user)
         self.fields['paciente'].required = True
         usar_busca_paciente(
             self.fields['paciente'],

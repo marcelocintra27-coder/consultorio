@@ -170,6 +170,7 @@ from .permissoes import (
     usuario_pode_acessar_cadastro_paciente,
     pacientes_visiveis_para_usuario,
     usuario_pode_cadastrar_paciente,
+    usuario_pode_cadastrar_paciente_na_digitalizacao,
     usuario_pode_editar_cadastro_paciente,
     perfil_do_usuario,
     status_consulta_permitidos,
@@ -337,12 +338,16 @@ def _volta_para_digitalizacao(request):
 
 
 def cadastrar_paciente(request):
+    voltar_digitalizacao = _volta_para_digitalizacao(request)
     if not usuario_pode_cadastrar_paciente(request.user):
-        raise PermissionDenied
+        if not (
+            voltar_digitalizacao
+            and usuario_pode_cadastrar_paciente_na_digitalizacao(request.user)
+        ):
+            raise PermissionDenied
     duplicados = []
     bloqueio_cpf = False
     aviso_confirmacao = ''
-    voltar_digitalizacao = _volta_para_digitalizacao(request)
     if request.method == 'POST':
         form = PacienteForm(request.POST, user=request.user)
         if form.is_valid():

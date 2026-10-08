@@ -50,7 +50,6 @@ class RevisaoDigitalizacaoTests(TestCase):
         self.admin.save(update_fields=['first_name'])
         self.secretaria = self._usuario('secretaria_a', 'secretaria', None, 'Ana')
         self.outra_secretaria = self._usuario('secretaria_b', 'secretaria', None, 'Bia')
-        self.auxiliar = self._usuario('auxiliar_revisao', 'auxiliar', self.dentista_a, 'Aux')
         self.staff = User.objects.create_user('staff_revisao', password='teste', is_staff=True)
         self.paciente_a = self._paciente('Paciente da Ana')
         self.paciente_b = self._paciente('Paciente isolado B')
@@ -295,7 +294,7 @@ class RevisaoDigitalizacaoTests(TestCase):
         )
 
     def test_perfis_sem_lista_recebem_403(self):
-        for usuario in (self.auxiliar, self.staff):
+        for usuario in (self.staff,):
             self._entrar(usuario)
             with self.subTest(usuario=usuario.username):
                 self.assertEqual(self.client.get(reverse('core:listar_digitalizacoes')).status_code, 403)

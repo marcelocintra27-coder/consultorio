@@ -381,9 +381,12 @@ class MatrizPermissoesTests(TestCase):
         resposta = self.client.get(inicio)
         self.assertContains(resposta, 'Auxiliar')
         self.assertContains(resposta, 'Consulta')
+        self.assertContains(resposta, 'Digitalizar ficha antiga')
+        self.assertContains(resposta, 'Fichas digitalizadas')
+        self.assertContains(resposta, reverse('core:digitalizacao_upload'))
+        self.assertContains(resposta, reverse('core:listar_digitalizacoes'))
         self.assertNotContains(resposta, reverse('core:agendar_consulta'))
         self.assertNotContains(resposta, 'Materiais utilizados')
-        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
 
         self.client.force_login(self.admin)
         resposta = self.client.get(inicio)
@@ -401,7 +404,11 @@ class MatrizPermissoesTests(TestCase):
         resposta = self.client.get(inicio)
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Auxiliar')
-        self.assertNotContains(resposta, 'Digitalizar ficha antiga')
+        self.assertContains(resposta, 'Digitalizar ficha antiga')
+        self.assertEqual(self.client.get(digitalizar).status_code, 200)
+
+        sem_perfil = User.objects.create_user('sem_perfil_matriz', password='x')
+        self.client.force_login(sem_perfil)
         self.assertEqual(self.client.get(digitalizar).status_code, 403)
         self.assertEqual(self.client.post(digitalizar).status_code, 403)
 

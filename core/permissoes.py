@@ -296,6 +296,15 @@ def usuario_pode_cadastrar_paciente(user):
     )
 
 
+def usuario_pode_cadastrar_paciente_na_digitalizacao(user):
+    """A auxiliar só cadastra paciente para voltar à digitalização."""
+    return bool(
+        _e_auxiliar(user)
+        and not usuario_e_administrador(user)
+        and usuario_pode_digitalizar(user)
+    )
+
+
 def usuario_pode_editar_cadastro_paciente(user, paciente):
     if usuario_e_administrador(user):
         return True
@@ -352,24 +361,42 @@ def usuario_pode_emitir_prescricao(user, paciente, prescricao=None):
 
 
 def usuario_pode_digitalizar(user):
-    """Abre a tela de envio. Não libera ver a imagem nem processar a ficha."""
+    """Abre a tela de envio. Não libera prontuário nem processar a ficha."""
     if not user or not user.is_authenticated or not user.is_active:
         return False
     if usuario_e_administrador(user):
         return True
     perfil = perfil_do_usuario(user)
-    if perfil is not None and perfil.papel == PerfilUsuario.Papel.SECRETARIA:
+    if perfil is not None and perfil.papel in {
+        PerfilUsuario.Papel.SECRETARIA,
+        PerfilUsuario.Papel.AUXILIAR,
+    }:
         return True
     dentista = dentista_do_usuario(user)
     return bool(dentista and dentista.ativo)
 
 
+def pacientes_para_digitalizar(user):
+    """Pacientes que podem ser escolhidos na tela de envio.
+
+    Secretária e auxiliar alcançam qualquer paciente ativo. Dentista continua
+    no conjunto já visível das consultas dele.
+    """
+    from core.models import Paciente
+
+    ativos = Paciente.objects.filter(ativo=True).order_by('nome_completo')
+    if not usuario_pode_digitalizar(user):
+        return ativos.none()
+    if _e_auxiliar(user) and not usuario_e_administrador(user):
+        return ativos
+    return pacientes_visiveis_para_usuario(user, ativos)
+
+
 def usuario_pode_enviar_digitalizacao(user, paciente):
     """Autoriza gravar a foto de um paciente ativo.
 
-    A secretária alcança qualquer paciente ativo, o mesmo conjunto de
-    pacientes_visiveis_para_usuario. Isso não abre prontuário, anamnese,
-    evolução nem o processamento com IA.
+    A secretária e a auxiliar alcançam qualquer paciente ativo. Isso não abre
+    prontuário, anamnese, evolução nem o processamento com IA.
     """
     if not usuario_pode_digitalizar(user):
         return False
@@ -384,6 +411,8 @@ def usuario_pode_enviar_digitalizacao(user, paciente):
         return pacientes_visiveis_para_usuario(
             user, Paciente.objects.filter(pk=paciente.pk, ativo=True)
         ).exists()
+    if perfil is not None and perfil.papel == PerfilUsuario.Papel.AUXILIAR:
+        return True
     return usuario_pode_acessar_digitalizacao(user, paciente)
 
 
@@ -401,11 +430,23 @@ def _e_secretaria(user):
     return perfil is not None and perfil.papel == PerfilUsuario.Papel.SECRETARIA
 
 
+def _e_auxiliar(user):
+    perfil = perfil_do_usuario(user)
+    return perfil is not None and perfil.papel == PerfilUsuario.Papel.AUXILIAR
+
+
+def usuario_reenvia_digitalizacao(user):
+    """Secretária e auxiliar reenviam a própria foto; não revisam a ficha."""
+    if usuario_e_administrador(user):
+        return False
+    return _e_secretaria(user) or _e_auxiliar(user)
+
+
 def usuario_pode_listar_digitalizacoes(user):
-    """Abre a lista. A secretária vê só as dela; o dentista, as do prontuário."""
+    """Abre a lista. Secretária e auxiliar veem só as delas; o dentista, o prontuário."""
     if user is None or not user.is_authenticated or not user.is_active:
         return False
-    if usuario_e_administrador(user) or _e_secretaria(user):
+    if usuario_e_administrador(user) or _e_secretaria(user) or _e_auxiliar(user):
         return True
     return bool(usuario_pode_digitalizar(user) and dentista_do_usuario(user))
 
@@ -420,7 +461,7 @@ def digitalizacoes_visiveis(user):
         return fichas.none()
     if usuario_e_administrador(user):
         return fichas
-    if _e_secretaria(user):
+    if _e_secretaria(user) or _e_auxiliar(user):
         return fichas.filter(digitalizado_por=user)
     dentista = dentista_do_usuario(user)
     pacientes = Consulta.objects.filter(dentista=dentista).values('paciente_id')
@@ -434,10 +475,10 @@ def usuario_pode_ver_digitalizacao(user, ficha):
 
 
 def usuario_pode_revisar_digitalizacao(user, ficha):
-    """Secretária envia e consulta as próprias fotos; não marca conferida nem refazer."""
+    """Secretária e auxiliar enviam as próprias fotos; não marcam conferida nem refazer."""
     if ficha is None:
         return False
-    if _e_secretaria(user) and not usuario_e_administrador(user):
+    if usuario_reenvia_digitalizacao(user):
         return False
     return usuario_pode_acessar_digitalizacao(user, ficha.paciente)
 
@@ -452,16 +493,16 @@ def usuario_pode_marcar_engano(user, ficha):
         return False
     if usuario_e_administrador(user):
         return True
-    if _e_secretaria(user):
+    if usuario_reenvia_digitalizacao(user):
         return ficha.digitalizado_por_id == getattr(user, 'id', None)
     return usuario_pode_acessar_digitalizacao(user, ficha.paciente)
 
 
 def usuario_pode_trocar_paciente_digitalizacao(user, ficha):
-    """Secretária não troca o paciente. Admin e dentista com acesso à ficha podem."""
+    """Secretária e auxiliar não trocam o paciente. Admin e dentista com acesso podem."""
     if ficha is None or not usuario_pode_ver_digitalizacao(user, ficha):
         return False
-    if _e_secretaria(user) and not usuario_e_administrador(user):
+    if usuario_reenvia_digitalizacao(user):
         return False
     if usuario_e_administrador(user):
         return True
@@ -474,7 +515,7 @@ def usuario_pode_receber_troca_digitalizacao(user, paciente):
         return False
     if not user or not user.is_authenticated or not user.is_active:
         return False
-    if _e_secretaria(user) and not usuario_e_administrador(user):
+    if usuario_reenvia_digitalizacao(user):
         return False
     if usuario_e_administrador(user):
         return True
