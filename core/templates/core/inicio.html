@@ -138,6 +138,18 @@
         {% endif %}
     </section>
     {% elif dashboard_dentista %}
+    {% if modo_simples and request.GET.painel != 'completo' %}
+    <section class="secao" aria-labelledby="titulo-atalhos-simples">
+        <h2 id="titulo-atalhos-simples" class="sr-only">Atalhos do dia</h2>
+        <div class="atalhos-simples">
+            <a href="{% url 'core:listar_consultas' %}?data={{ hoje|date:'Y-m-d' }}" class="botao">Minha agenda de hoje</a>
+            <a href="{% url 'core:listar_pacientes' %}" class="botao">Buscar paciente</a>
+            <a href="{% url 'core:listar_consultas' %}?data={{ hoje|date:'Y-m-d' }}" class="botao">Registrar atendimento</a>
+            <a href="{% url 'core:listar_materiais_dia' %}" class="botao">Meus valores de hoje</a>
+        </div>
+        <p class="atalho-painel-completo"><a href="{% url 'core:inicio' %}?painel=completo">Ver painel completo</a></p>
+    </section>
+    {% else %}
     <section class="secao" aria-labelledby="titulo-dashboard-dentista">
         <h2 id="titulo-dashboard-dentista">Agenda clínica de hoje</h2>
         <p class="subtitulo">Acompanhe os atendimentos vinculados ao seu perfil e priorize as pendências clínicas.</p>
@@ -237,6 +249,7 @@
             </article>
         </div>
     </section>
+    {% endif %}
     {% else %}
     <section class="secao">
         <h2>Consultório</h2>

@@ -55,7 +55,7 @@ class TurnoLocacaoAdmin(admin.ModelAdmin):
 class PerfilUsuarioAdmin(admin.ModelAdmin):
     list_display = ('usuario', 'dentista', 'papel')
     list_filter = ('papel', 'dentista')
-    fields = ('usuario', 'dentista', 'papel', 'deve_trocar_senha')
+    fields = ('usuario', 'dentista', 'papel', 'deve_trocar_senha', 'modo_simples')
     search_fields = (
         'usuario__username',
         'usuario__first_name',

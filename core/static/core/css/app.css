@@ -163,6 +163,21 @@ body {
     text-decoration: none;
 }
 
+.form-modo-simples {
+    margin: 0;
+}
+
+.form-modo-simples button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--cor-primaria);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
 .app-conteudo {
     min-width: 0;
     flex: 1;
@@ -1122,5 +1137,120 @@ h2.secao-pagina {
 @media (max-width: 480px) {
     .folha-envio {
         grid-template-columns: 1fr;
+    }
+}
+
+.atalhos-simples {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 32rem;
+}
+
+.atalhos-simples .botao {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 64px;
+    padding: 18px 20px;
+    font-size: 20px;
+    line-height: 1.3;
+    text-align: center;
+    white-space: normal;
+}
+
+.atalho-painel-completo {
+    margin: 20px 0 0;
+    font-size: 14px;
+}
+
+.atalho-painel-completo a {
+    color: var(--cor-texto-secundario);
+    font-weight: 600;
+}
+
+body.modo-simples {
+    font-size: 18px;
+    line-height: 1.55;
+}
+
+body.modo-simples .menu-item {
+    min-height: 52px;
+    padding: 12px;
+    font-size: 17px;
+}
+
+body.modo-simples .menu-rodape,
+body.modo-simples .form-modo-simples button {
+    font-size: 16px;
+}
+
+body.modo-simples .topo-esquerda h1 {
+    font-size: 22px;
+}
+
+body.modo-simples .topo-esquerda p,
+body.modo-simples .topo-usuario {
+    font-size: 16px;
+}
+
+body.modo-simples .secao h2 {
+    font-size: 24px;
+}
+
+body.modo-simples .botao {
+    min-height: 48px;
+    padding: 14px 22px;
+    font-size: 17px;
+}
+
+body.modo-simples .atalhos-simples .botao {
+    min-height: 64px;
+    padding: 18px 20px;
+    font-size: 20px;
+}
+
+body.modo-simples .campo,
+body.modo-simples .busca-form,
+body.modo-simples .acoes {
+    margin-bottom: 20px;
+}
+
+body.modo-simples .campo label {
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+body.modo-simples .campo input,
+body.modo-simples .campo select,
+body.modo-simples .campo textarea,
+body.modo-simples .busca-form input,
+body.modo-simples .busca-form select,
+body.modo-simples .mes-nav input {
+    min-height: 48px;
+    padding: 12px 14px;
+    font-size: 18px;
+}
+
+body.modo-simples th,
+body.modo-simples td {
+    padding: 16px;
+    font-size: 16px;
+}
+
+@media (max-width: 640px) {
+    .atalhos-simples {
+        max-width: none;
+    }
+
+    body.modo-simples .menu-toggle {
+        width: 48px;
+        height: 48px;
+        font-size: 24px;
+    }
+
+    body.modo-simples .atalhos-simples .botao {
+        min-height: 64px;
     }
 }

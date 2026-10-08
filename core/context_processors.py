@@ -28,9 +28,12 @@ def admin_local_date(request):
 
 
 def permissoes_usuario(request):
+    perfil = perfil_do_usuario(getattr(request, 'user', None))
     return {
         'pode_financeiro': usuario_pode_financeiro(request.user),
         'pode_digitalizar': usuario_pode_digitalizar(request.user),
+        'modo_simples': bool(perfil and perfil.modo_simples),
+        'tem_perfil': perfil is not None,
     }
 
 

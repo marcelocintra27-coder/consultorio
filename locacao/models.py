@@ -361,6 +361,10 @@ class PerfilUsuario(models.Model):
         'Obrigar a trocar a senha no próximo acesso',
         default=False,
     )
+    modo_simples = models.BooleanField(
+        'Modo simples (letra e botões maiores)',
+        default=False,
+    )
 
     class Meta:
         verbose_name = 'perfil de usuário'

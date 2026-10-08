@@ -115,6 +115,7 @@ from .views_whatsapp import (
     whatsapp_webhook,
 )
 from .prescricoes import listar_prescricoes, editar_prescricao, ver_prescricao, imprimir_prescricao
+from .modo_simples import alternar_modo_simples
 from .troca_senha import trocar_senha
 
 urlpatterns = [
@@ -128,6 +129,7 @@ urlpatterns = [
     path('documentos/<str:tipo>/<int:pk>/retificar/', retificar_documento, name='retificar_documento'),
     path('', inicio, name='inicio'),
     path('trocar-senha/', trocar_senha, name='trocar_senha'),
+    path('modo-simples/', alternar_modo_simples, name='alternar_modo_simples'),
     path(
         'entradas-fora-do-horario/',
         listar_entradas_fora_do_horario,

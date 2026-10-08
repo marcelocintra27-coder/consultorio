@@ -7,7 +7,7 @@
     <title>{% block title %}Consultório Odontológico{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'core/css/app.css' %}">
 </head>
-<body class="{% if user.is_authenticated %}app-autenticado{% endif %}">
+<body class="{% if user.is_authenticated %}app-autenticado{% endif %}{% if modo_simples %} modo-simples{% endif %}">
     {% if user.is_authenticated %}
     <button class="menu-toggle" type="button" aria-controls="menu-lateral" aria-expanded="false">
         <span class="sr-only">Abrir menu</span>
@@ -36,6 +36,12 @@
         </nav>
         <div class="menu-rodape">
             <span>{{ user.get_full_name|default:user.username }}</span>
+            {% if tem_perfil %}
+            <form method="post" action="{% url 'core:alternar_modo_simples' %}" class="form-modo-simples">
+                {% csrf_token %}
+                <button type="submit">{% if modo_simples %}Desativar modo simples{% else %}Ativar modo simples{% endif %}</button>
+            </form>
+            {% endif %}
             <a href="{% url 'core:trocar_senha' %}">Trocar minha senha</a>
             <a href="{% url 'sair' %}">Sair</a>
         </div>
