@@ -115,6 +115,7 @@ from .views_whatsapp import (
     whatsapp_webhook,
 )
 from .prescricoes import listar_prescricoes, editar_prescricao, ver_prescricao, imprimir_prescricao
+from .troca_senha import trocar_senha
 
 urlpatterns = [
     path('pacientes/<int:paciente_pk>/exames/', include('exames.urls')),
@@ -126,6 +127,7 @@ urlpatterns = [
     path('pacientes/<int:pk>/prescricoes/<int:ficha_pk>/pdf/', imprimir_prescricao, {'pdf': True}, name='pdf_prescricao'),
     path('documentos/<str:tipo>/<int:pk>/retificar/', retificar_documento, name='retificar_documento'),
     path('', inicio, name='inicio'),
+    path('trocar-senha/', trocar_senha, name='trocar_senha'),
     path(
         'entradas-fora-do-horario/',
         listar_entradas_fora_do_horario,

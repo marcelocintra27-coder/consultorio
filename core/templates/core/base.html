@@ -36,6 +36,7 @@
         </nav>
         <div class="menu-rodape">
             <span>{{ user.get_full_name|default:user.username }}</span>
+            <a href="{% url 'core:trocar_senha' %}">Trocar minha senha</a>
             <a href="{% url 'sair' %}">Sair</a>
         </div>
     </aside>

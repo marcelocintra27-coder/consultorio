@@ -357,6 +357,10 @@ class PerfilUsuario(models.Model):
         choices=Papel.choices,
         default=Papel.DENTISTA,
     )
+    deve_trocar_senha = models.BooleanField(
+        'Obrigar a trocar a senha no próximo acesso',
+        default=False,
+    )
 
     class Meta:
         verbose_name = 'perfil de usuário'

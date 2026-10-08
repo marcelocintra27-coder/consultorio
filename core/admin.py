@@ -607,4 +607,7 @@ class PrescricaoAdmin(AdminClinicoProtegido, admin.ModelAdmin):
         return False
 
 
+from . import admin_usuarios  # noqa: E402,F401
+
+
 

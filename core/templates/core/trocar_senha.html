@@ -1,0 +1,32 @@
+{% extends "core/base.html" %}
+
+{% block title %}Trocar minha senha{% endblock %}
+{% block titulo %}Trocar minha senha{% endblock %}
+{% block container_class %}login{% endblock %}
+
+{% block content %}
+<section class="secao">
+    <h2>Trocar minha senha</h2>
+    {% if obrigar_troca %}
+    <p class="mensagem error">{{ aviso_troca_obrigatoria }}</p>
+    {% endif %}
+    <form method="post" class="form-cartao">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <div class="erro">{{ form.non_field_errors }}</div>
+        {% endif %}
+        {% for field in form %}
+        <div class="campo">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <div class="erro">{{ field.errors }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="acoes">
+            <button type="submit" class="botao">Salvar nova senha</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
