@@ -863,6 +863,12 @@ def listar_consultas(request):
         consultas = consultas.filter(status=status_selecionado)
     else:
         status_selecionado = ''
+    consultas = list(consultas)
+    for consulta in consultas:
+        # Atalho para cobrar direto da agenda, só para quem pode lançar valor.
+        consulta.pode_cobrar = bool(
+            consulta.dentista_id and usuario_pode_lancar(request.user, consulta)
+        )
     return render(request, 'core/listar_consultas.html', {
         'consultas': consultas,
         'data': data,
@@ -2319,7 +2325,7 @@ def lancar_atendimento(request, pk):
                 request.user,
                 f'lançamento {dados["tipo"]}: {item.codigo} — {item.nome}',
             )
-        return redirect('core:ficha_consulta', pk=consulta.pk)
+        return _depois_do_lancamento(request, consulta, item.nome, dados['valor_final'])
     form = LancamentoForm(request.POST, dentista=consulta.dentista)
     if not form.is_valid():
         request._lancamento_form = form
@@ -2346,6 +2352,21 @@ def lancar_atendimento(request, pk):
             consulta,
             request.user,
             f'lançamento {dados["tipo"]}: {procedimento.nome}',
+        )
+    return _depois_do_lancamento(request, consulta, procedimento.nome, dados['valor_final'])
+
+
+def _depois_do_lancamento(request, consulta, nome_procedimento, valor_final):
+    """Quem clicou em "Cobrar" na agenda volta para a agenda do mesmo dia."""
+    if request.POST.get('voltar') == 'agenda':
+        valor = f'{valor_final:.2f}'.replace('.', ',')
+        messages.success(
+            request,
+            f'Cobrança salva: {consulta.paciente.nome_completo} — '
+            f'{nome_procedimento} — R$ {valor}.',
+        )
+        return redirect(
+            f"{reverse('core:listar_consultas')}?data={consulta.data.isoformat()}"
         )
     return redirect('core:ficha_consulta', pk=consulta.pk)
 

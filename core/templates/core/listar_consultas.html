@@ -75,7 +75,10 @@
                 </td>
                 {% endif %}
                 <td>
-                    <a href="{% url 'core:ficha_consulta' consulta.pk %}" class="botao secundario">Abrir</a>
+                    <div class="acoes-linha">
+                        {% if consulta.pode_cobrar %}<a href="{% url 'core:ficha_consulta' consulta.pk %}?voltar=agenda#form-lancamento" class="botao">Cobrar</a>{% endif %}
+                        <a href="{% url 'core:ficha_consulta' consulta.pk %}" class="botao secundario">Abrir</a>
+                    </div>
                 </td>
             </tr>
             {% empty %}

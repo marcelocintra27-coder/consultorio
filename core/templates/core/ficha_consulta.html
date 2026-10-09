@@ -191,6 +191,10 @@
             {% if pode_lancar and lancamento_form %}
             <form method="post" action="{% url 'core:lancar_atendimento' consulta.pk %}" class="form-cartao" id="form-lancamento">
                 {% csrf_token %}
+                {% if request.GET.voltar == 'agenda' or request.POST.voltar == 'agenda' %}
+                <input type="hidden" name="voltar" value="agenda">
+                <p class="mensagem success">Cobrança de {{ consulta.paciente.nome_completo }}: escolha o procedimento e clique em “Salvar lançamento”. Depois você volta para a agenda.</p>
+                {% endif %}
                 {% if usa_lancamento_uniodonto %}
                 <p><strong>{% if consulta.eh_legado %}Novo lançamento Uniodonto (ajuste){% else %}Novo lançamento Uniodonto{% endif %}</strong></p>
                 <p class="resumo">Tabela: Uniodonto · fator vigente US = {{ fator_us_uniodonto }}</p>
