@@ -166,6 +166,28 @@ def dados_da_ficha_anterior(paciente, tipo, excluir_pk=None):
     else:
         mapa = _SAUDE_ODONTO_PARA_HOF if tipo == 'hof' else _SAUDE_HOF_PARA_ODONTO
         dados['saude_condicoes'] = [mapa[c] for c in condicoes if c in mapa]
+
+    # Bruxismo e gravidez ficam em perguntas diferentes em cada ficha.
+    if anterior.tipo == 'hof':
+        situacoes = set(anterior.hof_situacoes or [])
+        bruxismo = 'bruxismo' in situacoes
+        gestante = 'gestante_lactante' in situacoes
+    else:
+        bruxismo = (
+            anterior.range_dentes == 'sim'
+            or 'bruxismo' in (anterior.saude_bucal or [])
+        )
+        gestante = anterior.gravidez == 'sim'
+    if tipo == 'hof':
+        dados['hof_situacoes'] = [
+            chave for chave, marcado in (
+                ('gestante_lactante', gestante), ('bruxismo', bruxismo),
+            ) if marcado
+        ]
+    elif bruxismo:
+        # "Gestante / lactante" da HOF não vira gravidez na odontológica:
+        # lactante não é gestante, então a paciente responde de novo.
+        dados['range_dentes'] = 'sim'
     return dados
 
 

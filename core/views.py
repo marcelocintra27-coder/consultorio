@@ -2904,7 +2904,14 @@ def _salvar_ficha_anamnese(request, ficha, *, publico, template):
                         )
             if publico:
                 return redirect('core:ficha_anamnese_enviada', token=ficha.token)
-            messages.success(request, 'Ficha salva.')
+            if ficha.status == FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA:
+                messages.success(
+                    request,
+                    'Ficha salva com a assinatura do paciente. Falta só a '
+                    'assinatura do dentista, no quadro no fim desta página.',
+                )
+            else:
+                messages.success(request, 'Ficha salva.')
             if ficha.status == FichaCadastroAnamnese.Status.RASCUNHO:
                 return redirect(
                     'core:editar_ficha_anamnese',

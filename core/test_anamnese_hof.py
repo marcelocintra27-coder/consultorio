@@ -338,6 +338,33 @@ class AnamneseAproveitaFichaAnteriorTests(TestCase):
         tela = self.client.get(f'/pacientes/{self.paciente.pk}/anamnese/{hof.pk}/editar/')
         self.assertEqual(tela.context['form'].initial['profissao'], 'Professora')
 
+    def test_bruxismo_e_gravidez_da_odontologica_vao_para_a_hof(self):
+        self._enviar('odontologica', _payload_anamnese(
+            nome_completo='Paciente HOF', cpf='333.333.333-33', telefone='11933334444',
+            range_dentes='sim', gravidez='sim',
+        ))
+        self.client.post(self.nova, {'tipo': 'hof'})
+        hof = FichaCadastroAnamnese.objects.get(paciente=self.paciente, tipo='hof')
+        self.assertEqual(sorted(hof.hof_situacoes), ['bruxismo', 'gestante_lactante'])
+
+    def test_bruxismo_da_hof_vai_para_a_odontologica_mas_lactante_nao(self):
+        self._enviar('hof', _payload_hof(hof_situacoes=['bruxismo', 'gestante_lactante']))
+        self.client.post(self.nova, {'tipo': 'odontologica'})
+        odonto = FichaCadastroAnamnese.objects.get(paciente=self.paciente, tipo='odontologica')
+        self.assertEqual(odonto.range_dentes, 'sim')
+        self.assertEqual(odonto.gravidez, '')
+
+    def test_tela_de_preenchimento_tem_um_quadro_e_dois_botoes(self):
+        self.client.post(self.nova, {'tipo': 'hof'})
+        hof = FichaCadastroAnamnese.objects.get(paciente=self.paciente, tipo='hof')
+        html = self.client.get(
+            f'/pacientes/{self.paciente.pk}/anamnese/{hof.pk}/editar/'
+        ).content.decode()
+        self.assertIn('Salvar e terminar depois', html)
+        self.assertIn('Salvar e assinar', html)
+        self.assertNotIn('assinatura_dentista_base64-canvas', html)
+        self.assertNotIn('Concluir com as duas assinaturas', html)
+
     def test_tela_separa_os_tipos_e_mostra_a_situacao(self):
         self._enviar('hof', _payload_hof())
         self.client.post(self.nova, {'tipo': 'odontologica'})
