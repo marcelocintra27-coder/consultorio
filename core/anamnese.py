@@ -130,20 +130,33 @@ CAMPOS_COMUNS_ANAMNESE = (
 )
 
 
-def dados_da_ficha_anterior(paciente, tipo):
-    """Respostas da última ficha já assinada, para não perguntar tudo de novo.
-
-    Vale entre os dois tipos (odontológica e HOF). O paciente revisa e assina
-    outra vez; nada da ficha anterior é alterado.
-    """
+def _ficha_base(paciente, excluir_pk=None):
+    """Ficha de onde copiar respostas: a última assinada; se não houver,
+    a última em preenchimento que já tenha alguma resposta."""
     from .models import FichaCadastroAnamnese
 
-    anterior = (
-        FichaCadastroAnamnese.objects.filter(paciente=paciente)
-        .exclude(status=FichaCadastroAnamnese.Status.RASCUNHO)
-        .order_by('-criado_em', '-pk')
-        .first()
-    )
+    fichas = FichaCadastroAnamnese.objects.filter(paciente=paciente)
+    if excluir_pk:
+        fichas = fichas.exclude(pk=excluir_pk)
+    rascunho = FichaCadastroAnamnese.Status.RASCUNHO
+    assinada = fichas.exclude(status=rascunho).order_by('-criado_em', '-pk').first()
+    if assinada:
+        return assinada
+    for ficha in fichas.filter(status=rascunho).order_by('-atualizado_em', '-pk'):
+        if ficha.saude_condicoes or any(
+            getattr(ficha, campo) for campo in CAMPOS_COMUNS_ANAMNESE
+        ):
+            return ficha
+    return None
+
+
+def dados_da_ficha_anterior(paciente, tipo, excluir_pk=None):
+    """Respostas de outra ficha do paciente, para não perguntar tudo de novo.
+
+    Vale entre os dois tipos (odontológica e HOF). O paciente revisa e assina;
+    nada da ficha de origem é alterado.
+    """
+    anterior = _ficha_base(paciente, excluir_pk)
     if anterior is None:
         return {}
     dados = {campo: getattr(anterior, campo) for campo in CAMPOS_COMUNS_ANAMNESE}
@@ -154,6 +167,18 @@ def dados_da_ficha_anterior(paciente, tipo):
         mapa = _SAUDE_ODONTO_PARA_HOF if tipo == 'hof' else _SAUDE_HOF_PARA_ODONTO
         dados['saude_condicoes'] = [mapa[c] for c in condicoes if c in mapa]
     return dados
+
+
+def completar_rascunho(ficha):
+    """Preenche, só na tela, os campos vazios de um rascunho com as respostas
+    de outra ficha. Não grava nada: vale quando a equipe ou o paciente salvar."""
+    if ficha.status != ficha.Status.RASCUNHO:
+        return ficha
+    dados = dados_da_ficha_anterior(ficha.paciente, ficha.tipo, excluir_pk=ficha.pk)
+    for campo, valor in dados.items():
+        if not getattr(ficha, campo) and valor:
+            setattr(ficha, campo, valor)
+    return ficha
 
 
 def idade_em_anos(data_nascimento, hoje=None):

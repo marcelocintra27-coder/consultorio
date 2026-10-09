@@ -295,13 +295,48 @@ class AnamneseAproveitaFichaAnteriorTests(TestCase):
         self.assertEqual(odonto.saude_condicoes, ['pressao_alta'])
         self.assertEqual(odonto.medicamento_nome, 'enalapril')
 
-    def test_rascunho_nao_serve_de_base(self):
+    def test_ficha_assinada_tem_preferencia_sobre_rascunho(self):
+        self._enviar('hof', _payload_hof(alergia='sim', alergia_qual='assinada'))
         self.client.post(self.nova, {'tipo': 'odontologica'})
-        rascunho = FichaCadastroAnamnese.objects.get(paciente=self.paciente)
-        FichaCadastroAnamnese.objects.filter(pk=rascunho.pk).update(alergia_qual='não vale')
+        odonto = FichaCadastroAnamnese.objects.get(paciente=self.paciente, tipo='odontologica')
+        self.assertEqual(odonto.alergia_qual, 'assinada')
+
+    def test_hof_aberta_antes_mostra_o_que_foi_digitado_na_odontologica(self):
+        # Caso real: a HOF já estava aberta quando a equipe preencheu a
+        # odontológica (ainda sem assinatura). Ao abrir a HOF, os dados aparecem.
         self.client.post(self.nova, {'tipo': 'hof'})
         hof = FichaCadastroAnamnese.objects.get(paciente=self.paciente, tipo='hof')
+        self.client.post(self.nova, {'tipo': 'odontologica'})
+        odonto = FichaCadastroAnamnese.objects.get(paciente=self.paciente, tipo='odontologica')
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/anamnese/{odonto.pk}/editar/',
+            _payload_anamnese(
+                nome_completo='Paciente HOF', cpf='333.333.333-33', telefone='11933334444',
+                acao='rascunho', assinatura_paciente_base64='',
+                profissao='Arquiteta', alergia='sim', alergia_qual='penicilina',
+                saude_condicoes=['diabetes'],
+            ),
+        )
+        self.assertEqual(resposta.status_code, 302)
+        tela = self.client.get(f'/pacientes/{self.paciente.pk}/anamnese/{hof.pk}/editar/')
+        form = tela.context['form']
+        self.assertEqual(form.initial['profissao'], 'Arquiteta')
+        self.assertEqual(form.initial['alergia_qual'], 'penicilina')
+        self.assertEqual(form.initial['saude_condicoes'], ['diabetes'])
+        # Só mostra; a HOF continua sem esses dados até alguém salvar.
+        hof.refresh_from_db()
         self.assertEqual(hof.alergia_qual, '')
+
+    def test_nao_apaga_o_que_ja_foi_digitado(self):
+        self._enviar('odontologica', _payload_anamnese(
+            nome_completo='Paciente HOF', cpf='333.333.333-33', telefone='11933334444',
+            profissao='Bancária',
+        ))
+        self.client.post(self.nova, {'tipo': 'hof'})
+        hof = FichaCadastroAnamnese.objects.get(paciente=self.paciente, tipo='hof')
+        FichaCadastroAnamnese.objects.filter(pk=hof.pk).update(profissao='Professora')
+        tela = self.client.get(f'/pacientes/{self.paciente.pk}/anamnese/{hof.pk}/editar/')
+        self.assertEqual(tela.context['form'].initial['profissao'], 'Professora')
 
     def test_tela_separa_os_tipos_e_mostra_a_situacao(self):
         self._enviar('hof', _payload_hof())

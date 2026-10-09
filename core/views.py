@@ -52,6 +52,7 @@ from .anamnese import (
     SAUDE_CONDICOES_HOF,
     SITUACOES_HOF,
     TEXTO_DECLARACAO_ANAMNESE,
+    completar_rascunho,
     dados_da_ficha_anterior,
     eh_menor_de_idade,
     renovar_token,
@@ -2916,6 +2917,7 @@ def _salvar_ficha_anamnese(request, ficha, *, publico, template):
                 ficha_pk=ficha.pk,
             )
     else:
+        completar_rascunho(ficha)
         form = formulario(
             instance=ficha,
             exigir_completo=False,
