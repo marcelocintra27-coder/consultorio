@@ -112,6 +112,50 @@ PROCEDIMENTOS_HOF = [
 ]
 
 
+# Mesma condição de saúde com chave diferente em cada tipo de ficha.
+_SAUDE_ODONTO_PARA_HOF = {
+    'pressao_alta': 'hipertensao',
+    'diabetes': 'diabetes',
+    'problemas_cardiacos': 'doenca_cardiaca',
+    'autoimune': 'autoimune',
+    'coagulacao': 'coagulacao',
+    'renais_hepaticos': 'hepatica_renal',
+    'cancer': 'cancer',
+}
+_SAUDE_HOF_PARA_ODONTO = {hof: odonto for odonto, hof in _SAUDE_ODONTO_PARA_HOF.items()}
+
+CAMPOS_COMUNS_ANAMNESE = (
+    'cidade', 'uf', 'profissao', 'nome_responsavel',
+    'alergia', 'alergia_qual', 'usa_medicamento', 'medicamento_nome', 'fuma',
+)
+
+
+def dados_da_ficha_anterior(paciente, tipo):
+    """Respostas da última ficha já assinada, para não perguntar tudo de novo.
+
+    Vale entre os dois tipos (odontológica e HOF). O paciente revisa e assina
+    outra vez; nada da ficha anterior é alterado.
+    """
+    from .models import FichaCadastroAnamnese
+
+    anterior = (
+        FichaCadastroAnamnese.objects.filter(paciente=paciente)
+        .exclude(status=FichaCadastroAnamnese.Status.RASCUNHO)
+        .order_by('-criado_em', '-pk')
+        .first()
+    )
+    if anterior is None:
+        return {}
+    dados = {campo: getattr(anterior, campo) for campo in CAMPOS_COMUNS_ANAMNESE}
+    condicoes = list(anterior.saude_condicoes or [])
+    if anterior.tipo == tipo:
+        dados['saude_condicoes'] = condicoes
+    else:
+        mapa = _SAUDE_ODONTO_PARA_HOF if tipo == 'hof' else _SAUDE_HOF_PARA_ODONTO
+        dados['saude_condicoes'] = [mapa[c] for c in condicoes if c in mapa]
+    return dados
+
+
 def idade_em_anos(data_nascimento, hoje=None):
     if data_nascimento is None:
         return None

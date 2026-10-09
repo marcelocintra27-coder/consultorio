@@ -1254,3 +1254,74 @@ body.modo-simples td {
         min-height: 64px;
     }
 }
+
+/* Anamnese: um bloco por tipo, cada um com a sua cor. */
+.anamnese-tipos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    align-items: start;
+}
+
+.anamnese-tipo {
+    background: var(--cor-superficie);
+    border-radius: var(--raio-card);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    border-top: 6px solid var(--cor-primaria);
+    padding: 20px;
+    min-width: 0;
+}
+
+.anamnese-tipo h2 {
+    margin: 0 0 4px;
+    font-size: 19px;
+    color: var(--cor-primaria);
+}
+
+.anamnese-tipo h3 {
+    margin: 20px 0 8px;
+    font-size: 15px;
+}
+
+.anamnese-tipo-hof {
+    border-top-color: #8a3d6b;
+}
+
+.anamnese-tipo-hof h2 {
+    color: #8a3d6b;
+}
+
+.anamnese-aberta {
+    background: var(--cor-thead);
+    border-radius: var(--raio-controle);
+    padding: 12px 14px;
+    margin: 12px 0;
+}
+
+.anamnese-tipo-hof .anamnese-aberta {
+    background: #f6ecf2;
+}
+
+.anamnese-situacao {
+    font-weight: 600;
+    margin: 0 0 10px;
+}
+
+.anamnese-historico {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.anamnese-historico li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid var(--cor-borda);
+}
+
+.anamnese-historico a {
+    color: var(--cor-primaria);
+    font-weight: 600;
+}

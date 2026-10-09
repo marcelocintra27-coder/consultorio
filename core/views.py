@@ -52,6 +52,7 @@ from .anamnese import (
     SAUDE_CONDICOES_HOF,
     SITUACOES_HOF,
     TEXTO_DECLARACAO_ANAMNESE,
+    dados_da_ficha_anterior,
     eh_menor_de_idade,
     renovar_token,
     rotulos_checklist,
@@ -2597,6 +2598,7 @@ def _criar_rascunho_anamnese(
         email=paciente.email or '',
         endereco=paciente.endereco or '',
         token_expira_em=timezone.now() + timedelta(days=14),
+        **dados_da_ficha_anterior(paciente, tipo),
     )
 
 
@@ -2629,23 +2631,39 @@ def listar_fichas_anamnese(request, pk):
     paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
     if not usuario_pode_acessar_prontuario(request.user, paciente):
         raise PermissionDenied
-    fichas = paciente.fichas_anamnese.all()
-    abertas = list(_fichas_abertas(paciente).order_by('tipo'))
-    for ficha in abertas:
-        ficha.link_publico = ''
-        if ficha.status == FichaCadastroAnamnese.Status.RASCUNHO:
-            ficha.link_publico = request.build_absolute_uri(
-                reverse('core:ficha_anamnese_publica', args=[ficha.token])
+    fichas = list(paciente.fichas_anamnese.all())
+    blocos = []
+    for tipo, titulo, descricao in (
+        (
+            FichaCadastroAnamnese.Tipo.ODONTOLOGICA,
+            'Anamnese odontológica',
+            'Tratamento dos dentes.',
+        ),
+        (
+            FichaCadastroAnamnese.Tipo.HOF,
+            'Anamnese HOF (rosto)',
+            'Harmonização orofacial: toxina, preenchimento e outros procedimentos no rosto.',
+        ),
+    ):
+        do_tipo = [ficha for ficha in fichas if ficha.tipo == tipo]
+        aberta = next((ficha for ficha in do_tipo if ficha.esta_aberta), None)
+        link_publico = ''
+        if aberta and aberta.status == FichaCadastroAnamnese.Status.RASCUNHO:
+            link_publico = request.build_absolute_uri(
+                reverse('core:ficha_anamnese_publica', args=[aberta.token])
             )
-    tipos_abertos = {ficha.tipo for ficha in abertas}
+        blocos.append({
+            'tipo': tipo,
+            'titulo': titulo,
+            'descricao': descricao,
+            'botao_novo': 'Nova ' + titulo[0].lower() + titulo[1:],
+            'aberta': aberta,
+            'link_publico': link_publico,
+            'historico': [ficha for ficha in do_tipo if ficha is not aberta],
+        })
     return render(request, 'core/listar_fichas_anamnese.html', {
         'paciente': paciente,
-        'fichas': fichas,
-        'abertas': abertas,
-        'pode_nova_odontologica': (
-            FichaCadastroAnamnese.Tipo.ODONTOLOGICA not in tipos_abertos
-        ),
-        'pode_nova_hof': FichaCadastroAnamnese.Tipo.HOF not in tipos_abertos,
+        'blocos': blocos,
     })
 
 

@@ -237,3 +237,78 @@ class AnamneseHOFPermissaoTests(TestCase):
         self.client.force_login(usuario_dentista)
         self.assertEqual(self.client.post(url, {'tipo': 'hof'}).status_code, 302)
         self.assertEqual(FichaCadastroAnamnese.objects.get(paciente=paciente).tipo, 'hof')
+
+
+@override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
+class AnamneseAproveitaFichaAnteriorTests(TestCase):
+    def setUp(self):
+        self.client.force_login(User.objects.create_superuser('admin_pre', password='x'))
+        self.paciente = Paciente.objects.create(
+            nome_completo='Paciente HOF', cpf='333.333.333-33',
+            data_nascimento=date(1990, 1, 1), telefone='11933334444',
+        )
+        self.nova = f'/pacientes/{self.paciente.pk}/anamnese/nova/'
+
+    def _enviar(self, tipo, payload):
+        self.client.post(self.nova, {'tipo': tipo})
+        ficha = FichaCadastroAnamnese.objects.get(paciente=self.paciente, tipo=tipo)
+        resposta = self.client.post(
+            f'/pacientes/{self.paciente.pk}/anamnese/{ficha.pk}/editar/', payload,
+        )
+        self.assertEqual(resposta.status_code, 302)
+        ficha.refresh_from_db()
+        self.assertEqual(ficha.status, FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA)
+        return ficha
+
+    def test_hof_nova_traz_respostas_da_odontologica(self):
+        self._enviar('odontologica', _payload_anamnese(
+            nome_completo='Paciente HOF', cpf='333.333.333-33', telefone='11933334444',
+            cidade='Anápolis', profissao='Bancária',
+            saude_condicoes=['pressao_alta', 'osteoporose'],
+            alergia='sim', alergia_qual='dipirona',
+            usa_medicamento='sim', medicamento_nome='losartana',
+            fuma='sim',
+        ))
+        self.client.post(self.nova, {'tipo': 'hof'})
+        hof = FichaCadastroAnamnese.objects.get(paciente=self.paciente, tipo='hof')
+        self.assertEqual(hof.cidade, 'Anápolis')
+        self.assertEqual(hof.profissao, 'Bancária')
+        self.assertEqual(hof.alergia_qual, 'dipirona')
+        self.assertEqual(hof.medicamento_nome, 'losartana')
+        self.assertEqual(hof.fuma, 'sim')
+        # Pressão alta vira hipertensão; osteoporose não existe na ficha HOF.
+        self.assertEqual(hof.saude_condicoes, ['hipertensao'])
+        html = self.client.get(
+            f'/pacientes/{self.paciente.pk}/anamnese/{hof.pk}/editar/'
+        ).content.decode()
+        self.assertIn('dipirona', html)
+
+    def test_odontologica_nova_traz_respostas_da_hof(self):
+        self._enviar('hof', _payload_hof(
+            saude_condicoes=['hipertensao', 'herpes'],
+            usa_medicamento='sim', medicamento_nome='enalapril',
+        ))
+        self.client.post(self.nova, {'tipo': 'odontologica'})
+        odonto = FichaCadastroAnamnese.objects.get(
+            paciente=self.paciente, tipo='odontologica'
+        )
+        self.assertEqual(odonto.saude_condicoes, ['pressao_alta'])
+        self.assertEqual(odonto.medicamento_nome, 'enalapril')
+
+    def test_rascunho_nao_serve_de_base(self):
+        self.client.post(self.nova, {'tipo': 'odontologica'})
+        rascunho = FichaCadastroAnamnese.objects.get(paciente=self.paciente)
+        FichaCadastroAnamnese.objects.filter(pk=rascunho.pk).update(alergia_qual='não vale')
+        self.client.post(self.nova, {'tipo': 'hof'})
+        hof = FichaCadastroAnamnese.objects.get(paciente=self.paciente, tipo='hof')
+        self.assertEqual(hof.alergia_qual, '')
+
+    def test_tela_separa_os_tipos_e_mostra_a_situacao(self):
+        self._enviar('hof', _payload_hof())
+        self.client.post(self.nova, {'tipo': 'odontologica'})
+        html = self.client.get(f'/pacientes/{self.paciente.pk}/anamnese/').content.decode()
+        self.assertIn('anamnese-tipo-odontologica', html)
+        self.assertIn('anamnese-tipo-hof', html)
+        self.assertIn('Em preenchimento', html)
+        self.assertIn('Falta a assinatura do dentista', html)
+        self.assertIn('Ver e concluir', html)

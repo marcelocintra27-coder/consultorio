@@ -88,10 +88,32 @@
             imagem.src = gravada;
         }
 
+        var aviso = canvas.closest('.assinatura-campo')
+            ? canvas.closest('.assinatura-campo').querySelector('.assinatura-falta')
+            : null;
+
+        function avisarFalta() {
+            if (aviso) aviso.hidden = false;
+            canvas.scrollIntoView({ block: 'center' });
+            canvas.focus();
+        }
+
+        canvas.addEventListener('pointerdown', function () {
+            if (aviso) aviso.hidden = true;
+        });
+
         var form = canvas.closest('form');
         if (form) {
             form.addEventListener('submit', function (evento) {
+                if (evento.defaultPrevented) return;
                 if (evento.submitter?.dataset.assinaturaOpcional === 'true') return;
+                // Quadro marcado com data-exigida-em só é obrigatório nos
+                // botões listados (ex.: assinatura do dentista só em "concluir").
+                var exigida = canvas.dataset.exigidaEm;
+                if (exigida) {
+                    var acao = evento.submitter ? evento.submitter.value : '';
+                    if (exigida.split(',').indexOf(acao) === -1) return;
+                }
                 var bloco = canvas.closest('.plano-item');
                 if (bloco) {
                     var procedimento = bloco.querySelector('[name$="-procedimento"]');
@@ -103,7 +125,7 @@
                 }
                 if (!houveTraco || !hidden.value) {
                     evento.preventDefault();
-                    canvas.focus();
+                    avisarFalta();
                 }
             });
         }

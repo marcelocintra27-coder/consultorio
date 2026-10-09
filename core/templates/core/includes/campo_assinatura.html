@@ -9,6 +9,7 @@
             height="200"
             tabindex="0"
             aria-label="{{ rotulo|default:'assinatura' }}"
+            {% if exigida_em %}data-exigida-em="{{ exigida_em }}"{% endif %}
         ></canvas>
     </div>
     <div class="acoes assinatura-acoes">
@@ -18,4 +19,5 @@
     {% if erro %}
     <div class="erro">{{ erro }}</div>
     {% endif %}
+    <div class="erro assinatura-falta" hidden>Falta assinar neste quadro antes de salvar.</div>
 </div>
