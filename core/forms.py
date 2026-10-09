@@ -12,8 +12,11 @@ from django.forms.models import ModelChoiceField, ModelChoiceIterator, inlinefor
 
 from .agenda import validar_horario_consulta
 from .anamnese import (
+    PROCEDIMENTOS_HOF,
     SAUDE_BUCAL,
     SAUDE_CONDICOES,
+    SAUDE_CONDICOES_HOF,
+    SITUACOES_HOF,
     UFS,
     eh_menor_de_idade,
 )
@@ -984,10 +987,15 @@ def _validar_png_opcional(bruto, obrigatorio):
 
 
 def _checklist_valido(valores, rotulo):
+    opcoes = {
+        'saude': SAUDE_CONDICOES,
+        'bucal': SAUDE_BUCAL,
+        'saude_hof': SAUDE_CONDICOES_HOF,
+        'situacoes_hof': SITUACOES_HOF,
+        'procedimentos_hof': PROCEDIMENTOS_HOF,
+    }[rotulo]
     valores = list(valores or [])
-    chaves = {item[0] for item in (
-        SAUDE_CONDICOES if rotulo == 'saude' else SAUDE_BUCAL
-    )}
+    chaves = {item[0] for item in opcoes}
     invalidos = [item for item in valores if item not in chaves]
     if invalidos:
         raise forms.ValidationError('Opção inválida no checklist.')
@@ -1188,6 +1196,186 @@ class FichaAnamneseForm(forms.ModelForm):
             'gravidez',
             'outra_info_saude',
         ):
+            if not dados.get(nome):
+                self.add_error(nome, 'Este campo é obrigatório.')
+        if not dados.get('aceitou_declaracao'):
+            self.add_error(
+                'aceitou_declaracao',
+                'É preciso concordar com a declaração para enviar a ficha.',
+            )
+        return dados
+
+
+class FichaAnamneseHOFForm(forms.ModelForm):
+    """Parte do paciente da ficha de harmonização orofacial (HOF)."""
+
+    saude_condicoes = forms.MultipleChoiceField(
+        label='histórico de saúde',
+        choices=SAUDE_CONDICOES_HOF,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+    )
+    hof_situacoes = forms.MultipleChoiceField(
+        label='situações relevantes',
+        choices=SITUACOES_HOF,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+    )
+    hof_procedimentos = forms.MultipleChoiceField(
+        label='procedimentos estéticos que já fez',
+        choices=PROCEDIMENTOS_HOF,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+    )
+    uf = forms.ChoiceField(
+        label='UF',
+        choices=[('', '—')] + list(UFS),
+        required=False,
+    )
+    aceitou_declaracao = forms.BooleanField(
+        label='li e concordo com a declaração',
+        required=False,
+    )
+    assinatura_paciente_base64 = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+    assinatura_dentista_base64 = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+
+    RADIOS = ('alergia', 'usa_medicamento', 'isotretinoina', 'fuma')
+
+    class Meta:
+        model = FichaCadastroAnamnese
+        fields = [
+            'nome_completo',
+            'data_nascimento',
+            'cpf',
+            'telefone',
+            'whatsapp',
+            'email',
+            'endereco',
+            'cidade',
+            'uf',
+            'profissao',
+            'nome_responsavel',
+            'saude_condicoes',
+            'usa_medicamento',
+            'medicamento_nome',
+            'alergia',
+            'alergia_qual',
+            'hof_situacoes',
+            'hof_situacoes_detalhes',
+            'isotretinoina',
+            'isotretinoina_quando',
+            'fuma',
+            'hof_procedimentos',
+            'hof_ultimo_procedimento',
+            'hof_intercorrencias',
+            'o_que_incomoda',
+            'o_que_espera',
+            'aceitou_declaracao',
+        ]
+        labels = {
+            'usa_medicamento': 'usa algum medicamento (incluindo anticoagulantes)',
+            'medicamento_nome': 'quais medicamentos',
+            'alergia': 'tem alergia (medicamentos, anestésicos, látex, antissépticos)',
+            'alergia_qual': 'qual alergia',
+            'hof_situacoes_detalhes': 'detalhes',
+            'isotretinoina_quando': 'quando usou',
+            'fuma': 'fuma / nicotina',
+            'o_que_incomoda': 'queixa principal (o que mais incomoda)',
+            'o_que_espera': 'o que espera do resultado / prioridades',
+        }
+        widgets = {
+            'data_nascimento': forms.DateInput(
+                attrs={'type': 'date'}, format='%Y-%m-%d'
+            ),
+            'endereco': forms.Textarea(attrs={'rows': 2}),
+            'hof_situacoes_detalhes': forms.Textarea(attrs={'rows': 2}),
+            'hof_ultimo_procedimento': forms.Textarea(attrs={'rows': 2}),
+            'hof_intercorrencias': forms.Textarea(attrs={'rows': 2}),
+            'o_que_incomoda': forms.Textarea(attrs={'rows': 3}),
+            'o_que_espera': forms.Textarea(attrs={'rows': 3}),
+            'alergia': forms.RadioSelect,
+            'usa_medicamento': forms.RadioSelect,
+            'isotretinoina': forms.RadioSelect,
+            'fuma': forms.RadioSelect,
+        }
+
+    def __init__(
+        self,
+        *args,
+        exigir_completo=False,
+        coletar_paciente=False,
+        coletar_dentista=False,
+        **kwargs,
+    ):
+        self.exigir_completo = exigir_completo
+        self.coletar_paciente = coletar_paciente
+        self.coletar_dentista = coletar_dentista
+        super().__init__(*args, **kwargs)
+        self.fields['data_nascimento'].input_formats = ['%Y-%m-%d']
+        for nome in self.RADIOS:
+            self.fields[nome].required = False
+
+    def clean_saude_condicoes(self):
+        return _checklist_valido(self.cleaned_data.get('saude_condicoes'), 'saude_hof')
+
+    def clean_hof_situacoes(self):
+        return _checklist_valido(self.cleaned_data.get('hof_situacoes'), 'situacoes_hof')
+
+    def clean_hof_procedimentos(self):
+        return _checklist_valido(
+            self.cleaned_data.get('hof_procedimentos'), 'procedimentos_hof'
+        )
+
+    def clean_assinatura_paciente_base64(self):
+        return _validar_png_opcional(
+            self.cleaned_data.get('assinatura_paciente_base64'),
+            self.coletar_paciente,
+        )
+
+    def clean_assinatura_dentista_base64(self):
+        return _validar_png_opcional(
+            self.cleaned_data.get('assinatura_dentista_base64'),
+            self.coletar_dentista,
+        )
+
+    def clean(self):
+        dados = super().clean()
+        if eh_menor_de_idade(dados.get('data_nascimento')) and not (
+            dados.get('nome_responsavel') or ''
+        ).strip():
+            self.add_error(
+                'nome_responsavel',
+                'Informe o responsável legal (paciente menor de 18 anos).',
+            )
+        if not self.exigir_completo:
+            return dados
+        for nome in ('saude_condicoes', 'hof_situacoes', 'hof_procedimentos'):
+            if not dados.get(nome):
+                self.add_error(nome, 'Marque ao menos uma opção.')
+        sim = FichaCadastroAnamnese.SimNao.SIM
+        pares = [
+            ('alergia', 'alergia_qual', 'Descreva a alergia.'),
+            ('usa_medicamento', 'medicamento_nome', 'Informe os medicamentos.'),
+            ('isotretinoina', 'isotretinoina_quando', 'Informe quando usou.'),
+        ]
+        for origem, detalhe, mensagem in pares:
+            if dados.get(origem) == sim and not (dados.get(detalhe) or '').strip():
+                self.add_error(detalhe, mensagem)
+        procedimentos = dados.get('hof_procedimentos') or []
+        if procedimentos and 'nenhuma' not in procedimentos and not (
+            dados.get('hof_ultimo_procedimento') or ''
+        ).strip():
+            self.add_error(
+                'hof_ultimo_procedimento',
+                'Informe produto, região e data do último procedimento.',
+            )
+        for nome in self.RADIOS:
             if not dados.get(nome):
                 self.add_error(nome, 'Este campo é obrigatório.')
         if not dados.get('aceitou_declaracao'):

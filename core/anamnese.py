@@ -73,6 +73,45 @@ SAUDE_BUCAL = [
 ]
 
 
+# Anamnese de harmonização orofacial (HOF). As chaves ficam gravadas na ficha;
+# mudar uma chave depois quebra a leitura das fichas antigas.
+SAUDE_CONDICOES_HOF = [
+    ('hipertensao', 'hipertensão'),
+    ('diabetes', 'diabetes'),
+    ('doenca_cardiaca', 'doença cardíaca'),
+    ('autoimune', 'doença autoimune'),
+    ('coagulacao', 'distúrbio de coagulação'),
+    ('neuromuscular', 'doença neuromuscular'),
+    ('hepatica_renal', 'doença hepática / renal'),
+    ('cancer', 'histórico de câncer'),
+    ('herpes', 'herpes recorrente'),
+    ('infeccao_ativa', 'infecção ativa'),
+    ('cicatrizacao', 'cicatrização alterada / queloide'),
+    ('nenhuma', 'nenhuma das anteriores'),
+]
+
+SITUACOES_HOF = [
+    ('gestante_lactante', 'gestante / lactante'),
+    ('infeccao_facial', 'infecção odontológica / facial'),
+    ('bruxismo', 'bruxismo / apertamento'),
+    ('paralisia_facial', 'paralisia facial prévia'),
+    ('reacao_injetaveis', 'reação a injetáveis / desmaios'),
+    ('vacina_infeccao_recente', 'vacinação ou infecção recente'),
+    ('nenhuma', 'nenhuma'),
+]
+
+PROCEDIMENTOS_HOF = [
+    ('toxina', 'toxina botulínica'),
+    ('acido_hialuronico', 'ácido hialurônico'),
+    ('bioestimulador', 'bioestimulador'),
+    ('fios', 'fios de sustentação'),
+    ('laser_peeling', 'laser / peeling'),
+    ('pmma', 'preenchimento permanente / PMMA'),
+    ('cirurgia_facial', 'cirurgia facial'),
+    ('nenhuma', 'nenhum procedimento'),
+]
+
+
 def idade_em_anos(data_nascimento, hoje=None):
     if data_nascimento is None:
         return None
@@ -167,4 +206,17 @@ def texto_para_hash(ficha):
         'usa_medicamento': ficha.usa_medicamento,
         'whatsapp': ficha.whatsapp,
     }
+    # A ficha odontológica mantém exatamente o conteúdo de antes, para as
+    # assinaturas já gravadas continuarem conferindo. Só a HOF ganha campos.
+    if ficha.tipo == 'hof':
+        payload.update({
+            'tipo': ficha.tipo,
+            'hof_intercorrencias': ficha.hof_intercorrencias,
+            'hof_procedimentos': sorted(ficha.hof_procedimentos or []),
+            'hof_situacoes': sorted(ficha.hof_situacoes or []),
+            'hof_situacoes_detalhes': ficha.hof_situacoes_detalhes,
+            'hof_ultimo_procedimento': ficha.hof_ultimo_procedimento,
+            'isotretinoina': ficha.isotretinoina,
+            'isotretinoina_quando': ficha.isotretinoina_quando,
+        })
     return json.dumps(payload, ensure_ascii=False, sort_keys=True)

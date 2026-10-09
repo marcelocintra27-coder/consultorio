@@ -26,4 +26,6 @@
 
     exclusivoNenhuma('saude_condicoes');
     exclusivoNenhuma('saude_bucal');
+    exclusivoNenhuma('hof_situacoes');
+    exclusivoNenhuma('hof_procedimentos');
 })();

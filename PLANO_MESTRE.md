@@ -958,6 +958,21 @@ agendada ou confirmada. Consulta passada, realizada, com falta, cancelada, ou
 lembrete sem consulta, não muda de status e a resposta fica para a secretária.
 A trava da resposta usa só a linha da mensagem: consulta e paciente são anuláveis, e o PostgreSQL recusa FOR UPDATE no lado nulo de um outer join. Nesta etapa o envio é simulado (`WHATSAPP_MODO=simulado`); a API da Meta não é chamada.
 
+### Anamnese de harmonização orofacial (HOF)
+
+A ficha de anamnese ganhou o campo `tipo`: odontológica (padrão, a de antes) ou
+HOF. As duas usam o mesmo fluxo: link para o paciente, assinatura do paciente
+ou responsável, conclusão com a assinatura do dentista, integridade e
+retificação. Pode haver uma ficha aberta de cada tipo por paciente. A HOF
+pergunta histórico de saúde próprio, situações relevantes (gestante/lactante,
+infecção facial, bruxismo, paralisia facial, reação a injetáveis, vacinação ou
+infecção recente), isotretinoína (Roacutan), fumo, procedimentos estéticos
+anteriores, último procedimento, intercorrências, queixa e expectativa. O
+conteúdo assinado da ficha odontológica continua idêntico ao de antes; só a
+HOF acrescenta as chaves próprias. A parte da dentista (exame, análise facial
+e planejamento) é uma etapa futura. O termo de consentimento usa o Plano e
+consentimento existente; o mapa facial em papel entra pela digitalização.
+
 ### Digitalização de fichas antigas — envio em lote
 
 O paciente é obrigatório para qualquer usuário que envia uma ficha. Folhas já

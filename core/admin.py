@@ -465,11 +465,12 @@ class AssinaturaEletronicaAdmin(AdminClinicoProtegido, admin.ModelAdmin):
 class FichaCadastroAnamneseAdmin(AdminClinicoProtegido, admin.ModelAdmin):
     list_display = (
         'paciente',
+        'tipo',
         'status',
         'preenchida_por',
         'criado_em',
     )
-    list_filter = ('status', 'preenchida_por')
+    list_filter = ('tipo', 'status', 'preenchida_por')
     search_fields = ('paciente__nome_completo', 'cpf', 'nome_completo')
     readonly_fields = ('token', 'criado_em', 'atualizado_em')
 

@@ -26,6 +26,26 @@
             <p><strong>Profissão:</strong> {{ ficha.profissao|default:"—" }}</p>
             <p><strong>Responsável legal:</strong> {{ ficha.nome_responsavel|default:"—" }}</p>
 
+            {% if ficha.tipo == 'hof' %}
+            <h2 class="secao-pagina">2. Histórico de saúde</h2>
+            <p>{{ saude_rotulos|join:", "|default:"—" }}</p>
+            <p><strong>Medicamentos:</strong> {{ ficha.get_usa_medicamento_display }} {% if ficha.medicamento_nome %}— {{ ficha.medicamento_nome }}{% endif %}</p>
+            <p><strong>Alergias:</strong> {{ ficha.get_alergia_display }} {% if ficha.alergia_qual %}— {{ ficha.alergia_qual }}{% endif %}</p>
+
+            <h2 class="secao-pagina">3. Situações relevantes</h2>
+            <p>{{ situacoes_rotulos|join:", "|default:"—" }}</p>
+            {% if ficha.hof_situacoes_detalhes %}<p><strong>Detalhes:</strong> {{ ficha.hof_situacoes_detalhes }}</p>{% endif %}
+            <p><strong>Isotretinoína (Roacutan):</strong> {{ ficha.get_isotretinoina_display|default:"—" }} {% if ficha.isotretinoina_quando %}— {{ ficha.isotretinoina_quando }}{% endif %}</p>
+            <p><strong>Fuma / nicotina:</strong> {{ ficha.get_fuma_display|default:"—" }}</p>
+
+            <h2 class="secao-pagina">4. Procedimentos anteriores e expectativas</h2>
+            <p>{{ procedimentos_rotulos|join:", "|default:"—" }}</p>
+            <p><strong>Último procedimento:</strong> {{ ficha.hof_ultimo_procedimento|default:"—" }}</p>
+            <p><strong>Intercorrências / reações:</strong> {{ ficha.hof_intercorrencias|default:"—" }}</p>
+            <p><strong>Queixa principal:</strong> {{ ficha.o_que_incomoda|default:"—" }}</p>
+            <p><strong>Expectativa de resultado:</strong> {{ ficha.o_que_espera|default:"—" }}</p>
+
+            {% else %}
             <h2 class="secao-pagina">2. Sua saúde</h2>
             <p>{{ saude_rotulos|join:", "|default:"—" }}</p>
             {% if ficha.saude_outra_texto %}<p><strong>Outra:</strong> {{ ficha.saude_outra_texto }}</p>{% endif %}
@@ -48,6 +68,8 @@
             <p><strong>Gravidez:</strong> {{ ficha.get_gravidez_display }}</p>
             <p><strong>Outra informação:</strong> {{ ficha.get_outra_info_saude_display }}</p>
             {% if ficha.outra_info_relato %}<p>{{ ficha.outra_info_relato }}</p>{% endif %}
+
+            {% endif %}
 
             <h2 class="secao-pagina">5. Declaração</h2>
             <p class="declaracao">{{ texto_declaracao }}</p>

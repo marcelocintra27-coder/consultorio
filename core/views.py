@@ -13,7 +13,7 @@ from django.core.files.base import ContentFile
 from django.db import DatabaseError, transaction
 from django.db.models import DecimalField, ExpressionWrapper, F, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce
-from django.http import FileResponse, HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -46,8 +46,11 @@ from .plano import (
     texto_para_hash_plano,
 )
 from .anamnese import (
+    PROCEDIMENTOS_HOF,
     SAUDE_BUCAL,
     SAUDE_CONDICOES,
+    SAUDE_CONDICOES_HOF,
+    SITUACOES_HOF,
     TEXTO_DECLARACAO_ANAMNESE,
     eh_menor_de_idade,
     renovar_token,
@@ -143,6 +146,7 @@ from .forms import (
     AssinaturaTesteForm,
     DigitalizacaoFichaForm,
     FichaAnamneseForm,
+    FichaAnamneseHOFForm,
     AssinaturaDentistaAnamneseForm,
     RegistroEvolucaoClinicaForm,
     FichaPlanoTratamentoForm,
@@ -2561,22 +2565,29 @@ def ver_imagem_assinatura(request, pk):
     return FileResponse(assinatura.imagem.open('rb'), content_type='image/png')
 
 
-def _ficha_aberta(paciente):
+def _fichas_abertas(paciente):
     return FichaCadastroAnamnese.objects.filter(
         paciente=paciente,
         status__in=[
             FichaCadastroAnamnese.Status.RASCUNHO,
             FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA,
         ],
-    ).first()
+    )
 
 
-def _criar_rascunho_anamnese(paciente, usuario):
-    existente = _ficha_aberta(paciente)
+def _ficha_aberta(paciente, tipo=FichaCadastroAnamnese.Tipo.ODONTOLOGICA):
+    return _fichas_abertas(paciente).filter(tipo=tipo).first()
+
+
+def _criar_rascunho_anamnese(
+    paciente, usuario, tipo=FichaCadastroAnamnese.Tipo.ODONTOLOGICA
+):
+    existente = _ficha_aberta(paciente, tipo)
     if existente:
         return existente
     return FichaCadastroAnamnese.objects.create(
         paciente=paciente,
+        tipo=tipo,
         criado_por=usuario if usuario.is_authenticated else None,
         nome_completo=paciente.nome_completo,
         data_nascimento=paciente.data_nascimento,
@@ -2619,17 +2630,22 @@ def listar_fichas_anamnese(request, pk):
     if not usuario_pode_acessar_prontuario(request.user, paciente):
         raise PermissionDenied
     fichas = paciente.fichas_anamnese.all()
-    ficha_aberta = _ficha_aberta(paciente)
-    link_publico = ''
-    if ficha_aberta and ficha_aberta.status == FichaCadastroAnamnese.Status.RASCUNHO:
-        link_publico = request.build_absolute_uri(
-            reverse('core:ficha_anamnese_publica', args=[ficha_aberta.token])
-        )
+    abertas = list(_fichas_abertas(paciente).order_by('tipo'))
+    for ficha in abertas:
+        ficha.link_publico = ''
+        if ficha.status == FichaCadastroAnamnese.Status.RASCUNHO:
+            ficha.link_publico = request.build_absolute_uri(
+                reverse('core:ficha_anamnese_publica', args=[ficha.token])
+            )
+    tipos_abertos = {ficha.tipo for ficha in abertas}
     return render(request, 'core/listar_fichas_anamnese.html', {
         'paciente': paciente,
         'fichas': fichas,
-        'ficha_aberta': ficha_aberta,
-        'link_publico': link_publico,
+        'abertas': abertas,
+        'pode_nova_odontologica': (
+            FichaCadastroAnamnese.Tipo.ODONTOLOGICA not in tipos_abertos
+        ),
+        'pode_nova_hof': FichaCadastroAnamnese.Tipo.HOF not in tipos_abertos,
     })
 
 
@@ -2638,7 +2654,10 @@ def nova_ficha_anamnese(request, pk):
     paciente = get_object_or_404(Paciente, pk=pk, ativo=True)
     if not usuario_pode_registrar_prontuario(request.user, paciente):
         raise PermissionDenied
-    ficha = _criar_rascunho_anamnese(paciente, request.user)
+    tipo = request.POST.get('tipo') or FichaCadastroAnamnese.Tipo.ODONTOLOGICA
+    if tipo not in FichaCadastroAnamnese.Tipo.values:
+        return HttpResponseBadRequest('Tipo de anamnese inválido.')
+    ficha = _criar_rascunho_anamnese(paciente, request.user, tipo)
     return redirect('core:editar_ficha_anamnese', pk=paciente.pk, ficha_pk=ficha.pk)
 
 
@@ -2736,14 +2755,21 @@ def ver_ficha_anamnese(request, pk, ficha_pk):
         'ficha': ficha,
         'form': form,
         'texto_declaracao': TEXTO_DECLARACAO_ANAMNESE,
-        'saude_rotulos': rotulos_checklist(ficha.saude_condicoes, SAUDE_CONDICOES),
+        'saude_rotulos': rotulos_checklist(
+            ficha.saude_condicoes,
+            SAUDE_CONDICOES_HOF if _eh_hof(ficha) else SAUDE_CONDICOES,
+        ),
         'bucal_rotulos': rotulos_checklist(ficha.saude_bucal, SAUDE_BUCAL),
+        'situacoes_rotulos': rotulos_checklist(ficha.hof_situacoes, SITUACOES_HOF),
+        'procedimentos_rotulos': rotulos_checklist(
+            ficha.hof_procedimentos, PROCEDIMENTOS_HOF
+        ),
         'assinaturas': _assinaturas_da_ficha(ficha),
         'pode_assinar_dentista': (
             ficha.status == FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA
             and integridade.integra
         ),
-        'titulo': 'Ficha de cadastro e anamnese',
+        'titulo': _titulo_anamnese(ficha),
     })
 
 
@@ -2781,7 +2807,20 @@ def ficha_anamnese_enviada(request, token):
     })
 
 
+def _eh_hof(ficha):
+    return ficha.tipo == FichaCadastroAnamnese.Tipo.HOF
+
+
+def _titulo_anamnese(ficha):
+    if _eh_hof(ficha):
+        return 'Anamnese de harmonização orofacial (HOF)'
+    return 'Ficha de cadastro e anamnese'
+
+
 def _salvar_ficha_anamnese(request, ficha, *, publico, template):
+    formulario = FichaAnamneseHOFForm if _eh_hof(ficha) else FichaAnamneseForm
+    if _eh_hof(ficha):
+        template = 'core/form_ficha_anamnese_hof.html'
     acao = request.POST.get('acao', 'enviar')
     if publico:
         acao = 'enviar'
@@ -2789,7 +2828,7 @@ def _salvar_ficha_anamnese(request, ficha, *, publico, template):
     coletar_paciente = exigir
     coletar_dentista = (not publico) and acao == 'concluir'
     if request.method == 'POST':
-        form = FichaAnamneseForm(
+        form = formulario(
             request.POST,
             instance=ficha,
             exigir_completo=exigir,
@@ -2859,7 +2898,7 @@ def _salvar_ficha_anamnese(request, ficha, *, publico, template):
                 ficha_pk=ficha.pk,
             )
     else:
-        form = FichaAnamneseForm(
+        form = formulario(
             instance=ficha,
             exigir_completo=False,
             coletar_paciente=False,
@@ -2873,7 +2912,7 @@ def _salvar_ficha_anamnese(request, ficha, *, publico, template):
         'publico': publico,
         'texto_declaracao': TEXTO_DECLARACAO_ANAMNESE,
         'menor': menor,
-        'titulo': 'Cadastro e anamnese',
+        'titulo': 'Anamnese de harmonização orofacial (HOF)' if _eh_hof(ficha) else 'Cadastro e anamnese',
     })
 
 

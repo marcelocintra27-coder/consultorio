@@ -2119,11 +2119,21 @@ class FichaCadastroAnamnese(ModeloClinicoProtegido):
         NAO = 'nao', 'não'
         NAO_SE_APLICA = 'nao_se_aplica', 'não se aplica'
 
+    class Tipo(models.TextChoices):
+        ODONTOLOGICA = 'odontologica', 'odontológica'
+        HOF = 'hof', 'harmonização orofacial (HOF)'
+
     paciente = models.ForeignKey(
         Paciente,
         verbose_name='paciente',
         on_delete=models.CASCADE,
         related_name='fichas_anamnese',
+    )
+    tipo = models.CharField(
+        'tipo de anamnese',
+        max_length=20,
+        choices=Tipo.choices,
+        default=Tipo.ODONTOLOGICA,
     )
     dentista = models.ForeignKey(
         'locacao.Dentista',
@@ -2258,6 +2268,32 @@ class FichaCadastroAnamnese(ModeloClinicoProtegido):
         'relato de outra informação de saúde',
         blank=True,
     )
+    # Campos usados só na anamnese de harmonização orofacial (tipo HOF).
+    hof_situacoes = models.JSONField(
+        'situações relevantes', default=list, blank=True,
+    )
+    hof_situacoes_detalhes = models.TextField(
+        'detalhes das situações relevantes', blank=True,
+    )
+    isotretinoina = models.CharField(
+        'usa ou usou isotretinoína (Roacutan)',
+        max_length=20,
+        choices=SimNao.choices,
+        blank=True,
+        default='',
+    )
+    isotretinoina_quando = models.CharField(
+        'quando usou a isotretinoína', max_length=200, blank=True,
+    )
+    hof_procedimentos = models.JSONField(
+        'procedimentos estéticos anteriores', default=list, blank=True,
+    )
+    hof_ultimo_procedimento = models.TextField(
+        'produto / região / data do último procedimento', blank=True,
+    )
+    hof_intercorrencias = models.TextField(
+        'intercorrências, nódulos, infecções ou reações anteriores', blank=True,
+    )
     aceitou_declaracao = models.BooleanField(
         'aceitou a declaração',
         default=False,
@@ -2279,11 +2315,11 @@ class FichaCadastroAnamnese(ModeloClinicoProtegido):
         ordering = ['-criado_em']
         constraints = [
             models.UniqueConstraint(
-                fields=['paciente'],
+                fields=['paciente', 'tipo'],
                 condition=Q(
                     status__in=['rascunho', 'aguardando_dentista']
                 ),
-                name='uma_ficha_anamnese_aberta_por_paciente',
+                name='uma_ficha_anamnese_aberta_por_paciente_e_tipo',
             ),
         ]
 
