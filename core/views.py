@@ -3005,7 +3005,7 @@ def _criar_rascunho_plano(paciente, usuario):
         criado_por=usuario if usuario.is_authenticated else None,
         nome_completo=paciente.nome_completo,
         data_nascimento=paciente.data_nascimento,
-        cpf=paciente.cpf,
+        cpf=paciente.cpf or '',
         telefone=paciente.telefone,
         whatsapp=paciente.whatsapp or '',
         email=paciente.email or '',
@@ -3311,7 +3311,7 @@ def _criar_rascunho_autorizacao(paciente, usuario, consulta=None):
         solicitado_por=usuario if usuario.is_authenticated else None,
         nome_completo=paciente.nome_completo,
         data_nascimento=paciente.data_nascimento,
-        cpf=paciente.cpf,
+        cpf=paciente.cpf or '',
         nome_responsavel=(ultima.nome_responsavel if ultima else ''),
     )
 
