@@ -1325,3 +1325,13 @@ body.modo-simples td {
     color: var(--cor-primaria);
     font-weight: 600;
 }
+
+.resumo-erros ul {
+    margin: 6px 0 0;
+    padding-left: 20px;
+}
+
+.resumo-erros a {
+    color: inherit;
+    font-weight: 600;
+}

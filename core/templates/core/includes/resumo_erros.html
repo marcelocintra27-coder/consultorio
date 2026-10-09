@@ -1,0 +1,12 @@
+{% if form.errors %}
+<div class="mensagem error resumo-erros" role="alert">
+    <strong>{{ titulo_erro|default:"Ainda não foi salvo." }}</strong>
+    Falta corrigir:
+    <ul>
+        {% for erro in form.non_field_errors %}<li>{{ erro }}</li>{% endfor %}
+        {% for field in form %}{% if field.errors %}
+        <li><a href="#{{ field.auto_id }}">{{ field.label|capfirst }}</a> — {{ field.errors.0 }}</li>
+        {% endif %}{% endfor %}
+    </ul>
+</div>
+{% endif %}

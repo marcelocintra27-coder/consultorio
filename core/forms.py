@@ -1029,10 +1029,12 @@ class FichaAnamneseForm(forms.ModelForm):
         required=False,
     )
     assinatura_paciente_base64 = forms.CharField(
+        label='assinatura do paciente',
         required=False,
         widget=forms.HiddenInput(),
     )
     assinatura_dentista_base64 = forms.CharField(
+        label='assinatura do dentista',
         required=False,
         widget=forms.HiddenInput(),
     )
@@ -1237,10 +1239,12 @@ class FichaAnamneseHOFForm(forms.ModelForm):
         required=False,
     )
     assinatura_paciente_base64 = forms.CharField(
+        label='assinatura do paciente',
         required=False,
         widget=forms.HiddenInput(),
     )
     assinatura_dentista_base64 = forms.CharField(
+        label='assinatura do dentista',
         required=False,
         widget=forms.HiddenInput(),
     )

@@ -347,3 +347,25 @@ class AnamneseAproveitaFichaAnteriorTests(TestCase):
         self.assertIn('Em preenchimento', html)
         self.assertIn('Falta a assinatura do dentista', html)
         self.assertIn('Ver e concluir', html)
+
+
+@override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
+class AvisoDoQueFaltaTests(TestCase):
+    def test_topo_avisa_que_nao_salvou_e_o_que_falta(self):
+        self.client.force_login(User.objects.create_superuser('admin_aviso', password='x'))
+        paciente = Paciente.objects.create(
+            nome_completo='Paciente HOF', cpf='333.333.333-33',
+            data_nascimento=date(1990, 1, 1), telefone='11933334444',
+        )
+        self.client.post(f'/pacientes/{paciente.pk}/anamnese/nova/', {'tipo': 'hof'})
+        ficha = FichaCadastroAnamnese.objects.get(paciente=paciente)
+        resposta = self.client.post(
+            f'/pacientes/{paciente.pk}/anamnese/{ficha.pk}/editar/',
+            _payload_hof(isotretinoina='', assinatura_paciente_base64=''),
+        )
+        html = resposta.content.decode()
+        self.assertIn('A ficha ainda não foi salva.', html)
+        self.assertIn('href="#id_isotretinoina"', html)
+        self.assertIn('Assinatura do paciente', html)
+        ficha.refresh_from_db()
+        self.assertEqual(ficha.status, FichaCadastroAnamnese.Status.RASCUNHO)
