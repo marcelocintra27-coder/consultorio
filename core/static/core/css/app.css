@@ -1335,3 +1335,23 @@ body.modo-simples td {
     color: inherit;
     font-weight: 600;
 }
+
+.anamnese-passo {
+    margin: 14px 0 8px;
+}
+
+.anamnese-ajuda {
+    margin-top: 12px;
+    border-top: 1px solid var(--cor-borda);
+    padding-top: 10px;
+}
+
+.anamnese-ajuda summary {
+    cursor: pointer;
+    color: var(--cor-primaria);
+    font-weight: 600;
+}
+
+.anamnese-ajuda p {
+    margin: 8px 0;
+}

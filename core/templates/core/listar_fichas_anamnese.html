@@ -20,20 +20,30 @@
                 <div class="anamnese-aberta">
                     {% if bloco.aberta.status == 'rascunho' %}
                     <p class="anamnese-situacao">Em preenchimento <span class="resumo">· aberta em {{ bloco.aberta.criado_em|date:"d/m/Y" }}</span></p>
+
+                    <p class="anamnese-passo"><strong>Paciente está aqui na clínica?</strong> Preencha junto com ele:</p>
                     <div class="acoes">
                         <a href="{% url 'core:editar_ficha_anamnese' paciente.pk bloco.aberta.pk %}" class="botao">Preencher aqui</a>
                     </div>
-                    <p class="resumo">Ou envie o link para o paciente preencher no celular:</p>
+
+                    <p class="anamnese-passo"><strong>Paciente vai preencher em casa?</strong> Clique em “Copiar link” e cole na conversa dele no WhatsApp. Ele preenche e assina no celular, sem senha.</p>
                     <p class="link-publico-texto"><a href="{{ bloco.link_publico }}">{{ bloco.link_publico }}</a></p>
                     <div class="acoes">
                         <button type="button" class="botao secundario copiar-link-anamnese" data-link="{{ bloco.link_publico }}">Copiar link</button>
+                    </div>
+                    <p class="resumo">O link vale até {{ bloco.aberta.token_expira_em|date:"d/m/Y" }}.</p>
+
+                    <details class="anamnese-ajuda">
+                        <summary>Mandou para a pessoa errada ou o link venceu?</summary>
+                        <p>Gere um link novo. O link antigo para de funcionar na hora, então mande o novo para o paciente.</p>
                         <form method="post" action="{% url 'core:renovar_link_anamnese' paciente.pk bloco.aberta.pk %}" class="form-inline">
                             {% csrf_token %}
                             <button type="submit" class="botao secundario">Gerar novo link</button>
                         </form>
-                    </div>
+                    </details>
                     {% else %}
                     <p class="anamnese-situacao">Paciente já assinou. Falta a assinatura do dentista.</p>
+                    <p class="anamnese-passo">O dentista abre a ficha, confere as respostas e assina no fim da página.</p>
                     <div class="acoes">
                         <a href="{% url 'core:ver_ficha_anamnese' paciente.pk bloco.aberta.pk %}" class="botao">Ver e concluir</a>
                     </div>
@@ -73,7 +83,7 @@
             var texto = botao.getAttribute('data-link') || '';
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(texto);
-                botao.textContent = 'Link copiado';
+                botao.textContent = 'Link copiado ✓ — agora cole no WhatsApp';
             }
         });
     });
