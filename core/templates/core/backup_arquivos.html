@@ -1,0 +1,25 @@
+{% extends "core/base.html" %}
+
+{% block title %}Cópia dos arquivos{% endblock %}
+{% block titulo %}Acesso, estrutura e auditoria{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+<section class="secao" aria-labelledby="titulo-backup-arquivos">
+    <h2 id="titulo-backup-arquivos">Cópia dos arquivos</h2>
+    <p class="subtitulo">Fotos das fichas digitalizadas, assinaturas, autorizações e exames. O backup do banco não leva estes arquivos.</p>
+
+    <p>Hoje são <strong>{{ quantidade }}</strong> arquivo{{ quantidade|pluralize }}, cerca de <strong>{{ tamanho }}</strong>.</p>
+
+    <form method="post" class="form-cartao">
+        {% csrf_token %}
+        <button type="submit" class="botao">Baixar cópia (.zip)</button>
+    </form>
+
+    <p>Guarde o arquivo baixado no mesmo lugar do backup semanal do banco. Ele tem dados de pacientes: não envie por WhatsApp nem por e-mail.</p>
+
+    <div class="acoes">
+        <a href="{% url 'core:administracao' %}" class="botao secundario">Voltar</a>
+    </div>
+</section>
+{% endblock %}

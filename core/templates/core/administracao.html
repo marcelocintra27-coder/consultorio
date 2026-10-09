@@ -40,6 +40,12 @@
         </article>
 
         <article class="card">
+            <h3>Cópia dos arquivos</h3>
+            <p>Baixe as fotos das fichas, assinaturas e exames para guardar junto com o backup do banco.</p>
+            <a href="{% url 'core:backup_arquivos' %}" class="botao">Baixar cópia dos arquivos</a>
+        </article>
+
+        <article class="card">
             <h3>Configuração técnica</h3>
             <p>Abra os demais cadastros técnicos já autorizados no Django Admin.</p>
             <a href="{% url 'admin:index' %}" class="botao secundario">Abrir administração técnica</a>

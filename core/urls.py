@@ -116,6 +116,7 @@ from .views_whatsapp import (
 )
 from .prescricoes import listar_prescricoes, editar_prescricao, ver_prescricao, imprimir_prescricao
 from .modo_simples import alternar_modo_simples
+from .backup_arquivos import backup_arquivos
 from .troca_senha import trocar_senha
 
 urlpatterns = [
@@ -177,6 +178,7 @@ urlpatterns = [
         name='digitalizacao_processar_ia',
     ),
     path('administracao/', administracao, name='administracao'),
+    path('administracao/copia-dos-arquivos/', backup_arquivos, name='backup_arquivos'),
     path('relatorio-atividade/', relatorio_atividade, name='relatorio_atividade'),
     path('relatorio-atividade/csv/', relatorio_atividade_csv, name='relatorio_atividade_csv'),
     path(
