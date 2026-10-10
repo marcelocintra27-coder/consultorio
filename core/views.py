@@ -322,14 +322,37 @@ def listar_pacientes(request):
         pacientes = filtrar_pacientes(pacientes, termo)
     pacientes = pacientes.select_related('convenio').order_by('nome_completo')
     from django.core.paginator import Paginator
+    from .ficha_paciente import marcas_de_pendencia
+
+    perfil = perfil_do_usuario(request.user)
+    regras = {
+        'pode_clinico': _pode_clinico(request.user),
+        'pode_financeiro': usuario_pode_financeiro(request.user),
+        'pode_editar': bool(
+            usuario_e_administrador(request.user)
+            or (perfil and perfil.papel in {
+                PerfilUsuario.Papel.SECRETARIA, PerfilUsuario.Papel.DENTISTA,
+            })
+        ),
+    }
+    so_pendencia = request.GET.get('filtro') == 'pendencia'
+    if so_pendencia:
+        marcas = marcas_de_pendencia(pacientes, **regras)
+        pacientes = pacientes.filter(pk__in=list(marcas))
     pagina = Paginator(pacientes, 25).get_page(request.GET.get('pagina'))
+    if not so_pendencia:
+        marcas = marcas_de_pendencia(
+            Paciente.objects.filter(pk__in=[p.pk for p in pagina]), **regras,
+        )
     hoje = timezone.localdate()
     for paciente in pagina:
         paciente.idade = idade_em_anos(paciente.data_nascimento, hoje)
+        paciente.marcas = marcas.get(paciente.pk, [])
     return render(request, 'core/listar_pacientes.html', {
         'pacientes': pagina,
         'pagina': pagina,
         'termo': termo,
+        'so_pendencia': so_pendencia,
         'pode_cadastrar_paciente': usuario_pode_cadastrar_paciente(request.user),
     })
 

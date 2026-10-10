@@ -12,9 +12,19 @@
         <form method="get" class="busca-form">
             <label class="sr-only" for="id-busca-paciente">Buscar paciente</label>
             <input id="id-busca-paciente" type="text" name="q" placeholder="Buscar por nome, CPF ou telefone" value="{{ termo }}" autofocus>
+            {% if so_pendencia %}<input type="hidden" name="filtro" value="pendencia">{% endif %}
             <button type="submit" class="botao">Buscar</button>
         </form>
+
+        <nav class="filtro-pacientes" aria-label="Mostrar">
+            <a href="?{% if termo %}q={{ termo|urlencode }}{% endif %}" class="filtro-opcao{% if not so_pendencia %} ativo{% endif %}"{% if not so_pendencia %} aria-current="page"{% endif %}>Todos</a>
+            <a href="?{% if termo %}q={{ termo|urlencode }}&amp;{% endif %}filtro=pendencia" class="filtro-opcao{% if so_pendencia %} ativo{% endif %}"{% if so_pendencia %} aria-current="page"{% endif %}>Com pendência</a>
+        </nav>
+        {% if so_pendencia %}
+        <p class="resumo">Só pacientes com algo para resolver. Abra a ficha para ver o que falta.</p>
+        {% else %}
         <p class="resumo">Clique em “Abrir ficha” para ver o paciente e tudo o que dá para fazer com ele.</p>
+        {% endif %}
 
         <div class="tabela-wrap">
         <table class="lista-pacientes">
@@ -27,7 +37,10 @@
             </tr>
             {% for paciente in pacientes %}
             <tr>
-                <td><a href="{% url 'core:ficha_paciente' paciente.pk %}" class="nome-paciente">{{ paciente.nome_completo }}</a></td>
+                <td>
+                    <a href="{% url 'core:ficha_paciente' paciente.pk %}" class="nome-paciente">{{ paciente.nome_completo }}</a>
+                    {% if paciente.marcas %}<div class="marcas-pendencia">{% for marca in paciente.marcas %}<span class="marca-pendencia">{{ marca }}</span>{% endfor %}</div>{% endif %}
+                </td>
                 <td>{{ paciente.data_nascimento|date:"d/m/Y" }}{% if paciente.idade is not None %} <span class="resumo">· {{ paciente.idade }} anos</span>{% endif %}</td>
                 <td>{{ paciente.telefone }}</td>
                 <td>{% if paciente.convenio %}{{ paciente.convenio }}{% else %}—{% endif %}</td>
@@ -35,7 +48,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" class="vazio">Nenhum paciente encontrado.{% if termo %} Confira o nome ou busque pelo telefone.{% endif %}</td>
+                <td colspan="5" class="vazio">{% if so_pendencia %}Nenhum paciente com pendência. Tudo em dia.{% else %}Nenhum paciente encontrado.{% if termo %} Confira o nome ou busque pelo telefone.{% endif %}{% endif %}</td>
             </tr>
             {% endfor %}
         </table>
@@ -43,9 +56,9 @@
 
         {% if pagina.paginator.num_pages > 1 %}
         <nav class="paginacao" aria-label="Páginas">
-            {% if pagina.has_previous %}<a class="botao secundario" href="?{% if termo %}q={{ termo|urlencode }}&amp;{% endif %}pagina={{ pagina.previous_page_number }}">‹ Anterior</a>{% endif %}
+            {% if pagina.has_previous %}<a class="botao secundario" href="?{% if termo %}q={{ termo|urlencode }}&amp;{% endif %}{% if so_pendencia %}filtro=pendencia&amp;{% endif %}pagina={{ pagina.previous_page_number }}">‹ Anterior</a>{% endif %}
             <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-            {% if pagina.has_next %}<a class="botao secundario" href="?{% if termo %}q={{ termo|urlencode }}&amp;{% endif %}pagina={{ pagina.next_page_number }}">Próxima ›</a>{% endif %}
+            {% if pagina.has_next %}<a class="botao secundario" href="?{% if termo %}q={{ termo|urlencode }}&amp;{% endif %}{% if so_pendencia %}filtro=pendencia&amp;{% endif %}pagina={{ pagina.next_page_number }}">Próxima ›</a>{% endif %}
         </nav>
         {% endif %}
 {% endblock %}

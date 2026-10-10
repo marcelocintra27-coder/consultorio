@@ -1515,3 +1515,43 @@ body.modo-simples td {
 .horarios-lista li { margin: 0.15rem 0; }
 .horarios-aviso { color: #9a3412; font-weight: 600; }
 .horarios-livre { color: #166534; }
+
+/* Lista de pacientes: filtro e marcas de pendência */
+.filtro-pacientes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.75rem 0 0.5rem;
+}
+.filtro-opcao {
+    display: inline-block;
+    padding: 0.45rem 1rem;
+    border: 1px solid var(--cor-primaria);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--cor-primaria);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+}
+.filtro-opcao:hover { background: var(--cor-thead); }
+.filtro-opcao.ativo {
+    background: var(--cor-primaria);
+    color: #fff;
+}
+.marcas-pendencia {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.3rem;
+}
+.marca-pendencia {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: #fff4d6;
+    border: 1px solid #e8c56b;
+    color: #7a5600;
+    font-size: 0.8rem;
+    font-weight: 600;
+}

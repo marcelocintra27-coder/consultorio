@@ -84,3 +84,67 @@ def pendencias_paciente(paciente, *, pode_clinico, pode_financeiro, pode_editar)
                 'link': editar,
             })
     return itens
+
+
+MARCA_ANAMNESE = 'Anamnese aberta'
+MARCA_VALOR = 'Valor em aberto'
+MARCA_CADASTRO = 'Cadastro incompleto'
+
+
+def marcas_de_pendencia(pacientes, *, pode_clinico, pode_financeiro, pode_editar):
+    """Para a lista de pacientes: {pk do paciente: [marcas]}.
+
+    Segue as mesmas regras de pendencias_paciente, em poucas consultas ao
+    banco, e só traz o que a pessoa logada pode resolver.
+    """
+    from django.db.models import Exists, OuterRef, Q
+
+    from .models import FichaAutorizacaoCusto, ItemAutorizacaoCusto
+
+    marcas = {}
+
+    def marcar(pk, marca):
+        lista = marcas.setdefault(pk, [])
+        if marca not in lista:
+            lista.append(marca)
+
+    if pode_clinico:
+        for pk in FichaCadastroAnamnese.objects.filter(
+            paciente__in=pacientes,
+            status__in=[
+                FichaCadastroAnamnese.Status.RASCUNHO,
+                FichaCadastroAnamnese.Status.AGUARDANDO_DENTISTA,
+            ],
+        ).values_list('paciente_id', flat=True):
+            marcar(pk, MARCA_ANAMNESE)
+    if pode_financeiro:
+        hoje = timezone.localdate()
+        # Só confere o valor de quem tem algo a cobrar; o resto nem é carregado.
+        autorizado = Exists(ItemAutorizacaoCusto.objects.filter(
+            ficha__consulta_id=OuterRef('pk'),
+            ficha__status=FichaAutorizacaoCusto.Status.CONCLUIDA,
+        ))
+        consultas = (
+            Consulta.objects.filter(paciente__in=pacientes, data__lte=hoje, pago=False)
+            .exclude(status__in=[Consulta.Status.CANCELADA, Consulta.Status.FALTOU])
+            .filter(
+                Q(eh_legado=True, valor_historico__gt=0)
+                | Q(lancamentos__isnull=False)
+                | Q(materiais__isnull=False)
+                | Q(autorizado)
+            )
+            .distinct()
+        )
+        for consulta in consultas:
+            if consulta.paciente_id in marcas and MARCA_VALOR in marcas[consulta.paciente_id]:
+                continue
+            if consulta.valor_a_cobrar > 0:
+                marcar(consulta.paciente_id, MARCA_VALOR)
+    if pode_editar:
+        sem_dado = Q(cpf__isnull=True) | Q(cpf='') | Q(whatsapp__isnull=True) | Q(whatsapp='')
+        for pk in pacientes.filter(sem_dado).values_list('pk', flat=True):
+            marcar(pk, MARCA_CADASTRO)
+    ordem = [MARCA_ANAMNESE, MARCA_VALOR, MARCA_CADASTRO]
+    for lista in marcas.values():
+        lista.sort(key=ordem.index)
+    return marcas
