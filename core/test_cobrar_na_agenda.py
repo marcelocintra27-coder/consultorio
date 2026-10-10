@@ -106,3 +106,30 @@ class CobrarNaAgendaTests(TestCase):
         self.assertContains(resposta, 'A cobrança ainda não foi salva.')
         self.assertContains(resposta, 'Use no máximo 2 casas depois da vírgula')
         self.assertFalse(LancamentoAtendimento.objects.exists())
+
+    def test_mesmo_procedimento_no_mesmo_dia_pede_confirmacao(self):
+        self.client.force_login(self.admin)
+        url = f'/consultas/{self.consulta.pk}/lancar/'
+        self.client.post(url, self._payload())
+        resposta = self.client.post(url, self._payload(voltar='agenda'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Esse procedimento já foi cobrado hoje')
+        self.assertContains(resposta, 'Sim, lançar mesmo assim')
+        self.assertEqual(LancamentoAtendimento.objects.count(), 1)
+        resposta = self.client.post(url, self._payload(voltar='agenda', confirmado='1'))
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(LancamentoAtendimento.objects.count(), 2)
+
+    def test_valor_zero_pede_confirmacao(self):
+        self.client.force_login(self.admin)
+        url = f'/consultas/{self.consulta.pk}/lancar/'
+        resposta = self.client.post(url, self._payload(valor_final='0'))
+        self.assertContains(resposta, 'O valor final está R$ 0,00. É cortesia?')
+        self.assertFalse(LancamentoAtendimento.objects.exists())
+        self.client.post(url, self._payload(valor_final='0', confirmado='1'))
+        self.assertEqual(LancamentoAtendimento.objects.count(), 1)
+
+    def test_primeira_cobranca_normal_nao_pergunta_nada(self):
+        self.client.force_login(self.admin)
+        resposta = self.client.post(f'/consultas/{self.consulta.pk}/lancar/', self._payload())
+        self.assertEqual(resposta.status_code, 302)

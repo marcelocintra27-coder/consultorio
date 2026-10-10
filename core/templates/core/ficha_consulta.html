@@ -191,6 +191,16 @@
             {% if pode_lancar and lancamento_form %}
             <form method="post" action="{% url 'core:lancar_atendimento' consulta.pk %}" class="form-cartao" id="form-lancamento">
                 {% csrf_token %}
+                {% if avisos_lancamento %}
+                <div class="mensagem aviso-confirmar" role="alert">
+                    <strong>Confira antes de salvar:</strong>
+                    <ul>{% for aviso in avisos_lancamento %}<li>{{ aviso }}</li>{% endfor %}</ul>
+                    <div class="acoes">
+                        <button type="submit" class="botao" name="confirmado" value="1">Sim, lançar mesmo assim</button>
+                        <a href="{% url 'core:listar_consultas' %}?data={{ consulta.data|date:'Y-m-d' }}" class="botao secundario">Não, cancelar</a>
+                    </div>
+                </div>
+                {% endif %}
                 {% if lancamento_form.errors %}
                 <div class="mensagem error" role="alert"><strong>A cobrança ainda não foi salva.</strong> Corrija o campo marcado em vermelho abaixo e clique em “Salvar lançamento” de novo.</div>
                 {% endif %}
@@ -348,7 +358,7 @@
     if (tabela) tabela.addEventListener('input', recalcular);
     if (desc) desc.addEventListener('input', recalcular);
     // Veio do "Cobrar" ou voltou com erro: leva direto ao formulário.
-    if (form.querySelector('.erro') || form.querySelector('[name="voltar"]')) {
+    if (form.querySelector('.erro') || form.querySelector('.aviso-confirmar') || form.querySelector('[name="voltar"]')) {
         form.scrollIntoView({ block: 'start' });
     }
 })();

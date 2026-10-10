@@ -1361,3 +1361,14 @@ body.modo-simples td {
     flex-wrap: wrap;
     gap: 6px;
 }
+
+.mensagem.aviso-confirmar {
+    background: #fff4d6;
+    color: #6b4a00;
+    border: 1px solid #e8c766;
+}
+
+.mensagem.aviso-confirmar ul {
+    margin: 6px 0 10px;
+    padding-left: 20px;
+}

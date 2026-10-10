@@ -2232,6 +2232,7 @@ def ficha_consulta(request, pk):
         'consulta': consulta,
         'status_form': status_form,
         'lancamento_form': lancamento_form,
+        'avisos_lancamento': getattr(request, '_avisos_lancamento', []),
         'complementar_form': complementar_form,
         'pode_financeiro': pode_financeiro,
         'pode_visualizar_valores': pode_lancar,
@@ -2302,6 +2303,13 @@ def lancar_atendimento(request, pk):
             return ficha_consulta(request, pk)
         dados = form.cleaned_data
         item = dados['procedimento_uniodonto']
+        avisos = _avisos_lancamento(
+            request, consulta, dados['valor_final'], procedimento_uniodonto=item,
+        )
+        if avisos:
+            request._lancamento_form = form
+            request._avisos_lancamento = avisos
+            return ficha_consulta(request, pk)
         LancamentoAtendimento.objects.create(
             consulta=consulta,
             procedimento=None,
@@ -2332,6 +2340,13 @@ def lancar_atendimento(request, pk):
         return ficha_consulta(request, pk)
     dados = form.cleaned_data
     procedimento = dados['procedimento']
+    avisos = _avisos_lancamento(
+        request, consulta, dados['valor_final'], procedimento=procedimento,
+    )
+    if avisos:
+        request._lancamento_form = form
+        request._avisos_lancamento = avisos
+        return ficha_consulta(request, pk)
     convenio = dados['convenio']
     particular = convenio is None
     LancamentoAtendimento.objects.create(
@@ -2354,6 +2369,25 @@ def lancar_atendimento(request, pk):
             f'lançamento {dados["tipo"]}: {procedimento.nome}',
         )
     return _depois_do_lancamento(request, consulta, procedimento.nome, dados['valor_final'])
+
+
+def _avisos_lancamento(request, consulta, valor_final, **procedimento):
+    """Pede confirmação antes de cobrar em dobro ou cobrar R$ 0,00."""
+    if request.POST.get('confirmado') == '1':
+        return []
+    avisos = []
+    hoje = timezone.localdate()
+    repetido = consulta.lancamentos.filter(
+        cadastrado_em__date=hoje, **procedimento,
+    ).exists()
+    if repetido:
+        avisos.append(
+            'Esse procedimento já foi cobrado hoje nesta consulta. '
+            'Confira na lista de lançamentos acima.'
+        )
+    if valor_final == 0:
+        avisos.append('O valor final está R$ 0,00. É cortesia?')
+    return avisos
 
 
 def _depois_do_lancamento(request, consulta, nome_procedimento, valor_final):
