@@ -23,6 +23,13 @@ def _grupo(titulo, itens):
     return {'titulo': titulo, 'itens': itens}
 
 
+def ambiente_treino(request):
+    """Marca as telas do TREINO para ninguém confundir com o sistema de verdade."""
+    from django.conf import settings
+
+    return {'eh_treino': getattr(settings, 'AMBIENTE', '') == 'homologacao'}
+
+
 def admin_local_date(request):
     return {"admin_local_date": timezone.localdate().isoformat()}
 

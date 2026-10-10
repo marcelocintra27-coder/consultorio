@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{% static 'core/css/app.css' %}">
 </head>
 <body class="{% if user.is_authenticated %}app-autenticado{% endif %}{% if modo_simples %} modo-simples{% endif %}">
+    {% if eh_treino %}<div class="faixa-treino" role="note">TREINO — dados de teste. Nada aqui vale para a clínica.</div>{% endif %}
     {% if user.is_authenticated %}
     <button class="menu-toggle" type="button" aria-controls="menu-lateral" aria-expanded="false">
         <span class="sr-only">Abrir menu</span>
