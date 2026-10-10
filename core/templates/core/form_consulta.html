@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load static %}
 
 {% block title %}{{ titulo }}{% endblock %}
 {% block titulo %}{{ titulo }}{% endblock %}
@@ -9,18 +10,32 @@
             <a href="{% url 'core:listar_consultas' %}" class="botao secundario">Voltar</a>
         </div>
 
-        <form method="post" class="form-cartao">
+        <form method="post" class="form-cartao" id="form-consulta">
             {% csrf_token %}
             {{ form.non_field_errors }}
             {% for field in form %}
             <div class="campo">
                 <label for="{{ field.id_for_label }}">{{ field.label }}</label>
                 {{ field }}
+                {% if field.name == 'hora_fim' %}
+                <p class="resumo">{% if consulta %}Ao mudar a hora início, a hora fim acompanha (mesma duração).{% else %}Preenchida sozinha com 30 minutos depois do início. Mude se precisar.{% endif %}</p>
+                {% endif %}
                 {% if field.errors %}
                     <div class="erro">{{ field.errors }}</div>
                 {% endif %}
             </div>
+            {% if field.name == 'data' %}
+            <div class="horarios-ocupados" id="horarios-ocupados" aria-live="polite"
+                 data-url="{% url 'core:horarios_ocupados' %}"
+                 {% if consulta %}data-consulta="{{ consulta.pk }}"{% endif %}>
+                <p class="resumo">Escolha a dentista e a data para ver os horários já ocupados.</p>
+            </div>
+            {% endif %}
             {% endfor %}
             <button type="submit" class="botao">Salvar</button>
         </form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/js/agendar.js' %}"></script>
 {% endblock %}

@@ -87,3 +87,54 @@ def validar_horario_consulta(dentista_id, data, hora_inicio, hora_fim, consulta_
         raise ValidationError(
             f'Esse horário da sala está alugado para {ocupacao.dentista.nome_completo}.'
         )
+
+
+def horarios_do_dia(dentista, data, consulta_pk=None):
+    """O que já ocupa o dia do dentista, para a tela de agendar.
+
+    Segue as mesmas regras de validar_horario_consulta. Não mostra o nome
+    dos pacientes: só o horário e o motivo de estar ocupado.
+    Devolve (ocupados, turnos): ocupados é uma lista de dicionários com
+    inicio, fim e motivo; turnos só vem preenchido para locatária (None
+    para titular).
+    """
+    def consultas_de(dentista_id, motivo):
+        consultas = (
+            Consulta.objects.filter(dentista_id=dentista_id, data=data)
+            .exclude(status=Consulta.Status.CANCELADA)
+        )
+        if consulta_pk is not None:
+            consultas = consultas.exclude(pk=consulta_pk)
+        return [
+            {'inicio': c.hora_inicio, 'fim': c.hora_fim, 'motivo': motivo}
+            for c in consultas.only('hora_inicio', 'hora_fim')
+        ]
+
+    ocupados = consultas_de(dentista.pk, 'Consulta marcada')
+    turnos = None
+    if dentista.tipo == Dentista.Tipo.LOCATARIA:
+        turnos = list(
+            TurnoLocacao.objects.filter(
+                dentista=dentista, ativo=True, dia_semana=data.weekday(),
+            ).select_related('sala').order_by('hora_inicio')
+        )
+        for turno in turnos:
+            titular = Dentista.objects.filter(
+                sala=turno.sala, tipo=Dentista.Tipo.TITULAR,
+            ).first()
+            if titular is None:
+                continue
+            for item in consultas_de(titular.pk, 'Titular da sala atendendo'):
+                if item['inicio'] < turno.hora_fim and item['fim'] > turno.hora_inicio:
+                    ocupados.append(item)
+    elif dentista.sala_id:
+        for turno in TurnoLocacao.objects.filter(
+            sala_id=dentista.sala_id, ativo=True, dia_semana=data.weekday(),
+        ).select_related('dentista').order_by('hora_inicio'):
+            ocupados.append({
+                'inicio': turno.hora_inicio,
+                'fim': turno.hora_fim,
+                'motivo': f'Sala alugada para {turno.dentista.nome_completo}',
+            })
+    ocupados.sort(key=lambda item: (item['inicio'], item['fim']))
+    return ocupados, turnos

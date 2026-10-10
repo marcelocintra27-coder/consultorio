@@ -360,11 +360,11 @@ class ConsultaForm(HorarioConsultaMixin, forms.ModelForm):
     class Meta:
         model = Consulta
         fields = [
-            'paciente',
+            'dentista',
             'data',
+            'paciente',
             'hora_inicio',
             'hora_fim',
-            'dentista',
             'observacoes',
         ]
         widgets = {

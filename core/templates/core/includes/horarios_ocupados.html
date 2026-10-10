@@ -1,0 +1,22 @@
+{% if not dentista or not data %}
+<p class="resumo">Escolha a dentista e a data para ver os horários já ocupados.</p>
+{% else %}
+<p class="horarios-titulo"><strong>{{ data|date:"l, d/m/Y" }}</strong> · {{ dentista.nome_completo }}</p>
+{% if turnos is not None %}
+    {% if turnos %}
+    <p class="horarios-turnos">Atende neste dia: {% for turno in turnos %}{{ turno.hora_inicio|time:"H:i" }} às {{ turno.hora_fim|time:"H:i" }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+    {% else %}
+    <p class="horarios-aviso">Esta dentista não tem turno neste dia da semana. Escolha outro dia.</p>
+    {% endif %}
+{% endif %}
+{% if ocupados %}
+<p class="horarios-subtitulo">Já ocupado:</p>
+<ul class="horarios-lista">
+    {% for item in ocupados %}
+    <li><strong>{{ item.inicio|time:"H:i" }} às {{ item.fim|time:"H:i" }}</strong> · {{ item.motivo }}</li>
+    {% endfor %}
+</ul>
+{% elif turnos is None or turnos %}
+<p class="horarios-livre">Nenhum horário ocupado neste dia.</p>
+{% endif %}
+{% endif %}

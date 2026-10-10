@@ -29,7 +29,7 @@ from .digitalizacao_uploads import (
 
 from locacao.models import Dentista, Despesa, PerfilUsuario, Sala
 
-from .agenda import com_sala_de_agenda, validar_horario_consulta
+from .agenda import com_sala_de_agenda, horarios_do_dia, validar_horario_consulta
 from .assinatura import gravar_assinatura_manuscrita
 from .caixa import registrar_movimento_automatico
 from .conciliacao import sugerir_origens, valor_origem
@@ -2150,6 +2150,40 @@ def agendar_consulta(request):
     })
 
 
+@require_http_methods(['GET'])
+def horarios_ocupados(request):
+    """Pedaço da tela de agendar: o que já ocupa o dia escolhido.
+
+    Só horários e motivo, sem nome de paciente. Usado ao agendar (dentista
+    e data escolhidos na tela) e ao remarcar (a própria consulta fica de fora).
+    """
+    consulta_pk = request.GET.get('consulta') or None
+    if consulta_pk:
+        consulta = get_object_or_404(Consulta.objects.select_related('dentista'), pk=consulta_pk)
+        if not usuario_pode_gerenciar_agenda(request.user, consulta):
+            raise PermissionDenied
+        dentista = consulta.dentista
+    else:
+        if not usuario_pode_agendar_consulta(request.user):
+            raise PermissionDenied
+        dentista_id = request.GET.get('dentista', '')
+        dentista = None
+        if dentista_id.isdigit():
+            dentista = Dentista.objects.filter(pk=dentista_id, ativo=True).first()
+        dentista_logado = dentista_do_usuario(request.user)
+        if dentista is not None and dentista_logado and dentista.pk != dentista_logado.pk:
+            raise PermissionDenied
+    try:
+        data = datetime.strptime(request.GET.get('data', ''), '%Y-%m-%d').date()
+    except ValueError:
+        data = None
+    contexto = {'dentista': dentista, 'data': data}
+    if dentista is not None and data is not None:
+        ocupados, turnos = horarios_do_dia(dentista, data, consulta_pk=consulta_pk)
+        contexto.update({'ocupados': ocupados, 'turnos': turnos})
+    return render(request, 'core/includes/horarios_ocupados.html', contexto)
+
+
 @require_http_methods(['GET', 'POST'])
 @transaction.atomic
 def remarcar_consulta(request, pk):
@@ -2184,7 +2218,7 @@ def remarcar_consulta(request, pk):
     else:
         form = RemarcacaoConsultaForm(instance=consulta)
     return render(request, 'core/form_consulta.html', {
-        'form': form, 'titulo': 'Remarcar consulta',
+        'form': form, 'titulo': 'Remarcar consulta', 'consulta': consulta,
     })
 
 

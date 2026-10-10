@@ -1501,3 +1501,17 @@ body.modo-simples td {
 .ficha-pendencias li:first-child {
     border-top: 0;
 }
+
+/* Tela de agendar: horários já ocupados */
+.horarios-ocupados {
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid #c9d6e3;
+    border-radius: 8px;
+    background: #f4f8fc;
+}
+.horarios-ocupados p { margin: 0.25rem 0; }
+.horarios-lista { margin: 0.25rem 0 0; padding-left: 1.2rem; }
+.horarios-lista li { margin: 0.15rem 0; }
+.horarios-aviso { color: #9a3412; font-weight: 600; }
+.horarios-livre { color: #166534; }

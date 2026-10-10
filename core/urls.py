@@ -21,6 +21,7 @@ from .views import (
     listar_consultas,
     marcar_consulta_paga,
     agendar_consulta,
+    horarios_ocupados,
     remarcar_consulta,
     ficha_consulta,
     alterar_status_consulta,
@@ -325,6 +326,7 @@ urlpatterns = [
     ),
     path('whatsapp/webhook/', whatsapp_webhook, name='whatsapp_webhook'),
     path('consultas/agendar/', agendar_consulta, name='agendar_consulta'),
+    path('consultas/horarios-ocupados/', horarios_ocupados, name='horarios_ocupados'),
     path('consultas/<int:pk>/remarcar/', remarcar_consulta, name='remarcar_consulta'),
     path('consultas/<int:pk>/', ficha_consulta, name='ficha_consulta'),
     path(
