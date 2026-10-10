@@ -55,6 +55,7 @@ from .anamnese import (
     completar_rascunho,
     dados_da_ficha_anterior,
     eh_menor_de_idade,
+    idade_em_anos,
     renovar_token,
     rotulos_checklist,
     sincronizar_paciente,
@@ -319,17 +320,52 @@ def listar_pacientes(request):
     if termo:
         from .busca_paciente import filtrar_pacientes
         pacientes = filtrar_pacientes(pacientes, termo)
-    pacientes = pacientes.order_by('nome_completo')
-    perfil = getattr(request.user, 'perfil', None)
-    pode_clinico = bool(
-        usuario_e_administrador(request.user)
-        or (perfil and perfil.papel == perfil.Papel.DENTISTA)
-    )
+    pacientes = pacientes.select_related('convenio').order_by('nome_completo')
+    from django.core.paginator import Paginator
+    pagina = Paginator(pacientes, 25).get_page(request.GET.get('pagina'))
+    hoje = timezone.localdate()
+    for paciente in pagina:
+        paciente.idade = idade_em_anos(paciente.data_nascimento, hoje)
     return render(request, 'core/listar_pacientes.html', {
-        'pacientes': pacientes,
+        'pacientes': pagina,
+        'pagina': pagina,
         'termo': termo,
         'pode_cadastrar_paciente': usuario_pode_cadastrar_paciente(request.user),
-        'pode_clinico': pode_clinico,
+    })
+
+
+def _pode_clinico(user):
+    perfil = getattr(user, 'perfil', None)
+    return bool(
+        usuario_e_administrador(user)
+        or (perfil and perfil.papel == perfil.Papel.DENTISTA)
+    )
+
+
+def ficha_paciente(request, pk):
+    """Ficha do paciente só para leitura, com um caminho claro para cada tarefa."""
+    paciente = get_object_or_404(
+        pacientes_visiveis_para_usuario(
+            request.user, Paciente.objects.filter(ativo=True).select_related('convenio'),
+        ),
+        pk=pk,
+    )
+    hoje = timezone.localdate()
+    proxima = (
+        consultas_visiveis_para_usuario(
+            request.user,
+            Consulta.objects.filter(paciente=paciente, data__gte=hoje)
+            .exclude(status__in=[Consulta.Status.CANCELADA])
+            .select_related('dentista')
+            .order_by('data', 'hora_inicio'),
+        ).first()
+    )
+    return render(request, 'core/ficha_paciente.html', {
+        'paciente': paciente,
+        'idade': idade_em_anos(paciente.data_nascimento, hoje),
+        'proxima': proxima,
+        'pode_editar': usuario_pode_editar_cadastro_paciente(request.user, paciente),
+        'pode_clinico': _pode_clinico(request.user),
     })
 
 _VOLTAR_DIGITALIZACAO = 'digitalizacao'

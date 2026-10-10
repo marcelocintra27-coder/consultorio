@@ -3,6 +3,7 @@ from .alerta_horario import listar_entradas_fora_do_horario
 from .views import (
     inicio,
     administracao,
+    ficha_paciente,
     listar_pacientes,
     buscar_pacientes,
     cadastrar_paciente,
@@ -203,6 +204,7 @@ urlpatterns = [
     path('financeiro/relatorios/', relatorios_financeiros, name='relatorios_financeiros'),
     path('pacientes/', listar_pacientes, name='listar_pacientes'),
     path('pacientes/busca/', buscar_pacientes, name='buscar_pacientes'),
+    path('pacientes/<int:pk>/ficha/', ficha_paciente, name='ficha_paciente'),
     path('pacientes/cadastrar/', cadastrar_paciente, name='cadastrar_paciente'),
     path('pacientes/<int:pk>/editar/', editar_paciente, name='editar_paciente'),
     path(

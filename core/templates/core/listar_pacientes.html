@@ -1,49 +1,51 @@
-﻿{% extends "core/base.html" %}
+{% extends "core/base.html" %}
 
-{% block title %}Lista de Pacientes{% endblock %}
-{% block titulo %}Lista de Pacientes{% endblock %}
+{% block title %}Pacientes{% endblock %}
+{% block titulo %}Pacientes{% endblock %}
 
 {% block content %}
         <div class="acoes">
             <a href="{% url 'core:inicio' %}" class="botao secundario">Voltar</a>
-            {% if pode_cadastrar_paciente %}<a href="{% url 'core:cadastrar_paciente' %}" class="botao">Cadastrar</a>{% endif %}
+            {% if pode_cadastrar_paciente %}<a href="{% url 'core:cadastrar_paciente' %}" class="botao">+ Novo paciente</a>{% endif %}
         </div>
 
         <form method="get" class="busca-form">
-            <input type="text" name="q" placeholder="Buscar por nome, CPF ou telefone" value="{{ termo }}">
+            <label class="sr-only" for="id-busca-paciente">Buscar paciente</label>
+            <input id="id-busca-paciente" type="text" name="q" placeholder="Buscar por nome, CPF ou telefone" value="{{ termo }}" autofocus>
             <button type="submit" class="botao">Buscar</button>
         </form>
+        <p class="resumo">Clique em “Abrir ficha” para ver o paciente e tudo o que dá para fazer com ele.</p>
 
         <div class="tabela-wrap">
-        <table>
+        <table class="lista-pacientes">
             <tr>
                 <th>Nome</th>
+                <th>Nascimento</th>
                 <th>Telefone</th>
-                <th>Convenio</th>
+                <th>Convênio</th>
                 <th></th>
             </tr>
             {% for paciente in pacientes %}
             <tr>
-                <td>{{ paciente.nome_completo }}</td>
+                <td><a href="{% url 'core:ficha_paciente' paciente.pk %}" class="nome-paciente">{{ paciente.nome_completo }}</a></td>
+                <td>{{ paciente.data_nascimento|date:"d/m/Y" }}{% if paciente.idade is not None %} <span class="resumo">· {{ paciente.idade }} anos</span>{% endif %}</td>
                 <td>{{ paciente.telefone }}</td>
                 <td>{% if paciente.convenio %}{{ paciente.convenio }}{% else %}—{% endif %}</td>
-                <td>
-                    {% if user.perfil.papel != 'auxiliar' %}<a href="{% url 'core:editar_paciente' paciente.pk %}" class="botao">Editar</a>{% endif %}
-                    {% if pode_clinico %}
-                        <a href="{% url 'core:listar_fichas_anamnese' paciente.pk %}" class="botao secundario">Anamnese</a>
-                        <a href="{% url 'core:ficha_evolucao_clinica' paciente.pk %}" class="botao secundario">Evolução</a>
-                        <a href="{% url 'core:listar_fichas_plano' paciente.pk %}" class="botao secundario">Plano</a>
-                        <a href="{% url 'core:listar_fichas_autorizacao' paciente.pk %}" class="botao secundario">Autorização</a>
-                        <a href="{% url 'core:exames:lista' paciente.pk %}" class="botao secundario">Imagens e exames</a>
-                        <a href="{% url 'core:listar_prescricoes' paciente.pk %}" class="botao secundario">Prescrições</a>
-                    {% endif %}
-                </td>
+                <td><a href="{% url 'core:ficha_paciente' paciente.pk %}" class="botao">Abrir ficha</a></td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="4">Nenhum paciente encontrado.</td>
+                <td colspan="5" class="vazio">Nenhum paciente encontrado.{% if termo %} Confira o nome ou busque pelo telefone.{% endif %}</td>
             </tr>
             {% endfor %}
         </table>
         </div>
+
+        {% if pagina.paginator.num_pages > 1 %}
+        <nav class="paginacao" aria-label="Páginas">
+            {% if pagina.has_previous %}<a class="botao secundario" href="?{% if termo %}q={{ termo|urlencode }}&amp;{% endif %}pagina={{ pagina.previous_page_number }}">‹ Anterior</a>{% endif %}
+            <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+            {% if pagina.has_next %}<a class="botao secundario" href="?{% if termo %}q={{ termo|urlencode }}&amp;{% endif %}pagina={{ pagina.next_page_number }}">Próxima ›</a>{% endif %}
+        </nav>
+        {% endif %}
 {% endblock %}

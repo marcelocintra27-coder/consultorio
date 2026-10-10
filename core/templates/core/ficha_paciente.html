@@ -1,0 +1,53 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ paciente.nome_completo }}{% endblock %}
+{% block titulo %}Ficha do paciente{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:listar_pacientes' %}" class="botao secundario">‹ Voltar para pacientes</a>
+            {% if pode_editar %}<a href="{% url 'core:editar_paciente' paciente.pk %}" class="botao secundario">Editar dados</a>{% endif %}
+        </div>
+
+        <section class="ficha-cabecalho" aria-labelledby="titulo-paciente">
+            <h2 id="titulo-paciente">{{ paciente.nome_completo }}</h2>
+            <p class="ficha-identidade">
+                {% if idade is not None %}{{ idade }} anos · {% endif %}nasc. {{ paciente.data_nascimento|date:"d/m/Y" }}
+                · {% if paciente.convenio %}{{ paciente.convenio }}{% else %}Particular{% endif %}
+            </p>
+            <p>Telefone: {{ paciente.telefone|default:"—" }}{% if paciente.whatsapp %} · WhatsApp: {{ paciente.whatsapp }}{% endif %}</p>
+            <p><strong>Próxima consulta:</strong>
+                {% if proxima %}{{ proxima.data|date:"d/m/Y" }} às {{ proxima.hora_inicio|time:"H:i" }}{% if proxima.dentista %} · {{ proxima.dentista.nome_completo }}{% endif %}
+                <a href="{% url 'core:listar_consultas' %}?data={{ proxima.data|date:'Y-m-d' }}">ver na agenda</a>
+                {% else %}nenhuma marcada{% endif %}
+            </p>
+        </section>
+
+        {% if pode_clinico %}
+        <div class="ficha-blocos">
+            <section class="ficha-bloco" aria-labelledby="titulo-prontuario">
+                <h3 id="titulo-prontuario">Prontuário</h3>
+                <ul class="ficha-itens">
+                    <li><a href="{% url 'core:listar_fichas_anamnese' paciente.pk %}">Anamnese</a> <span class="resumo">questionário de saúde</span></li>
+                    <li><a href="{% url 'core:ficha_evolucao_clinica' paciente.pk %}">Evolução</a> <span class="resumo">o que foi feito em cada atendimento</span></li>
+                    <li><a href="{% url 'core:listar_fichas_plano' paciente.pk %}">Plano e consentimento</a> <span class="resumo">tratamento combinado e assinado</span></li>
+                    <li><a href="{% url 'core:listar_prescricoes' paciente.pk %}">Receitas e prescrições</a></li>
+                </ul>
+            </section>
+            <section class="ficha-bloco" aria-labelledby="titulo-imagens">
+                <h3 id="titulo-imagens">Imagens e documentos</h3>
+                <ul class="ficha-itens">
+                    <li><a href="{% url 'core:exames:lista' paciente.pk %}">Imagens e exames</a> <span class="resumo">raio-X, fotos e laudos</span></li>
+                </ul>
+            </section>
+            <section class="ficha-bloco" aria-labelledby="titulo-custos">
+                <h3 id="titulo-custos">Custos</h3>
+                <ul class="ficha-itens">
+                    <li><a href="{% url 'core:listar_fichas_autorizacao' paciente.pk %}">Autorização de custos</a> <span class="resumo">itens que o paciente aprova antes</span></li>
+                </ul>
+            </section>
+        </div>
+        {% else %}
+        <p class="resumo">Para marcar consulta, use a <a href="{% url 'core:listar_consultas' %}">Agenda</a>.{% if pode_editar %} Para corrigir telefone ou endereço, use “Editar dados”.{% endif %}</p>
+        {% endif %}
+{% endblock %}

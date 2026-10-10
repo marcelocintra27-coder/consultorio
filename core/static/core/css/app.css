@@ -1372,3 +1372,85 @@ body.modo-simples td {
     margin: 6px 0 10px;
     padding-left: 20px;
 }
+
+/* Lista e ficha do paciente */
+.lista-pacientes .nome-paciente {
+    color: var(--cor-texto);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.paginacao {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.ficha-cabecalho {
+    background: var(--cor-superficie);
+    border-radius: var(--raio-card);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    padding: 20px;
+    margin: 12px 0 20px;
+}
+
+.ficha-cabecalho h2 {
+    margin: 0 0 4px;
+    font-size: 22px;
+}
+
+.ficha-cabecalho p {
+    margin: 4px 0;
+}
+
+.ficha-identidade {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--cor-texto-secundario);
+}
+
+.ficha-blocos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    align-items: start;
+}
+
+.ficha-bloco {
+    background: var(--cor-superficie);
+    border-radius: var(--raio-card);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    padding: 18px 20px;
+}
+
+.ficha-bloco h3 {
+    margin: 0 0 8px;
+    color: var(--cor-primaria);
+}
+
+.ficha-itens {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.ficha-itens li {
+    padding: 10px 0;
+    border-top: 1px solid var(--cor-borda);
+}
+
+.ficha-itens li:first-child {
+    border-top: 0;
+}
+
+.ficha-itens a {
+    color: var(--cor-primaria);
+    font-weight: 600;
+    display: block;
+}
+
+.ficha-cabecalho a {
+    color: var(--cor-primaria);
+    font-weight: 600;
+}
