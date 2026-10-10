@@ -72,3 +72,63 @@ class ListaEFichaPacienteTests(TestCase):
         PerfilUsuario.objects.create(usuario=usuario, papel=PerfilUsuario.Papel.DENTISTA, dentista=outra)
         self.client.force_login(usuario)
         self.assertEqual(self.client.get(self.ficha).status_code, 404)
+
+
+@override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
+class PendenciasFichaTests(TestCase):
+    def setUp(self):
+        from decimal import Decimal
+        from .models import FichaCadastroAnamnese, Procedimento, LancamentoAtendimento
+        sala = Sala.objects.create(nome='Sala P')
+        self.dentista = Dentista.objects.create(nome_completo='Dra. P', sala=sala)
+        self.paciente = Paciente.objects.create(
+            nome_completo='Paciente Pendente', data_nascimento=date(1990, 1, 1), telefone='62999990000',
+        )
+        self.ficha_url = reverse('core:ficha_paciente', args=[self.paciente.pk])
+        self.admin = User.objects.create_superuser('admin_pend', password='x')
+        self.secretaria = User.objects.create_user('sec_pend', password='x')
+        PerfilUsuario.objects.create(usuario=self.secretaria, papel=PerfilUsuario.Papel.SECRETARIA)
+        FichaCadastroAnamnese.objects.create(
+            paciente=self.paciente, tipo='hof', status='aguardando_dentista',
+            nome_completo='Paciente Pendente', data_nascimento=date(1990, 1, 1), cpf='',
+            telefone='62999990000', alergia='sim', alergia_qual='dipirona',
+        )
+        consulta = Consulta.objects.create(
+            paciente=self.paciente, dentista=self.dentista, data=date(2026, 10, 1),
+            hora_inicio=time(9), hora_fim=time(10), status='realizada',
+        )
+        proc = Procedimento.objects.create(dentista=self.dentista, nome='Limpeza')
+        LancamentoAtendimento.objects.create(
+            consulta=consulta, procedimento=proc, nome_procedimento='Limpeza',
+            dentista=self.dentista, particular=True, valor_tabela=Decimal('120'),
+            percentual_desconto=Decimal('0'), valor_final=Decimal('120'),
+            tipo='atendimento', cadastrado_por=self.admin,
+        )
+
+    def test_admin_ve_alergia_assinatura_valor_e_cadastro(self):
+        self.client.force_login(self.admin)
+        resposta = self.client.get(self.ficha_url)
+        self.assertContains(resposta, 'ALERGIA:</strong> dipirona')
+        self.assertContains(resposta, 'Anamnese HOF: falta a assinatura do dentista.')
+        self.assertContains(resposta, 'R$ 120,00 em aberto da consulta de 01/10/2026.')
+        self.assertContains(resposta, 'Cadastro sem CPF')
+        self.assertContains(resposta, 'Sem WhatsApp no cadastro')
+
+    def test_secretaria_ve_so_o_que_e_do_cadastro(self):
+        self.client.force_login(self.secretaria)
+        resposta = self.client.get(self.ficha_url)
+        self.assertNotContains(resposta, 'dipirona')
+        self.assertNotContains(resposta, 'Anamnese HOF')
+        self.assertNotContains(resposta, 'em aberto')
+        self.assertContains(resposta, 'Cadastro sem CPF')
+
+    def test_consulta_paga_nao_aparece_como_pendencia(self):
+        Consulta.objects.update(pago=True)
+        self.client.force_login(self.admin)
+        self.assertNotContains(self.client.get(self.ficha_url), 'em aberto')
+
+    def test_alergia_nao_aparece_se_a_anamnese_ainda_e_rascunho(self):
+        from .models import FichaCadastroAnamnese
+        FichaCadastroAnamnese.objects.update(status='rascunho')
+        self.client.force_login(self.admin)
+        self.assertNotContains(self.client.get(self.ficha_url), 'ALERGIA')

@@ -23,6 +23,21 @@
             </p>
         </section>
 
+        {% if alergia %}
+        <div class="alerta-alergia" role="alert"><strong>⚠ ALERGIA:</strong> {{ alergia }} <span>(informado na anamnese)</span></div>
+        {% endif %}
+
+        {% if pendencias %}
+        <section class="ficha-pendencias" aria-labelledby="titulo-pendencias">
+            <h3 id="titulo-pendencias">O que falta fazer</h3>
+            <ul>
+                {% for item in pendencias %}
+                <li><span>{{ item.texto }}</span> <a href="{{ item.link }}" class="botao secundario">{{ item.acao }}</a></li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
         {% if pode_clinico %}
         <div class="ficha-blocos">
             <section class="ficha-bloco" aria-labelledby="titulo-prontuario">

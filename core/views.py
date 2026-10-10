@@ -360,12 +360,23 @@ def ficha_paciente(request, pk):
             .order_by('data', 'hora_inicio'),
         ).first()
     )
+    from .ficha_paciente import alerta_alergia, pendencias_paciente
+
+    pode_clinico = _pode_clinico(request.user)
+    pode_editar = usuario_pode_editar_cadastro_paciente(request.user, paciente)
     return render(request, 'core/ficha_paciente.html', {
         'paciente': paciente,
         'idade': idade_em_anos(paciente.data_nascimento, hoje),
         'proxima': proxima,
-        'pode_editar': usuario_pode_editar_cadastro_paciente(request.user, paciente),
-        'pode_clinico': _pode_clinico(request.user),
+        'pode_editar': pode_editar,
+        'pode_clinico': pode_clinico,
+        'alergia': alerta_alergia(paciente) if pode_clinico else '',
+        'pendencias': pendencias_paciente(
+            paciente,
+            pode_clinico=pode_clinico,
+            pode_financeiro=usuario_pode_financeiro(request.user),
+            pode_editar=pode_editar,
+        ),
     })
 
 _VOLTAR_DIGITALIZACAO = 'digitalizacao'
