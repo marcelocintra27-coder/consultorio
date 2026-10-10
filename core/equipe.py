@@ -5,11 +5,11 @@ função dele no sistema. Antes eram duas telas técnicas separadas, e esquecer 
 segunda deixava a pessoa sem enxergar nada.
 """
 import logging
+import re
 
 from django import forms
 from django.contrib import messages
 from django.contrib.auth import get_user_model, password_validation
-from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Prefetch
@@ -19,6 +19,7 @@ from django.views.decorators.http import require_http_methods
 
 from locacao.models import Dentista, PerfilUsuario, TurnoLocacao
 
+from .backends import normalizar_usuario
 from .permissoes import exige_financeiro
 from .troca_senha import mensagens_da_validacao
 
@@ -87,7 +88,7 @@ class NovoFuncionarioForm(_FuncaoMixin, _SenhaMixin, forms.Form):
     )
     usuario = forms.CharField(
         label='Nome para entrar no sistema', max_length=150,
-        help_text='Uma palavra só, sem espaço e sem acento. Ex.: renata',
+        help_text='Uma palavra só, sem espaço. Ex.: renata. Acento e maiúscula são ignorados ao entrar.',
         widget=forms.TextInput(attrs={'autocomplete': 'off', 'autocapitalize': 'none'}),
     )
     senha = _campo_senha('Senha provisória')
@@ -98,14 +99,13 @@ class NovoFuncionarioForm(_FuncaoMixin, _SenhaMixin, forms.Form):
         self.fields['dentista'].queryset = _dentistas_ativas()
 
     def clean_usuario(self):
-        usuario = self.cleaned_data['usuario'].strip()
+        # Guarda sempre sem acento e em minúsculas: "Recepção" vira "recepcao".
+        usuario = normalizar_usuario(self.cleaned_data['usuario'])
         if ' ' in usuario:
             raise ValidationError('Não use espaço. Ex.: renata ou renata.silva')
-        try:
-            UnicodeUsernameValidator()(usuario)
-        except ValidationError:
+        if not re.fullmatch(r'[a-z0-9._-]+', usuario):
             raise ValidationError('Use só letras, números e . _ - (sem espaço).')
-        if User.objects.filter(username__iexact=usuario).exists():
+        if any(normalizar_usuario(nome) == usuario for nome in User.objects.values_list('username', flat=True)):
             raise ValidationError('Esse nome já é usado por outra pessoa. Escolha outro.')
         return usuario
 

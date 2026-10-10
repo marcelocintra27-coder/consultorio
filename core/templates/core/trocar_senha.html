@@ -8,7 +8,10 @@
 <section class="secao">
     <h2>Trocar minha senha</h2>
     {% if obrigar_troca %}
-    <p class="mensagem error">{{ aviso_troca_obrigatoria }}</p>
+    <div class="mensagem success" role="status">
+        <strong>Você entrou.</strong> Falta só um passo: criar a sua senha.<br>
+        Em <strong>senha atual</strong>, digite a senha provisória que você recebeu. Depois, escolha a sua senha nova e repita.
+    </div>
     {% endif %}
     <form method="post" class="form-cartao">
         {% csrf_token %}

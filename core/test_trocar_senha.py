@@ -109,7 +109,7 @@ class TrocarSenhaTests(TestCase):
         self.assertContains(pagina, 'senha nova')
         self.assertContains(pagina, 'repetir senha nova')
         self.assertContains(pagina, 'Salvar nova senha')
-        self.assertNotContains(pagina, 'Por segurança, crie a sua própria senha')
+        self.assertNotContains(pagina, 'Falta só um passo: criar a sua senha')
 
     def test_admin_redefine_senha_de_outro_marca_obrigacao(self):
         self.assertFalse(self.perfil.deve_trocar_senha)
@@ -180,7 +180,7 @@ class TrocarSenhaTests(TestCase):
             )
             self.assertContains(
                 resposta,
-                'Por segurança, crie a sua própria senha antes de continuar.',
+                'Falta só um passo: criar a sua senha.',
             )
         pagina = self.client.get(self.troca)
         self.assertEqual(pagina.status_code, 200)
@@ -211,7 +211,7 @@ class TrocarSenhaTests(TestCase):
         self.assertEqual(self.client.get(self.agenda).status_code, 200)
         self.assertNotContains(
             self.client.get(self.inicio),
-            'Por segurança, crie a sua própria senha antes de continuar.',
+            'Falta só um passo: criar a sua senha.',
         )
 
     def test_usuario_nao_marcado_nao_e_afetado(self):
@@ -223,7 +223,7 @@ class TrocarSenhaTests(TestCase):
         self.assertEqual(self.client.get(self.inicio).status_code, 200)
         self.assertNotContains(
             self.client.get(self.inicio),
-            'Por segurança, crie a sua própria senha antes de continuar.',
+            'Falta só um passo: criar a sua senha.',
         )
 
     def test_registro_de_acesso_e_alerta_fora_do_horario_continuam(self):
