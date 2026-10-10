@@ -8,43 +8,67 @@
         <div class="acoes">
             <a href="{% url 'core:administracao' %}" class="botao secundario">Voltar</a>
             <a href="{% url 'core:novo_funcionario' %}" class="botao">+ Novo funcionário</a>
-            <a href="{% url 'locacao:cadastrar_dentista' %}" class="botao secundario">+ Nova dentista</a>
         </div>
-        <p class="resumo">Todo mundo que trabalha na clínica. A dentista é cadastrada uma vez (sala ou turnos); para ela entrar no sistema, crie também o acesso.</p>
 
-        <h2 class="secao-pagina">Dentistas</h2>
+        <div class="explica-locacao">
+            <p><span class="selo-equipe">Titular</span> é dona de uma sala e atende nela.</p>
+            <p><span class="selo-equipe selo-locataria">Locatária</span> não tem sala: aluga dias e horários na sala de uma titular e paga o aluguel direto a ela.</p>
+        </div>
+
+        <div class="titulo-com-acao">
+            <h2 class="secao-pagina">Dentistas titulares <span class="resumo">(donas de sala)</span></h2>
+            <a href="{% url 'locacao:cadastrar_dentista' %}?tipo=titular" class="botao secundario">+ Nova titular</a>
+        </div>
         <div class="tabela-wrap">
         <table class="tabela-equipe">
             <tr>
                 <th>Nome</th>
-                <th>Como trabalha</th>
+                <th>Sala</th>
+                <th>Quem aluga a sala dela</th>
                 <th>Acesso ao sistema</th>
                 <th></th>
             </tr>
-            {% for dentista in dentistas %}
+            {% for dentista in titulares %}
             <tr>
                 <td class="nome-equipe">{{ dentista.nome_completo }}</td>
+                <td>{{ dentista.sala|default:"—" }}</td>
                 <td>
-                    {% if dentista.eh_locataria %}
-                    <span class="selo-equipe selo-locataria">Locatária</span>
-                    <div class="resumo">{{ dentista.resumo_turnos|default:"Nenhum turno cadastrado" }}</div>
-                    {% else %}
-                    <span class="selo-equipe">Titular</span>
-                    <div class="resumo">{% if dentista.sala %}{{ dentista.sala }}{% else %}Sem sala{% endif %}</div>
-                    {% endif %}
+                    {% for aluguel in dentista.alugueis %}
+                    <div><strong>{{ aluguel.locataria.nome_completo }}</strong> <span class="resumo">{{ aluguel.texto }}</span></div>
+                    {% empty %}<span class="resumo">Ninguém</span>{% endfor %}
                 </td>
-                <td>
-                    {% for perfil in dentista.acessos %}
-                    <div>{{ perfil.usuario.username }}{% if not perfil.usuario.is_active %} <span class="resumo">(desligado)</span>{% endif %}</div>
-                    {% empty %}
-                    <span class="resumo">Sem acesso</span>
-                    <div><a href="{% url 'core:novo_funcionario' %}?funcao=dentista&amp;dentista={{ dentista.pk }}">Criar acesso</a></div>
-                    {% endfor %}
-                </td>
+                <td>{% include "core/includes/acesso_dentista.html" %}</td>
                 <td><a href="{% url 'locacao:editar_dentista' dentista.pk %}" class="botao">Abrir</a></td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="vazio">Nenhuma dentista cadastrada.</td></tr>
+            <tr><td colspan="5" class="vazio">Nenhuma titular cadastrada.</td></tr>
+            {% endfor %}
+        </table>
+        </div>
+
+        <div class="titulo-com-acao">
+            <h2 class="secao-pagina">Dentistas locatárias <span class="resumo">(alugam horários)</span></h2>
+            <a href="{% url 'locacao:cadastrar_dentista' %}?tipo=locataria" class="botao secundario">+ Nova locatária</a>
+        </div>
+        <div class="tabela-wrap">
+        <table class="tabela-equipe">
+            <tr>
+                <th>Nome</th>
+                <th>Aluga de quem</th>
+                <th>Dias e horários</th>
+                <th>Acesso ao sistema</th>
+                <th></th>
+            </tr>
+            {% for dentista in locatarias %}
+            <tr>
+                <td class="nome-equipe">{{ dentista.nome_completo }}</td>
+                <td>{% for dona in dentista.donas %}{{ dona.nome_completo }}{% if not forloop.last %}, {% endif %}{% empty %}{% if dentista.dias %}<span class="selo-equipe selo-alerta">Sala sem titular</span>{% else %}<span class="selo-equipe selo-alerta">Sem turno</span>{% endif %}{% endfor %}</td>
+                <td>{{ dentista.dias|default:"—" }}</td>
+                <td>{% include "core/includes/acesso_dentista.html" %}</td>
+                <td><a href="{% url 'locacao:editar_dentista' dentista.pk %}" class="botao">Abrir</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="vazio">Nenhuma locatária cadastrada.</td></tr>
             {% endfor %}
         </table>
         </div>

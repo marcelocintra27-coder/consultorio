@@ -1,0 +1,6 @@
+{% for perfil in dentista.acessos %}
+<div>{{ perfil.usuario.username }}{% if not perfil.usuario.is_active %} <span class="resumo">(desligado)</span>{% endif %}</div>
+{% empty %}
+<span class="resumo">Sem acesso</span>
+<div><a href="{% url 'core:novo_funcionario' %}?funcao=dentista&amp;dentista={{ dentista.pk }}">Criar acesso</a></div>
+{% endfor %}

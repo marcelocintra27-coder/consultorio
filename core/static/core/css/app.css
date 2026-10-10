@@ -1602,8 +1602,13 @@ body.modo-simples td {
 .turno-linha:has(.turno-editar[open]) .turno-acoes { flex-basis: 100%; }
 .turno-form .grade-turno {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: 1fr;
     gap: 0 0.75rem;
+}
+@media (min-width: 900px) {
+    .turno-form .grade-turno {
+        grid-template-columns: minmax(140px, 1fr) minmax(120px, 0.8fr) minmax(120px, 0.8fr) minmax(260px, 2.2fr);
+    }
 }
 .turnos-historico { margin-top: 1rem; color: var(--cor-texto-secundario); }
 .turnos-historico summary { cursor: pointer; font-weight: 600; }
@@ -1611,3 +1616,35 @@ body.modo-simples td {
 .turno-editar[open] .rotulo-abrir { display: none; }
 .turno-editar[open] .rotulo-fechar { display: inline; }
 .turno-linha:has(.turno-editar[open]) .form-desativar-turno { display: none; }
+
+/* Titular x locatária */
+.explica-locacao {
+    margin: 0.75rem 0 1rem;
+    padding: 0.75rem 1rem;
+    border-left: 4px solid var(--cor-primaria);
+    background: var(--cor-superficie);
+    border-radius: var(--raio-controle);
+}
+.explica-locacao p { margin: 0.25rem 0; }
+.titulo-com-acao {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+}
+.titulo-com-acao h2 { margin: 0; }
+.papel-dentista {
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--raio-controle);
+    border: 1px solid var(--cor-borda);
+    background: var(--cor-superficie);
+}
+.papel-dentista.papel-locataria { border-left: 4px solid #5b3a92; }
+.papel-dentista.papel-titular { border-left: 4px solid var(--cor-primaria); }
+.papel-dentista p { margin: 0.25rem 0; }
+.lista-alugueis { margin: 0.25rem 0 0; padding-left: 1.2rem; }
+.mudar-tipo { margin: 0.5rem 0 1rem; }
+.mudar-tipo > summary { cursor: pointer; color: var(--cor-texto-secundario); font-weight: 600; }

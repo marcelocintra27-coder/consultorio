@@ -54,9 +54,18 @@ def _contexto_dentista(form, titulo, dentista=None, turno_form=None, turnos_form
         # Sugere a sala que a locatária já usa, para não precisar escolher toda vez.
         salas = {turno.sala_id for turno in ativos}
         turno_form = TurnoLocacaoForm(initial={'sala': salas.pop()} if len(salas) == 1 else None)
+    alugueis, donas = [], []
+    if dentista and dentista.pk:
+        from .relacoes import relacoes_de_locacao
+
+        por_titular, por_locataria = relacoes_de_locacao()
+        alugueis = por_titular.get(dentista.pk, [])
+        donas = por_locataria.get(dentista.pk, [])
     return {
         'form': form,
         'titulo': titulo,
+        'alugueis': alugueis,
+        'donas': donas,
         'dentista': dentista if dentista and dentista.pk else None,
         'eh_locataria': eh_locataria,
         'turno_form': turno_form,
@@ -88,10 +97,18 @@ def listar_dentistas(request):
     })
 
 
+TITULOS_NOVA = {
+    Dentista.Tipo.TITULAR: 'Nova dentista titular',
+    Dentista.Tipo.LOCATARIA: 'Nova dentista locatária',
+}
+
+
 @exige_financeiro
 def cadastrar_dentista(request):
+    fonte = request.POST if request.method == 'POST' else request.GET
+    tipo_fixo = fonte.get('tipo') if fonte.get('tipo') in TITULOS_NOVA else None
     if request.method == 'POST':
-        form = DentistaForm(request.POST)
+        form = DentistaForm(request.POST, tipo_fixo=tipo_fixo)
         if form.is_valid():
             dentista = form.save()
             if dentista.tipo == Dentista.Tipo.LOCATARIA:
@@ -104,12 +121,10 @@ def cadastrar_dentista(request):
             messages.success(request, f'{dentista.nome_completo} cadastrada.')
             return redirect('core:equipe')
     else:
-        form = DentistaForm()
-    return render(
-        request,
-        'locacao/form_dentista.html',
-        _contexto_dentista(form, 'Nova dentista'),
-    )
+        form = DentistaForm(tipo_fixo=tipo_fixo)
+    contexto = _contexto_dentista(form, TITULOS_NOVA.get(tipo_fixo, 'Nova dentista'))
+    contexto['tipo_fixo'] = tipo_fixo
+    return render(request, 'locacao/form_dentista.html', contexto)
 
 
 @exige_financeiro

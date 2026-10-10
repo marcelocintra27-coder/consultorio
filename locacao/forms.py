@@ -28,8 +28,13 @@ class DentistaForm(forms.ModelForm):
             'valor_hora': forms.NumberInput(attrs={'step': '0.01'}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, tipo_fixo=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if tipo_fixo in Dentista.Tipo.values:
+            # Cadastro novo: quem clicou em "Nova titular" ou "Nova locatária"
+            # já escolheu; o campo não aparece para não confundir.
+            self.fields['tipo'].initial = tipo_fixo
+            self.fields['tipo'].widget = forms.HiddenInput()
         ocupadas = Dentista.objects.values_list('sala_id', flat=True)
         if self.instance.pk:
             ocupadas = Dentista.objects.exclude(
@@ -42,6 +47,7 @@ class DentistaForm(forms.ModelForm):
             'na sala de outra dentista.'
         )
         self.fields['sala'].label = 'Sala própria'
+        self.fields['sala'].help_text = 'A sala onde ela atende.'
         self.fields['valor_hora'].label = 'Valor da hora (opcional)'
         self.fields['valor_hora'].help_text = (
             'Só serve para sugerir o preço de procedimentos. Pode deixar 0.'
@@ -50,6 +56,20 @@ class DentistaForm(forms.ModelForm):
         self.fields['sala'].queryset = Sala.objects.filter(
             ativa=True,
         ).exclude(pk__in=ocupadas)
+
+    def clean_nome_completo(self):
+        nome = ' '.join((self.cleaned_data.get('nome_completo') or '').split())
+        iguais = [
+            outro for outro in Dentista.objects.filter(ativo=True).exclude(pk=self.instance.pk)
+            .only('nome_completo')
+            if ' '.join(outro.nome_completo.split()).casefold() == nome.casefold()
+        ]
+        if iguais:
+            raise forms.ValidationError(
+                'Já existe uma dentista com este nome. Use o nome completo, com '
+                'sobrenome, para a recepção não confundir na agenda.'
+            )
+        return nome
 
     def clean(self):
         dados = super().clean()
@@ -134,6 +154,17 @@ class TurnoLocacaoForm(forms.ModelForm):
         if self.instance.pk and self.instance.sala_id:
             salas = salas | Sala.objects.filter(pk=self.instance.sala_id)
         self.fields['sala'].queryset = salas.distinct().order_by('nome')
+        from .relacoes import rotulo_sala
+
+        titular_da_sala = {
+            dentista.sala_id: dentista
+            for dentista in Dentista.objects.filter(
+                ativo=True, tipo=Dentista.Tipo.TITULAR, sala__isnull=False,
+            )
+        }
+        self.fields['sala'].label_from_instance = (
+            lambda sala: rotulo_sala(sala, titular_da_sala)
+        )
 
 
 class DespesaForm(forms.ModelForm):

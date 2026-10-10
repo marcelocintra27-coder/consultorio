@@ -188,8 +188,25 @@ def equipe(request):
             'editavel': not usuario.is_superuser and usuario.pk != request.user.pk,
         })
     pessoas.sort(key=lambda pessoa: (not pessoa['usuario'].is_active, pessoa['nome'].lower()))
+
+    from locacao.relacoes import relacoes_de_locacao
+
+    alugueis, donas = relacoes_de_locacao()
+    titulares, locatarias = [], []
+    for dentista in dentistas:
+        if dentista.eh_locataria:
+            dentista.donas = donas.get(dentista.pk, [])
+            dentista.dias = '; '.join(
+                turno.rotulo_curto()
+                for turno in sorted(dentista.turnos.all(), key=lambda t: (t.dia_semana, t.hora_inicio))
+            )
+            locatarias.append(dentista)
+        else:
+            dentista.alugueis = alugueis.get(dentista.pk, [])
+            titulares.append(dentista)
     return render(request, 'core/equipe.html', {
-        'dentistas': dentistas,
+        'titulares': titulares,
+        'locatarias': locatarias,
         'pessoas': pessoas,
     })
 

@@ -9,21 +9,48 @@
             <a href="{% url 'core:equipe' %}" class="botao secundario">Voltar</a>
         </div>
 
-        <form method="post" class="form-cartao">
+        {% if dentista %}
+        <div class="papel-dentista papel-{{ dentista.tipo }}">
+            {% if dentista.eh_locataria %}
+            <p><span class="selo-equipe selo-locataria">Locatária</span> Não tem sala própria. Aluga dias e horários na sala de uma titular.</p>
+            <p><strong>Aluga de:</strong> {% for dona in donas %}{{ dona.nome_completo }}{% if not forloop.last %}, {% endif %}{% empty %}{% if tem_turno_ativo %}a sala dos turnos não tem titular.{% else %}ninguém ainda — cadastre os turnos abaixo.{% endif %}{% endfor %}</p>
+            {% else %}
+            <p><span class="selo-equipe">Titular</span> Dona da sala <strong>{{ dentista.sala|default:"(sem sala)" }}</strong>. Atende na sala dela.</p>
+            <p><strong>Quem aluga esta sala:</strong>
+            {% if alugueis %}</p>
+            <ul class="lista-alugueis">
+                {% for aluguel in alugueis %}
+                <li><a href="{% url 'locacao:editar_dentista' aluguel.locataria.pk %}">{{ aluguel.locataria.nome_completo }}</a> — {{ aluguel.texto }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}ninguém.</p>{% endif %}
+            {% endif %}
+        </div>
+        {% elif tipo_fixo == 'locataria' %}
+        <p class="resumo">A <strong>locatária</strong> não tem sala própria: aluga dias e horários na sala de uma titular. Depois de salvar, você cadastra os dias e horários dela.</p>
+        {% elif tipo_fixo == 'titular' %}
+        <p class="resumo">A <strong>titular</strong> é dona de uma sala e atende nela.</p>
+        {% endif %}
+
+        <form method="post" class="form-cartao" id="form-dentista">
             {% csrf_token %}
             {% if form.non_field_errors %}
-            <div class="erro">{{ form.non_field_errors }}</div>
+            <div class="mensagem error" role="alert">{{ form.non_field_errors }}</div>
             {% endif %}
-            {% for field in form %}
-            <div class="campo" id="bloco-{{ field.name }}">
-                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                {{ field }}
-                {% if field.help_text %}<p class="resumo">{{ field.help_text }}</p>{% endif %}
-                {% if field.errors %}
-                    <div class="erro">{{ field.errors }}</div>
-                {% endif %}
-            </div>
-            {% endfor %}
+            {% include "core/includes/campo_equipe.html" with field=form.nome_completo %}
+            {% if tipo_fixo %}
+                {{ form.tipo }}
+            {% elif dentista %}
+            <details class="mudar-tipo"{% if form.tipo.errors %} open{% endif %}>
+                <summary>Precisa mudar como ela trabalha (titular ↔ locatária)?</summary>
+                <p class="resumo">É raro. O sistema não deixa mudar se a sala dela estiver alugada ou se ela tiver consultas marcadas.</p>
+                {% include "core/includes/campo_equipe.html" with field=form.tipo %}
+            </details>
+            {% else %}
+                {% include "core/includes/campo_equipe.html" with field=form.tipo %}
+            {% endif %}
+            {% include "core/includes/campo_equipe.html" with field=form.sala %}
+            {% include "core/includes/campo_equipe.html" with field=form.valor_hora %}
             <button type="submit" class="botao">Salvar</button>
         </form>
 
