@@ -184,6 +184,21 @@ from .permissoes import (
     usuario_pode_alterar_status_consulta,
 )
 
+# Botões de um clique na tela inicial da recepção (só aparecem se permitidos).
+ACOES_RAPIDAS_RECEPCAO = [
+    (Consulta.Status.CONFIRMADA, 'Confirmou'),
+    (Consulta.Status.PRESENTE, 'Chegou'),
+    (Consulta.Status.FALTOU, 'Faltou'),
+]
+RESUMO_DO_DIA = [
+    (Consulta.Status.CONFIRMADA, 'confirmada', 'confirmadas'),
+    (Consulta.Status.PRESENTE, 'chegou', 'chegaram'),
+    (Consulta.Status.REALIZADA, 'atendida', 'atendidas'),
+    (Consulta.Status.FALTOU, 'faltou', 'faltaram'),
+    (Consulta.Status.CANCELADA, 'cancelada', 'canceladas'),
+]
+
+
 def inicio(request):
     from .alerta_horario import contagem_entradas_fora_do_horario
 
@@ -212,21 +227,26 @@ def inicio(request):
             .select_related('paciente', 'dentista')
             .order_by('hora_inicio'),
         ))
+        consultas_hoje = list(consultas_hoje)
+        for consulta in consultas_hoje:
+            permitidos = status_consulta_permitidos(request.user, consulta)
+            consulta.acoes_rapidas = [
+                (status, rotulo) for status, rotulo in ACOES_RAPIDAS_RECEPCAO
+                if status in permitidos
+            ]
+        contagem = {}
+        for consulta in consultas_hoje:
+            contagem[consulta.status] = contagem.get(consulta.status, 0) + 1
         return render(request, 'core/inicio.html', {
             'alertas_fora_do_horario': alertas_fora_do_horario,
             'dashboard_secretaria': True,
             'hoje': hoje,
             'consultas_hoje': consultas_hoje,
-            'total_consultas_hoje': consultas_hoje.count(),
-            'consultas_agendadas_hoje': consultas_hoje.filter(
-                status=Consulta.Status.AGENDADA
-            ).count(),
-            'consultas_realizadas_hoje': consultas_hoje.filter(
-                status=Consulta.Status.REALIZADA
-            ).count(),
-            'consultas_canceladas_hoje': consultas_hoje.filter(
-                status=Consulta.Status.CANCELADA
-            ).count(),
+            'total_consultas_hoje': len(consultas_hoje),
+            'resumo_hoje': [
+                (singular if contagem.get(status, 0) == 1 else plural, contagem.get(status, 0))
+                for status, singular, plural in RESUMO_DO_DIA
+            ],
         })
     if (
         perfil
@@ -2379,6 +2399,7 @@ def alterar_status_consulta(request, pk):
         instance=consulta,
         status_permitidos=status_permitidos,
     )
+    voltar_inicio = request.POST.get('voltar') == 'inicio'
     if form.is_valid():
         consulta.save(update_fields=['status'])
         _registrar_auditoria(
@@ -2386,6 +2407,15 @@ def alterar_status_consulta(request, pk):
             request.user,
             f'status alterado para {consulta.get_status_display()}',
         )
+        if voltar_inicio:
+            messages.success(
+                request,
+                f'{consulta.paciente.nome_completo}: {consulta.get_status_display()}.',
+            )
+    elif voltar_inicio:
+        messages.error(request, 'Não foi possível mudar a situação desta consulta.')
+    if voltar_inicio:
+        return redirect('core:inicio')
     return redirect('core:ficha_consulta', pk=consulta.pk)
 
 

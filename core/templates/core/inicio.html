@@ -52,91 +52,64 @@
         </div>
     </section>
     {% elif dashboard_secretaria %}
-    <section class="secao dashboard-secretaria" aria-labelledby="titulo-dashboard-secretaria">
-        <h2 id="titulo-dashboard-secretaria">Agenda de hoje</h2>
-        <p class="subtitulo">Acompanhe a operação do dia e acesse as ações mais frequentes.</p>
-
-        <div class="cards dashboard-indicadores">
-            <article class="card card-indicador">
-                <h3>Consultas do dia</h3>
-                <p class="numero-indicador">{{ total_consultas_hoje }}</p>
-                <p>Total previsto para {{ hoje|date:"d/m/Y" }}.</p>
-            </article>
-            <article class="card card-indicador">
-                <h3>Agendadas</h3>
-                <p class="numero-indicador">{{ consultas_agendadas_hoje }}</p>
-                <p>Consultas aguardando atendimento.</p>
-            </article>
-            <article class="card card-indicador">
-                <h3>Realizadas</h3>
-                <p class="numero-indicador">{{ consultas_realizadas_hoje }}</p>
-                <p>Atendimentos concluídos hoje.</p>
-            </article>
-            <article class="card card-indicador">
-                <h3>Canceladas</h3>
-                <p class="numero-indicador">{{ consultas_canceladas_hoje }}</p>
-                <p>Cancelamentos registrados hoje.</p>
-            </article>
-        </div>
-    </section>
-
-    <section class="secao" aria-labelledby="titulo-atalhos-secretaria">
-        <h2 id="titulo-atalhos-secretaria">Atalhos de operação</h2>
+    <section class="secao inicio-recepcao" aria-labelledby="titulo-hoje">
+        <h2 id="titulo-hoje">Hoje, {{ hoje|date:"l, d/m/Y" }}</h2>
         <div class="acoes" aria-label="Ações rápidas">
-            <a href="{% url 'core:agendar_consulta' %}" class="botao">Agendar consulta</a>
-            <a href="{% url 'core:listar_consultas' %}" class="botao secundario">Ver agenda</a>
-            <a href="{% url 'core:cadastrar_paciente' %}" class="botao secundario">Cadastrar paciente</a>
-            <a href="{% url 'core:listar_pacientes' %}" class="botao secundario">Buscar pacientes</a>
+            <a href="{% url 'core:agendar_consulta' %}" class="botao">+ Agendar consulta</a>
+            <a href="{% url 'core:listar_pacientes' %}" class="botao secundario">Buscar paciente</a>
+            <a href="{% url 'core:cadastrar_paciente' %}" class="botao secundario">+ Novo paciente</a>
+            <a href="{% url 'core:listar_consultas' %}?data={{ hoje|date:'Y-m-d' }}" class="botao secundario">Ver agenda completa</a>
         </div>
     </section>
 
-    <section class="secao" aria-labelledby="titulo-digitalizar-secretaria">
-        <h2 id="titulo-digitalizar-secretaria">Fichas antigas</h2>
-        <div class="cards">
-            <div class="card">
-                <h3>Digitalizar ficha antiga</h3>
-                <p>Envio de ficha física digitalizada para revisão.</p>
-                <a href="{% url 'core:digitalizacao_upload' %}" class="botao">Acessar</a>
-            </div>
-            <div class="card">
-                <h3>Minhas fichas enviadas</h3>
-                <p>Fotos que você enviou e o que foi pedido para refazer.</p>
-                <a href="{% url 'core:listar_digitalizacoes' %}" class="botao">Acessar</a>
-            </div>
-        </div>
-    </section>
-
-    <section class="secao" aria-labelledby="titulo-proximas-consultas">
-        <h2 id="titulo-proximas-consultas">Consultas de hoje</h2>
+    <section class="secao" aria-labelledby="titulo-consultas-hoje">
+        <h2 id="titulo-consultas-hoje">Consultas de hoje</h2>
+        <p class="resumo-dia"><strong>{{ total_consultas_hoje }} marcada{{ total_consultas_hoje|pluralize }}</strong>{% for rotulo, quantidade in resumo_hoje %}{% if quantidade %} · {{ quantidade }} {{ rotulo }}{% endif %}{% endfor %}</p>
         {% if consultas_hoje %}
         <div class="tabela-wrap">
-            <table>
+            <table class="tabela-hoje">
                 <thead>
                     <tr>
                         <th scope="col">Horário</th>
                         <th scope="col">Paciente</th>
                         <th scope="col">Dentista</th>
-                        <th scope="col">Sala</th>
-                        <th scope="col">Status</th>
+                        <th scope="col">Situação</th>
+                        <th scope="col">Marcar</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for consulta in consultas_hoje %}
-                    <tr>
-                        <td>{{ consulta.hora_inicio|time:"H:i" }}</td>
+                    <tr class="linha-{{ consulta.status }}">
+                        <td class="hora-hoje">{{ consulta.hora_inicio|time:"H:i" }}</td>
                         <td><a href="{% url 'core:ficha_consulta' consulta.pk %}">{{ consulta.paciente.nome_completo }}</a></td>
-                        <td>{{ consulta.dentista|default:"Não informado" }}</td>
-                        <td>{% if consulta.sala_agenda %}{{ consulta.sala_agenda }}{% else %}—{% endif %}</td>
-                        <td>{{ consulta.get_status_display }}</td>
+                        <td>{{ consulta.dentista|default:"Não informado" }}{% if consulta.sala_agenda %}<div class="resumo">{{ consulta.sala_agenda }}</div>{% endif %}</td>
+                        <td><span class="situacao situacao-{{ consulta.status }}">{{ consulta.get_status_display|capfirst }}</span></td>
+                        <td>
+                            {% if consulta.acoes_rapidas %}
+                            <div class="acoes-rapidas">
+                                {% for status, rotulo in consulta.acoes_rapidas %}
+                                <form method="post" action="{% url 'core:alterar_status_consulta' consulta.pk %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="status" value="{{ status }}">
+                                    <input type="hidden" name="voltar" value="inicio">
+                                    <button type="submit" class="botao {% if status == 'presente' %}botao-chegou{% else %}secundario{% endif %}"{% if status == 'faltou' %} onclick="return confirm('Marcar que {{ consulta.paciente.nome_completo|escapejs }} faltou?');"{% endif %}>{{ rotulo }}</button>
+                                </form>
+                                {% endfor %}
+                            </div>
+                            {% else %}<span class="resumo">—</span>{% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        <p class="resumo">Para cancelar ou remarcar, clique no nome do paciente.</p>
         {% else %}
-        <p class="vazio">Não há consultas agendadas para hoje.</p>
+        <p class="vazio">Não há consultas marcadas para hoje.</p>
         {% endif %}
     </section>
+
+    <p class="rodape-atalhos resumo">Fichas antigas: <a href="{% url 'core:digitalizacao_upload' %}">Digitalizar ficha antiga</a> · <a href="{% url 'core:listar_digitalizacoes' %}">Minhas fichas enviadas</a></p>
     {% elif dashboard_dentista %}
     {% if modo_simples and request.GET.painel != 'completo' %}
     <section class="secao" aria-labelledby="titulo-atalhos-simples">
