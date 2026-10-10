@@ -191,6 +191,9 @@
             {% if pode_lancar and lancamento_form %}
             <form method="post" action="{% url 'core:lancar_atendimento' consulta.pk %}" class="form-cartao" id="form-lancamento">
                 {% csrf_token %}
+                {% if lancamento_form.errors %}
+                <div class="mensagem error" role="alert"><strong>A cobrança ainda não foi salva.</strong> Corrija o campo marcado em vermelho abaixo e clique em “Salvar lançamento” de novo.</div>
+                {% endif %}
                 {% if request.GET.voltar == 'agenda' or request.POST.voltar == 'agenda' %}
                 <input type="hidden" name="voltar" value="agenda">
                 <p class="mensagem success">Cobrança de {{ consulta.paciente.nome_completo }}: escolha o procedimento e clique em “Salvar lançamento”. Depois você volta para a agenda.</p>
@@ -344,6 +347,10 @@
     {% endif %}
     if (tabela) tabela.addEventListener('input', recalcular);
     if (desc) desc.addEventListener('input', recalcular);
+    // Veio do "Cobrar" ou voltou com erro: leva direto ao formulário.
+    if (form.querySelector('.erro') || form.querySelector('[name="voltar"]')) {
+        form.scrollIntoView({ block: 'start' });
+    }
 })();
 </script>
 {% endif %}

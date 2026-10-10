@@ -96,3 +96,13 @@ class CobrarNaAgendaTests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'name="voltar" value="agenda"')
         self.assertFalse(LancamentoAtendimento.objects.exists())
+
+    def test_desconto_com_muitas_casas_avisa_em_portugues_simples(self):
+        self.client.force_login(self.admin)
+        resposta = self.client.post(
+            f'/consultas/{self.consulta.pk}/lancar/',
+            self._payload(percentual_desconto='0.00000', voltar='agenda'),
+        )
+        self.assertContains(resposta, 'A cobrança ainda não foi salva.')
+        self.assertContains(resposta, 'Use no máximo 2 casas depois da vírgula')
+        self.assertFalse(LancamentoAtendimento.objects.exists())

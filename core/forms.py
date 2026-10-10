@@ -762,6 +762,11 @@ class LancamentoForm(forms.Form):
         decimal_places=2,
         min_value=0,
         initial=0,
+        error_messages={
+            'max_decimal_places': 'Use no máximo 2 casas depois da vírgula (ex.: 10 ou 10,50).',
+            'max_digits': 'Desconto inválido. Use um número de 0 a 100, como 10 ou 10,50.',
+            'invalid': 'Digite só o número do desconto, como 10 ou 10,50.',
+        },
     )
     valor_final = forms.DecimalField(
         label='valor final',
