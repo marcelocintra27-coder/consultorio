@@ -36,6 +36,16 @@ class DentistaForm(forms.ModelForm):
                 pk=self.instance.pk,
             ).values_list('sala_id', flat=True)
         ocupadas = [pk for pk in ocupadas if pk]
+        self.fields['tipo'].label = 'Como trabalha na clínica'
+        self.fields['tipo'].help_text = (
+            'Titular: tem sala própria. Locatária: aluga horários (turnos) '
+            'na sala de outra dentista.'
+        )
+        self.fields['sala'].label = 'Sala própria'
+        self.fields['valor_hora'].label = 'Valor da hora (opcional)'
+        self.fields['valor_hora'].help_text = (
+            'Só serve para sugerir o preço de procedimentos. Pode deixar 0.'
+        )
         self.fields['sala'].required = False
         self.fields['sala'].queryset = Sala.objects.filter(
             ativa=True,

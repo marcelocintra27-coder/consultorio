@@ -48,13 +48,21 @@ def _contexto_dentista(form, titulo, dentista=None, turno_form=None, turnos_form
     )
     if eh_locataria and turnos_forms is None:
         turnos_forms = _formularios_turnos(dentista)
+    turnos_forms = turnos_forms or []
+    ativos = [turno for turno, _ in turnos_forms if turno.ativo]
+    if turno_form is None:
+        # Sugere a sala que a locatária já usa, para não precisar escolher toda vez.
+        salas = {turno.sala_id for turno in ativos}
+        turno_form = TurnoLocacaoForm(initial={'sala': salas.pop()} if len(salas) == 1 else None)
     return {
         'form': form,
         'titulo': titulo,
         'dentista': dentista if dentista and dentista.pk else None,
         'eh_locataria': eh_locataria,
-        'turno_form': turno_form or TurnoLocacaoForm(),
-        'turnos_forms': turnos_forms or [],
+        'turno_form': turno_form,
+        'turnos_forms': turnos_forms,
+        'tem_turno_ativo': bool(ativos),
+        'tem_turno_inativo': len(ativos) < len(turnos_forms),
     }
 
 
@@ -87,14 +95,20 @@ def cadastrar_dentista(request):
         if form.is_valid():
             dentista = form.save()
             if dentista.tipo == Dentista.Tipo.LOCATARIA:
+                messages.success(
+                    request,
+                    f'{dentista.nome_completo} cadastrada. Agora adicione os turnos dela, '
+                    'no fim desta página.',
+                )
                 return redirect('locacao:editar_dentista', pk=dentista.pk)
+            messages.success(request, f'{dentista.nome_completo} cadastrada.')
             return redirect('core:equipe')
     else:
         form = DentistaForm()
     return render(
         request,
         'locacao/form_dentista.html',
-        _contexto_dentista(form, 'Cadastrar Dentista'),
+        _contexto_dentista(form, 'Nova dentista'),
     )
 
 
@@ -113,7 +127,7 @@ def editar_dentista(request, pk):
     return render(
         request,
         'locacao/form_dentista.html',
-        _contexto_dentista(form, 'Editar Dentista', dentista),
+        _contexto_dentista(form, 'Editar dentista', dentista),
     )
 
 
@@ -137,7 +151,7 @@ def cadastrar_turno(request, pk):
         'locacao/form_dentista.html',
         _contexto_dentista(
             DentistaForm(instance=dentista),
-            'Editar Dentista',
+            'Editar dentista',
             dentista,
             turno_form=form,
         ),
@@ -169,7 +183,7 @@ def editar_turno(request, pk, turno_pk):
         'locacao/form_dentista.html',
         _contexto_dentista(
             DentistaForm(instance=dentista),
-            'Editar Dentista',
+            'Editar dentista',
             dentista,
             turnos_forms=formularios,
         ),

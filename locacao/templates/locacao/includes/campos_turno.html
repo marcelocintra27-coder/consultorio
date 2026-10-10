@@ -1,0 +1,27 @@
+<div class="grade-turno">
+    <div class="campo">
+        <label for="{{ f.dia_semana.id_for_label }}">Dia</label>
+        {{ f.dia_semana }}
+        {% if f.dia_semana.errors %}<div class="erro">{{ f.dia_semana.errors }}</div>{% endif %}
+    </div>
+    <div class="campo">
+        <label for="{{ f.hora_inicio.id_for_label }}">Início</label>
+        {{ f.hora_inicio }}
+        {% if f.hora_inicio.errors %}<div class="erro">{{ f.hora_inicio.errors }}</div>{% endif %}
+    </div>
+    <div class="campo">
+        <label for="{{ f.hora_fim.id_for_label }}">Fim</label>
+        {{ f.hora_fim }}
+        {% if f.hora_fim.errors %}<div class="erro">{{ f.hora_fim.errors }}</div>{% endif %}
+    </div>
+    <div class="campo">
+        <label for="{{ f.sala.id_for_label }}">Sala</label>
+        {{ f.sala }}
+        {% if f.sala.errors %}<div class="erro">{{ f.sala.errors }}</div>{% endif %}
+    </div>
+</div>
+<div class="campo">
+    <label for="{{ f.observacao.id_for_label }}">Observação (opcional)</label>
+    {{ f.observacao }}
+    {% if f.observacao.errors %}<div class="erro">{{ f.observacao.errors }}</div>{% endif %}
+</div>

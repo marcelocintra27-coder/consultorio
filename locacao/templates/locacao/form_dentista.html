@@ -29,56 +29,57 @@
 
         {% if eh_locataria %}
         <section class="contexto-consulta" aria-labelledby="titulo-turnos">
-            <h2 id="titulo-turnos" class="secao-pagina">Turnos</h2>
-            <p class="resumo">A locatária atende só nestes horários, na sala de cada turno. Desativar não apaga o histórico.</p>
+            <h2 id="titulo-turnos" class="secao-pagina">Turnos da semana</h2>
+            <p class="resumo">A locatária só pode ser agendada nestes horários, na sala de cada turno.</p>
 
-            {% for turno, turno_edicao in turnos_forms %}
-            <form method="post" action="{% url 'locacao:editar_turno' dentista.pk turno.pk %}" class="form-cartao">
-                {% csrf_token %}
-                <p>{% if turno.ativo %}Turno ativo{% else %}Turno inativo{% endif %}</p>
-                {% if turno_edicao.non_field_errors %}
-                <div class="erro">{{ turno_edicao.non_field_errors }}</div>
-                {% endif %}
-                {% if turno.ativo %}
-                {% for field in turno_edicao %}
-                <div class="campo">
-                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.errors %}<div class="erro">{{ field.errors }}</div>{% endif %}
-                </div>
-                {% endfor %}
-                <button type="submit" class="botao">Salvar turno</button>
-                {% else %}
-                <p>{{ turno.get_dia_semana_display }} · {{ turno.hora_inicio|time:"H:i" }}–{{ turno.hora_fim|time:"H:i" }} · {{ turno.sala }}</p>
-                {% endif %}
-            </form>
-            {% if turno.ativo %}
-            <form method="post" action="{% url 'locacao:desativar_turno' dentista.pk turno.pk %}">
-                {% csrf_token %}
-                <button type="submit" class="botao secundario">Desativar</button>
-            </form>
-            {% endif %}
-            {% empty %}
-            <p class="vazio">Nenhum turno cadastrado.</p>
-            {% endfor %}
+            <ul class="turnos-semana">
+            {% for turno, turno_edicao in turnos_forms %}{% if turno.ativo %}
+                <li class="turno-linha">
+                    <div class="turno-resumo">
+                        <span class="turno-dia">{{ turno.get_dia_semana_display|capfirst }}</span>
+                        <span class="turno-hora">{{ turno.hora_inicio|time:"H:i" }} às {{ turno.hora_fim|time:"H:i" }}</span>
+                        <span class="turno-sala">{{ turno.sala }}</span>
+                        {% if turno.observacao %}<span class="resumo">{{ turno.observacao }}</span>{% endif %}
+                    </div>
+                    <div class="turno-acoes">
+                        <details class="turno-editar"{% if turno_edicao.is_bound %} open{% endif %}>
+                            <summary class="botao secundario"><span class="rotulo-abrir">Editar</span><span class="rotulo-fechar">Fechar</span></summary>
+                            <form method="post" action="{% url 'locacao:editar_turno' dentista.pk turno.pk %}" class="turno-form">
+                                {% csrf_token %}
+                                {% if turno_edicao.non_field_errors %}<div class="mensagem error" role="alert">{{ turno_edicao.non_field_errors }}</div>{% endif %}
+                                {% include "locacao/includes/campos_turno.html" with f=turno_edicao %}
+                                <button type="submit" class="botao">Salvar turno</button>
+                            </form>
+                        </details>
+                        <form method="post" action="{% url 'locacao:desativar_turno' dentista.pk turno.pk %}" class="form-desativar-turno">
+                            {% csrf_token %}
+                            <button type="submit" class="botao secundario" onclick="return confirm('Desativar o turno de {{ turno.get_dia_semana_display|escapejs }}, {{ turno.hora_inicio|time:"H:i" }} às {{ turno.hora_fim|time:"H:i" }}? Consultas já marcadas não são apagadas.');">Desativar</button>
+                        </form>
+                    </div>
+                </li>
+            {% endif %}{% endfor %}
+            </ul>
+            {% if not tem_turno_ativo %}<p class="vazio">Nenhum turno ainda. Adicione o primeiro abaixo.</p>{% endif %}
 
             <h3 class="secao-pagina">Adicionar turno</h3>
-            <form method="post" action="{% url 'locacao:cadastrar_turno' dentista.pk %}" class="form-cartao">
+            <form method="post" action="{% url 'locacao:cadastrar_turno' dentista.pk %}" class="form-cartao turno-form">
                 {% csrf_token %}
-                {% if turno_form.non_field_errors %}
-                <div class="erro">{{ turno_form.non_field_errors }}</div>
-                {% endif %}
-                {% for field in turno_form %}
-                <div class="campo">
-                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.errors %}
-                        <div class="erro">{{ field.errors }}</div>
-                    {% endif %}
-                </div>
-                {% endfor %}
+                {% if turno_form.non_field_errors %}<div class="mensagem error" role="alert">{{ turno_form.non_field_errors }}</div>{% endif %}
+                {% include "locacao/includes/campos_turno.html" with f=turno_form %}
+                <p class="resumo">Dia com dois períodos (ex.: manhã e tarde)? Cadastre um turno para cada período.</p>
                 <button type="submit" class="botao">Adicionar turno</button>
             </form>
+
+            {% if tem_turno_inativo %}
+            <details class="turnos-historico">
+                <summary>Turnos desativados (histórico)</summary>
+                <ul>
+                {% for turno, turno_edicao in turnos_forms %}{% if not turno.ativo %}
+                    <li>{{ turno.get_dia_semana_display|capfirst }} · {{ turno.hora_inicio|time:"H:i" }} às {{ turno.hora_fim|time:"H:i" }} · {{ turno.sala }}</li>
+                {% endif %}{% endfor %}
+                </ul>
+            </details>
+            {% endif %}
         </section>
         {% endif %}
         <script>
