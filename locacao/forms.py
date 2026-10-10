@@ -4,7 +4,7 @@ from django import forms
 from django.utils import timezone
 
 from .models import Dentista, Despesa, DividaAvulsa, Sala, TurnoLocacao
-from core.models import ContaPagar
+from core.models import Consulta, ContaPagar
 
 
 def _queryset_dentistas(*ids_extras):
@@ -54,6 +54,12 @@ class DentistaForm(forms.ModelForm):
     def clean(self):
         dados = super().clean()
         tipo = dados.get('tipo')
+        if (
+            tipo == Dentista.Tipo.LOCATARIA
+            and self.instance.pk
+            and self.instance.tipo == Dentista.Tipo.TITULAR
+        ):
+            self._recusar_titular_virar_locataria()
         if tipo == Dentista.Tipo.LOCATARIA:
             dados['sala'] = None
             self._errors.pop('sala', None)
@@ -69,6 +75,32 @@ class DentistaForm(forms.ModelForm):
                 'Desative os turnos antes de marcar a dentista como titular.',
             )
         return dados
+
+    def _recusar_titular_virar_locataria(self):
+        """Titular só vira locatária sem sala alugada e sem consulta futura.
+
+        Sem esta trava, a sala ficaria sem dona, os turnos de quem aluga
+        ficariam soltos e as consultas marcadas perderiam a sala.
+        """
+        dentista = self.instance
+        if dentista.sala_id:
+            alugueis = TurnoLocacao.objects.filter(
+                sala_id=dentista.sala_id, ativo=True,
+            ).select_related('dentista')
+            nomes = sorted({turno.dentista.nome_completo for turno in alugueis})
+            if nomes:
+                self.add_error('tipo', (
+                    f'A sala desta dentista está alugada para {", ".join(nomes)}. '
+                    'Ela não pode virar locatária enquanto esses turnos estiverem ativos.'
+                ))
+        futuras = Consulta.objects.filter(
+            dentista=dentista, data__gte=timezone.localdate(),
+        ).exclude(status=Consulta.Status.CANCELADA).count()
+        if futuras:
+            self.add_error('tipo', (
+                f'Esta dentista tem {futuras} consulta(s) marcada(s) a partir de hoje '
+                'na sala própria. Remarque ou cancele antes de mudar para locatária.'
+            ))
 
 
 class TurnoLocacaoForm(forms.ModelForm):

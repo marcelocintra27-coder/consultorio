@@ -65,3 +65,58 @@ class TelaTurnosTests(TestCase):
         }, follow=True)
         self.assertContains(resposta, 'Agora adicione os turnos dela')
         self.assertContains(resposta, 'Como trabalha na clínica')
+
+
+class TravaTitularViraLocatariaTests(TestCase):
+    def setUp(self):
+        from datetime import date, timedelta
+
+        from django.utils import timezone
+
+        from core.models import Consulta, Paciente
+
+        self.sala = Sala.objects.create(nome='Sala Trava')
+        self.titular = Dentista.objects.create(nome_completo='Dra. Titular Trava', sala=self.sala)
+        self.locataria = Dentista.objects.create(
+            nome_completo='Dra. Inquilina Trava', tipo=Dentista.Tipo.LOCATARIA,
+        )
+        self.client.force_login(User.objects.create_superuser('admin_trava', password='x'))
+        self.url = reverse('locacao:editar_dentista', args=[self.titular.pk])
+        self.dados = {'nome_completo': 'Dra. Titular Trava', 'tipo': 'locataria', 'valor_hora': '0'}
+        self.Consulta = Consulta
+        self.paciente = Paciente.objects.create(
+            nome_completo='Paciente Trava', data_nascimento=date(1990, 1, 1), telefone='62900000000',
+        )
+        self.amanha = timezone.localdate() + timedelta(days=1)
+
+    def test_recusa_se_a_sala_esta_alugada(self):
+        TurnoLocacao.objects.create(
+            dentista=self.locataria, sala=self.sala, dia_semana=0,
+            hora_inicio=time(8), hora_fim=time(12),
+        )
+        resposta = self.client.post(self.url, self.dados)
+        self.assertContains(resposta, 'está alugada para Dra. Inquilina Trava')
+        self.titular.refresh_from_db()
+        self.assertEqual(self.titular.tipo, Dentista.Tipo.TITULAR)
+        self.assertEqual(self.titular.sala, self.sala)
+
+    def test_recusa_se_tem_consulta_futura(self):
+        self.Consulta.objects.create(
+            paciente=self.paciente, dentista=self.titular, data=self.amanha,
+            hora_inicio=time(9), hora_fim=time(10),
+        )
+        resposta = self.client.post(self.url, self.dados)
+        self.assertContains(resposta, '1 consulta(s) marcada(s)')
+        self.titular.refresh_from_db()
+        self.assertEqual(self.titular.tipo, Dentista.Tipo.TITULAR)
+
+    def test_permite_quando_nao_ha_nada_preso_a_sala(self):
+        self.Consulta.objects.create(
+            paciente=self.paciente, dentista=self.titular, data=self.amanha,
+            hora_inicio=time(9), hora_fim=time(10), status=self.Consulta.Status.CANCELADA,
+        )
+        resposta = self.client.post(self.url, self.dados)
+        self.assertEqual(resposta.status_code, 302)
+        self.titular.refresh_from_db()
+        self.assertEqual(self.titular.tipo, Dentista.Tipo.LOCATARIA)
+        self.assertIsNone(self.titular.sala)
