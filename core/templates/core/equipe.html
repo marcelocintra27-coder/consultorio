@@ -1,0 +1,80 @@
+{% extends "core/base.html" %}
+
+{% block title %}Equipe{% endblock %}
+{% block titulo %}Equipe{% endblock %}
+{% block container_class %}largo{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:administracao' %}" class="botao secundario">Voltar</a>
+            <a href="{% url 'core:novo_funcionario' %}" class="botao">+ Novo funcionário</a>
+            <a href="{% url 'locacao:cadastrar_dentista' %}" class="botao secundario">+ Nova dentista</a>
+        </div>
+        <p class="resumo">Todo mundo que trabalha na clínica. A dentista é cadastrada uma vez (sala ou turnos); para ela entrar no sistema, crie também o acesso.</p>
+
+        <h2 class="secao-pagina">Dentistas</h2>
+        <div class="tabela-wrap">
+        <table class="tabela-equipe">
+            <tr>
+                <th>Nome</th>
+                <th>Como trabalha</th>
+                <th>Acesso ao sistema</th>
+                <th></th>
+            </tr>
+            {% for dentista in dentistas %}
+            <tr>
+                <td class="nome-equipe">{{ dentista.nome_completo }}</td>
+                <td>
+                    {% if dentista.eh_locataria %}
+                    <span class="selo-equipe selo-locataria">Locatária</span>
+                    <div class="resumo">{{ dentista.resumo_turnos|default:"Nenhum turno cadastrado" }}</div>
+                    {% else %}
+                    <span class="selo-equipe">Titular</span>
+                    <div class="resumo">{% if dentista.sala %}{{ dentista.sala }}{% else %}Sem sala{% endif %}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% for perfil in dentista.acessos %}
+                    <div>{{ perfil.usuario.username }}{% if not perfil.usuario.is_active %} <span class="resumo">(desligado)</span>{% endif %}</div>
+                    {% empty %}
+                    <span class="resumo">Sem acesso</span>
+                    <div><a href="{% url 'core:novo_funcionario' %}?funcao=dentista&amp;dentista={{ dentista.pk }}">Criar acesso</a></div>
+                    {% endfor %}
+                </td>
+                <td><a href="{% url 'locacao:editar_dentista' dentista.pk %}" class="botao">Abrir</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="vazio">Nenhuma dentista cadastrada.</td></tr>
+            {% endfor %}
+        </table>
+        </div>
+
+        <h2 class="secao-pagina">Acessos ao sistema</h2>
+        <p class="resumo">Quem entra no sistema e o que pode fazer. Para alguém que saiu da clínica, abra e use “Desligar acesso”.</p>
+        <div class="tabela-wrap">
+        <table class="tabela-equipe">
+            <tr>
+                <th>Nome</th>
+                <th>Função</th>
+                <th>Trabalha com</th>
+                <th>Situação</th>
+                <th></th>
+            </tr>
+            {% for pessoa in pessoas %}
+            <tr{% if not pessoa.usuario.is_active %} class="linha-desligada"{% endif %}>
+                <td class="nome-equipe">{{ pessoa.nome }}<div class="resumo">entra como: {{ pessoa.usuario.username }}</div></td>
+                <td>{% if pessoa.funcao %}{{ pessoa.funcao }}{% else %}<span class="selo-equipe selo-alerta">Sem função</span><div class="resumo">Entra, mas não vê nada. Abra e escolha a função.</div>{% endif %}</td>
+                <td>{% if pessoa.dentista %}{{ pessoa.dentista.nome_completo }}{% else %}—{% endif %}</td>
+                <td>
+                    {% if not pessoa.usuario.is_active %}<span class="selo-equipe selo-desligado">Desligado</span>
+                    {% elif pessoa.troca_pendente %}<span class="selo-equipe selo-alerta">Ainda não criou a senha própria</span>
+                    {% else %}<span class="selo-equipe selo-ativo">Ativo</span>{% endif %}
+                </td>
+                <td>{% if pessoa.editavel %}<a href="{% url 'core:editar_funcionario' pessoa.usuario.pk %}" class="botao">Abrir</a>{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="vazio">Nenhum acesso cadastrado.</td></tr>
+            {% endfor %}
+        </table>
+        </div>
+{% endblock %}

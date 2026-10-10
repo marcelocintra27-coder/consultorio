@@ -1,5 +1,6 @@
 ﻿from django.urls import path
 from .alerta_horario import listar_entradas_fora_do_horario
+from .equipe import editar_funcionario, equipe, novo_funcionario
 from .views import (
     inicio,
     administracao,
@@ -181,6 +182,9 @@ urlpatterns = [
     ),
     path('administracao/', administracao, name='administracao'),
     path('administracao/copia-dos-arquivos/', backup_arquivos, name='backup_arquivos'),
+    path('administracao/equipe/', equipe, name='equipe'),
+    path('administracao/equipe/novo/', novo_funcionario, name='novo_funcionario'),
+    path('administracao/equipe/<int:pk>/', editar_funcionario, name='editar_funcionario'),
     path('relatorio-atividade/', relatorio_atividade, name='relatorio_atividade'),
     path('relatorio-atividade/csv/', relatorio_atividade_csv, name='relatorio_atividade_csv'),
     path(

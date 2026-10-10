@@ -453,8 +453,9 @@ class MatrizPermissoesTests(TestCase):
 
         resposta = self.client.get(administracao)
         self.assertContains(resposta, 'Administração da clínica')
-        self.assertContains(resposta, 'Usuários e permissões')
-        self.assertContains(resposta, 'Profissionais e salas')
+        self.assertContains(resposta, 'Equipe')
+        self.assertContains(resposta, reverse('core:equipe'))
+        self.assertContains(resposta, 'Salas')
         self.assertContains(resposta, 'Auditoria')
 
     def test_dashboard_da_secretaria_exibe_apenas_operacao_autorizada(self):

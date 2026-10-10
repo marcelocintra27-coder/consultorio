@@ -88,7 +88,7 @@ def cadastrar_dentista(request):
             dentista = form.save()
             if dentista.tipo == Dentista.Tipo.LOCATARIA:
                 return redirect('locacao:editar_dentista', pk=dentista.pk)
-            return redirect('locacao:listar_dentistas')
+            return redirect('core:equipe')
     else:
         form = DentistaForm()
     return render(
@@ -107,7 +107,7 @@ def editar_dentista(request, pk):
             dentista = form.save()
             if dentista.tipo == Dentista.Tipo.LOCATARIA:
                 return redirect('locacao:editar_dentista', pk=dentista.pk)
-            return redirect('locacao:listar_dentistas')
+            return redirect('core:equipe')
     else:
         form = DentistaForm(instance=dentista)
     return render(

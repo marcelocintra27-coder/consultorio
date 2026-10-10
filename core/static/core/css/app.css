@@ -1555,3 +1555,21 @@ body.modo-simples td {
     font-size: 0.8rem;
     font-weight: 600;
 }
+
+/* Equipe */
+.tabela-equipe .nome-equipe { font-weight: 600; }
+.tabela-equipe td { vertical-align: top; }
+.selo-equipe {
+    display: inline-block;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: var(--cor-thead);
+    color: var(--cor-primaria);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.selo-equipe.selo-locataria { background: #efe7fb; color: #5b3a92; }
+.selo-equipe.selo-ativo { background: #e3f4ea; color: var(--cor-sucesso); }
+.selo-equipe.selo-alerta { background: #fff4d6; color: #7a5600; }
+.selo-equipe.selo-desligado { background: #eceff1; color: var(--cor-texto-secundario); }
+.linha-desligada td { color: var(--cor-texto-secundario); }

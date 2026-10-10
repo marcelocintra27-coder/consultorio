@@ -1,0 +1,32 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Novo funcionário{% endblock %}
+{% block titulo %}Novo funcionário{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:equipe' %}" class="botao secundario">Voltar</a>
+        </div>
+        <p class="resumo">Cria o acesso de uma pessoa da clínica. Ela entra com o nome e a senha provisória e, no primeiro acesso, cria a senha dela.</p>
+
+        {% include "core/includes/resumo_erros.html" with titulo_erro="O acesso ainda não foi criado." %}
+
+        <form method="post" class="form-cartao" id="form-funcionario" autocomplete="off">
+            {% csrf_token %}
+            {% include "core/includes/campo_equipe.html" with field=form.nome %}
+            {% include "core/includes/campo_equipe.html" with field=form.funcao extra_class="grupo-opcoes" %}
+            {% include "core/includes/campo_equipe.html" with field=form.dentista %}
+            <h2 class="secao-pagina">Acesso</h2>
+            {% include "core/includes/campo_equipe.html" with field=form.usuario %}
+            {% include "core/includes/campo_equipe.html" with field=form.senha %}
+            {% include "core/includes/campo_equipe.html" with field=form.confirmar_senha %}
+            <p class="resumo">Mínimo de 8 caracteres, sem ser só números.</p>
+            <button type="submit" class="botao">Criar acesso</button>
+        </form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/js/equipe.js' %}"></script>
+{% endblock %}

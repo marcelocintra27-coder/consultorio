@@ -1,0 +1,58 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}{{ nome }}{% endblock %}
+{% block titulo %}{{ nome }}{% endblock %}
+{% block container_class %}estreito{% endblock %}
+
+{% block content %}
+        <div class="acoes">
+            <a href="{% url 'core:equipe' %}" class="botao secundario">Voltar</a>
+        </div>
+        <p class="resumo">Entra como: <strong>{{ usuario_editado.username }}</strong>{% if not usuario_editado.is_active %} · <strong>acesso desligado</strong>{% endif %}</p>
+
+        {% include "core/includes/resumo_erros.html" with titulo_erro="Ainda não foi salvo." %}
+
+        <form method="post" class="form-cartao" id="form-funcionario">
+            {% csrf_token %}
+            <input type="hidden" name="acao" value="dados">
+            <h2 class="secao-pagina">Dados e função</h2>
+            {% include "core/includes/campo_equipe.html" with field=form.nome %}
+            {% include "core/includes/campo_equipe.html" with field=form.funcao extra_class="grupo-opcoes" %}
+            {% include "core/includes/campo_equipe.html" with field=form.dentista %}
+            <div class="campo aceite">
+                <label for="{{ form.modo_simples.id_for_label }}">{{ form.modo_simples }} {{ form.modo_simples.label }}</label>
+            </div>
+            <button type="submit" class="botao">Salvar dados</button>
+        </form>
+
+        <form method="post" class="form-cartao" autocomplete="off">
+            {% csrf_token %}
+            <input type="hidden" name="acao" value="senha">
+            <h2 class="secao-pagina">Esqueceu a senha?</h2>
+            <p class="resumo">Crie uma senha provisória e entregue a ela. No próximo acesso, o sistema pede para criar uma senha própria.</p>
+            {% if form_senha.errors %}<div class="mensagem error" role="alert">A senha ainda não foi trocada. Veja abaixo.</div>{% endif %}
+            {% include "core/includes/campo_equipe.html" with field=form_senha.senha %}
+            {% include "core/includes/campo_equipe.html" with field=form_senha.confirmar_senha %}
+            <button type="submit" class="botao secundario">Trocar senha provisória</button>
+        </form>
+
+        <form method="post" class="form-cartao">
+            {% csrf_token %}
+            {% if usuario_editado.is_active %}
+            <input type="hidden" name="acao" value="desligar">
+            <h2 class="secao-pagina">Saiu da clínica?</h2>
+            <p class="resumo">Desligar o acesso impede a entrada no sistema. Nada é apagado: o histórico do que ela fez continua guardado.</p>
+            <button type="submit" class="botao perigo" onclick="return confirm('Desligar o acesso de {{ nome|escapejs }}?');">Desligar acesso</button>
+            {% else %}
+            <input type="hidden" name="acao" value="religar">
+            <h2 class="secao-pagina">Voltou para a clínica?</h2>
+            <p class="resumo">Religar o acesso deixa a pessoa entrar de novo, com a mesma senha de antes.</p>
+            <button type="submit" class="botao">Religar acesso</button>
+            {% endif %}
+        </form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/js/equipe.js' %}"></script>
+{% endblock %}

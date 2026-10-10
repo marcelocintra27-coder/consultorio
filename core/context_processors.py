@@ -75,6 +75,7 @@ def navegacao_usuario(request):
                     _item(request, 'Acerto mensal', 'acerto', 'locacao:acerto_mensal'),
                 ]),
                 _grupo('Administração', [
+                    _item(request, 'Equipe', 'pacientes', 'core:equipe'),
                     _item(request, 'Administração', 'configuracoes', 'core:administracao'),
                     _item(request, 'Relatório de atividade', 'relatorios', 'core:relatorio_atividade'),
                 ]),

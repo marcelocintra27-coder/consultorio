@@ -11,21 +11,16 @@
 
     <div class="cards">
         <article class="card">
-            <h3>Usuários e permissões</h3>
-            <p>Gerencie usuários, grupos e os perfis vinculados a cada papel.</p>
-            <div class="acoes">
-                <a href="{% url 'admin:auth_user_changelist' %}" class="botao">Usuários</a>
-                <a href="{% url 'admin:auth_group_changelist' %}" class="botao secundario">Grupos</a>
-                <a href="{% url 'admin:locacao_perfilusuario_changelist' %}" class="botao secundario">Perfis</a>
-            </div>
+            <h3>Equipe</h3>
+            <p>Dentistas, locatárias, secretárias e auxiliares. Crie acessos, troque senha provisória e desligue quem saiu.</p>
+            <a href="{% url 'core:equipe' %}" class="botao">Abrir equipe</a>
         </article>
 
         <article class="card">
-            <h3>Profissionais e salas</h3>
-            <p>Configure dentistas, salas e a disponibilidade registrada.</p>
+            <h3>Salas</h3>
+            <p>Salas da clínica e a disponibilidade registrada.</p>
             <div class="acoes">
-                <a href="{% url 'admin:locacao_dentista_changelist' %}" class="botao">Dentistas</a>
-                <a href="{% url 'admin:locacao_sala_changelist' %}" class="botao secundario">Salas</a>
+                <a href="{% url 'admin:locacao_sala_changelist' %}" class="botao">Salas</a>
                 <a href="{% url 'admin:locacao_disponibilidade_changelist' %}" class="botao secundario">Disponibilidade</a>
             </div>
         </article>
