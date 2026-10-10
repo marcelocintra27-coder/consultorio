@@ -10,9 +10,13 @@
             <a href="{% url 'core:listar_consultas' %}" class="botao secundario">Voltar</a>
         </div>
 
+        {% include "core/includes/resumo_erros.html" with titulo_erro="A consulta ainda não foi salva." %}
+        {% if form.non_field_errors %}
+        <p class="resumo">Veja na caixa azul os horários já ocupados e escolha outro horário.</p>
+        {% endif %}
+
         <form method="post" class="form-cartao" id="form-consulta">
             {% csrf_token %}
-            {{ form.non_field_errors }}
             {% for field in form %}
             <div class="campo">
                 <label for="{{ field.id_for_label }}">{{ field.label }}</label>

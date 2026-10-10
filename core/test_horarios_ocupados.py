@@ -113,3 +113,15 @@ class HorariosOcupadosTests(TestCase):
         self.assertContains(resposta, 'agendar.js')
         html = resposta.content.decode()
         self.assertLess(html.index('name="dentista"'), html.index('name="paciente"'))
+
+    def test_conflito_aparece_no_quadro_vermelho(self):
+        self.consulta(self.titular, (14, 0), (14, 30))
+        resposta = self.client.post(reverse('core:agendar_consulta'), {
+            'dentista': self.titular.pk, 'data': '2026-10-12', 'paciente': self.paciente.pk,
+            'hora_inicio': '14:00', 'hora_fim': '14:30',
+        })
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'resumo-erros')
+        self.assertContains(resposta, 'A consulta ainda não foi salva.')
+        self.assertContains(resposta, 'O dentista já possui consulta neste horário.')
+        self.assertContains(resposta, 'escolha outro horário')
